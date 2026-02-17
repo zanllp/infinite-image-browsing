@@ -841,13 +841,17 @@ def mount_topic_cluster_routes(
             batch_size = max(1, min(int(req.batch_size or 64), 256))
             max_chars = max(256, min(int(req.max_chars or 4000), 8000))
             force = bool(req.force_embed)
+            recursive = bool(req.recursive) if req.recursive is not None else True
+            logger.info(f"[_run_cluster_job] recursive={recursive}, req.recursive={req.recursive}")
             for f in folders:
+                logger.info(f"[_run_cluster_job] Building embeddings for folder: {f}, recursive={recursive}")
                 await _build_embeddings_one_folder(
                     folder=f,
                     model=model,
                     force=force,
                     batch_size=batch_size,
                     max_chars=max_chars,
+                    recursive=recursive,
                     progress_cb=_embed_cb,
                 )
 
@@ -876,6 +880,7 @@ def mount_topic_cluster_routes(
                 "lang": str(req.lang or ""),
                 "nv": _PROMPT_NORMALIZE_VERSION,
                 "nm": _PROMPT_NORMALIZE_MODE,
+                "recursive": recursive,
             }
             h = hashlib.sha1()
             h.update(json.dumps({"folders": folders, "params": cache_params}, ensure_ascii=False, sort_keys=True).encode("utf-8"))
