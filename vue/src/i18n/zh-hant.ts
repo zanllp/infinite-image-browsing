@@ -509,7 +509,7 @@ export const zhHant: Partial<IIBI18nMap> = {
   confirmFailed: '確認失敗',
   organizeComplete: '完成：已移動 {moved} 個檔案，創建了 {folders} 個資料夾',
   organizeFailed: '整理失敗',
-  smartOrganize: '智能整理',
+  smartOrganize: 'AI整理',
   smartOrganizeHint: 'AI 將分析並把零散檔案整理到資料夾中',
   organizeJobStarted: '整理任務已啟動，請在右下角面板查看進度',
 

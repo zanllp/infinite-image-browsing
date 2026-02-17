@@ -529,7 +529,7 @@ You can specify which snapshot to restore to when starting IIB in the global set
   confirmFailed: 'Confirm failed',
   organizeComplete: 'Done: {moved} files moved, {folders} folders created',
   organizeFailed: 'Organize failed',
-  smartOrganize: 'Smart Organize',
+  smartOrganize: 'AI Organize',
   smartOrganizeHint: 'AI will analyze and organize scattered files into folders',
   organizeJobStarted: 'Organize task started, check progress in bottom-right panel',
 

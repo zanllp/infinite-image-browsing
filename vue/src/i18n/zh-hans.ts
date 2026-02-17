@@ -507,7 +507,7 @@ export const zhHans = {
   confirmFailed: '确认失败',
   organizeComplete: '完成：已移动 {moved} 个文件，创建了 {folders} 个文件夹',
   organizeFailed: '整理失败',
-  smartOrganize: '智能整理',
+  smartOrganize: 'AI整理',
   smartOrganizeHint: 'AI 将分析并把零散文件整理到文件夹中',
   organizeJobStarted: '整理任务已启动，请在右下角面板查看进度',
 

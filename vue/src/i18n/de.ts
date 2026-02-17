@@ -269,7 +269,7 @@ export const de: Partial<IIBI18nMap> = {
   confirmFailed: 'Bestätigung fehlgeschlagen',
   organizeComplete: 'Fertig: {moved} Dateien verschoben, {folders} Ordner erstellt',
   organizeFailed: 'Organisation fehlgeschlagen',
-  smartOrganize: 'Smart Organize',
+  smartOrganize: 'AI Organize',
   smartOrganizeHint: 'KI analysiert und organisiert verstreute Dateien in Ordner',
   organizeJobStarted: 'Organisationsaufgabe gestartet, Fortschritt im Panel unten rechts',
 
