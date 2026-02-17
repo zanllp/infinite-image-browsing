@@ -349,13 +349,23 @@ def mount_organize_routes(
             })
 
             # 1. Start cluster job using topic_cluster API
-            logger.info(f"[organize_files][{job_id}] Starting cluster job (recursive={req.recursive})")
+            # Get existing folder names in dest directory for AI to consider reusing
+            dest_folder = req.dest_folder or req.folder_paths[0]
+            dest_folder = os.path.abspath(dest_folder)
+            existing_folder_names = []
+            if os.path.isdir(dest_folder):
+                for item in os.listdir(dest_folder):
+                    item_path = os.path.join(dest_folder, item)
+                    if os.path.isdir(item_path):
+                        existing_folder_names.append(item)
+            logger.info(f"[organize_files][{job_id}] Starting cluster job (recursive={req.recursive}, existing_folders={len(existing_folder_names)})")
             cluster_job_id = await start_cluster_job_func(
                 folder_paths=req.folder_paths,
                 threshold=req.threshold,
                 min_cluster_size=req.min_cluster_size,
                 lang=req.lang,
                 recursive=req.recursive,
+                existing_folder_names=existing_folder_names,
             )
 
             # 2. Poll cluster job status until done
