@@ -292,6 +292,18 @@ export function useLocation () {
 
   useGlobalEventListen('returnToIIB', lazyRefresh)
 
+  // Listen for refreshFileView event (e.g., after smart organize completes)
+  useGlobalEventListen('refreshFileView', (data?: { paths?: string[] }) => {
+    // Check if current location is in the affected paths
+    const paths = data?.paths || []
+    const shouldRefresh = paths.length === 0 || paths.some(p =>
+      currLocation.value.startsWith(p) || p.startsWith(currLocation.value)
+    )
+    if (shouldRefresh) {
+      refresh()
+    }
+  })
+
   useEventListen.value('refresh', refresh)
   useEventListen.value('navigateUp', backToLastUseTo)
 

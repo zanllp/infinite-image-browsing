@@ -157,6 +157,12 @@ def _job_get(job_id: str) -> Optional[Dict]:
         return dict(j) if isinstance(j, dict) else None
 
 
+# Export for use by other modules (e.g., organize_files)
+def get_cluster_job_status(job_id: str) -> Optional[Dict]:
+    """Public function to get cluster job status."""
+    return _job_get(job_id)
+
+
 def _job_upsert(job_id: str, patch: Dict) -> None:
     with _TOPIC_CLUSTER_JOBS_LOCK:
         cur = _TOPIC_CLUSTER_JOBS.get(job_id)
@@ -934,6 +940,7 @@ def mount_topic_cluster_routes(
         force: bool,
         batch_size: int,
         max_chars: int,
+        recursive: bool = True,
         progress_cb: Optional[Callable[[Dict], None]] = None,
     ) -> Dict:
         """
@@ -941,10 +948,13 @@ def mount_topic_cluster_routes(
         Progress payload (best-effort):
         - stage: "embedding"
         - folder, scanned, to_embed, embedded_done, updated, skipped
+
+        Args:
+            recursive: If True, include files in subfolders. Default True for backward compatibility.
         """
         logger.info("[build_embeddings] === _build_embeddings_one_folder START ===")
-        logger.info("[build_embeddings] folder=%s model=%s force=%s batch_size=%s max_chars=%s",
-                    folder, model, force, batch_size, max_chars)
+        logger.info("[build_embeddings] folder=%s model=%s force=%s batch_size=%s max_chars=%s recursive=%s",
+                    folder, model, force, batch_size, max_chars, recursive)
 
         if not openai_api_key:
             logger.error("[build_embeddings] OpenAI API Key not configured")
@@ -969,6 +979,14 @@ def mount_topic_cluster_routes(
         with closing(conn.cursor()) as cur:
             cur.execute("SELECT id, path, exif FROM image WHERE path LIKE ?", (like_prefix,))
             rows = cur.fetchall()
+
+        # Filter to direct children only if not recursive
+        if not recursive:
+            def is_direct_child(path: str) -> bool:
+                parent_dir = os.path.dirname(path)
+                return os.path.normpath(parent_dir) == os.path.normpath(folder)
+            rows = [r for r in rows if is_direct_child(r[1])]
+            logger.info("[build_embeddings] Filtered to direct children: %d files", len(rows))
 
         images = []
         for image_id, path, exif in rows:
@@ -1165,6 +1183,8 @@ def mount_topic_cluster_routes(
         force: Optional[bool] = False
         batch_size: Optional[int] = 64
         max_chars: Optional[int] = 4000
+        # If True, recursively scan subfolders; default True for backward compatibility
+        recursive: Optional[bool] = True
 
     @app.post(
         f"{db_api_base}/build_iib_output_embeddings",
@@ -1182,12 +1202,14 @@ def mount_topic_cluster_routes(
         batch_size = max(1, min(int(req.batch_size or 64), 256))
         max_chars = max(256, min(int(req.max_chars or 4000), 8000))
         force = bool(req.force)
+        recursive = bool(req.recursive) if req.recursive is not None else True
         return await _build_embeddings_one_folder(
             folder=folder,
             model=model,
             force=force,
             batch_size=batch_size,
             max_chars=max_chars,
+            recursive=recursive,
             progress_cb=None,
         )
 
@@ -1210,6 +1232,8 @@ def mount_topic_cluster_routes(
         force_title: Optional[bool] = False
         # Output language for titles/keywords (from frontend globalStore.lang)
         lang: Optional[str] = None
+        # If True, recursively scan subfolders; default True for Topic Search (backward compatible)
+        recursive: Optional[bool] = True
 
     def _scope_cache_stale_by_folders(conn: Connection, folders: List[str]) -> Dict:
         """
@@ -1409,6 +1433,9 @@ def mount_topic_cluster_routes(
 
         logger.info("[cluster_after] use_title_cache=%s force_title=%s", use_title_cache, force_title)
 
+        recursive = bool(req.recursive) if req.recursive is not None else False
+        logger.info("[cluster_after] recursive=%s", recursive)
+
         if progress_cb:
             logger.info("[cluster_after] Calling progress callback with clustering stage")
             progress_cb({"stage": "clustering", "folder": folder, "folders": folders})
@@ -1425,6 +1452,17 @@ def mount_topic_cluster_routes(
                 (*like_prefixes, model),
             )
             rows = cur.fetchall()
+
+        # Filter to direct children only if not recursive
+        if not recursive:
+            def is_direct_child(path: str, folders: List[str]) -> bool:
+                for f in folders:
+                    parent_dir = os.path.dirname(path)
+                    if os.path.normpath(parent_dir) == os.path.normpath(f):
+                        return True
+                return False
+            rows = [r for r in rows if is_direct_child(r[1], folders)]
+            logger.info("[cluster_after] Filtered to direct children: %d files", len(rows))
 
         items = []
         for n, (image_id, path, exif, vec_blob) in enumerate(rows):
@@ -1608,31 +1646,50 @@ def mount_topic_cluster_routes(
             sorted_keywords = sorted(keyword_frequency.items(), key=lambda x: x[1], reverse=True)
             return [k for k, v in sorted_keywords[:100]]
 
+        # Separate clusters that need LLM title from those that are too small (noise)
+        clusters_to_title = []
         for cidx, c in enumerate(clusters):
             if len(c["members"]) < min_cluster_size:
                 for mi in c["members"]:
                     noise.append(items[mi]["path"])
-                continue
+            else:
+                member_items = [items[mi] for mi in c["members"]]
+                paths = [x["path"] for x in member_items]
+                texts = [x.get("text") or "" for x in member_items]
+                member_ids = [x["id"] for x in member_items]
+                rep = (c.get("sample_text") or (texts[0] if texts else "")).strip()
+                cluster_hash = _cluster_sig(
+                    member_ids=member_ids,
+                    model=model,
+                    threshold=threshold,
+                    min_cluster_size=min_cluster_size,
+                    title_model=title_model,
+                    lang=output_lang,
+                )
+                clusters_to_title.append({
+                    "cidx": cidx,
+                    "paths": paths,
+                    "texts": texts,
+                    "rep": rep,
+                    "cluster_hash": cluster_hash,
+                })
 
-            member_items = [items[mi] for mi in c["members"]]
-            paths = [x["path"] for x in member_items]
-            texts = [x.get("text") or "" for x in member_items]
-            member_ids = [x["id"] for x in member_items]
+        # Process LLM titles concurrently in batches
+        LLM_CONCURRENCY = 5  # Number of concurrent LLM requests
+        completed_count = [0]  # Use list for closure mutation
 
-            # Representative prompt for LLM title generation
-            rep = (c.get("sample_text") or (texts[0] if texts else "")).strip()
+        async def process_cluster_title(cluster_info: dict) -> dict:
+            cidx = cluster_info["cidx"]
+            paths = cluster_info["paths"]
+            texts = cluster_info["texts"]
+            rep = cluster_info["rep"]
+            cluster_hash = cluster_info["cluster_hash"]
 
+            # Check cache first
             cached = None
-            cluster_hash = _cluster_sig(
-                member_ids=member_ids,
-                model=model,
-                threshold=threshold,
-                min_cluster_size=min_cluster_size,
-                title_model=title_model,
-                lang=output_lang,
-            )
             if use_title_cache and (not force_title):
                 cached = TopicTitleCache.get(conn, cluster_hash)
+
             if cached and isinstance(cached, dict) and cached.get("title"):
                 title = str(cached.get("title"))
                 keywords = cached.get("keywords") or []
@@ -1657,23 +1714,37 @@ def mount_topic_cluster_routes(
                     except Exception:
                         pass
 
-            for kw in keywords or []:
-                keyword_frequency[kw] = keyword_frequency.get(kw, 0) + 1
+            # Update progress
+            completed_count[0] += 1
+            if progress_cb:
+                progress_cb({"stage": "titling", "clusters_total": len(clusters_to_title), "clusters_done": completed_count[0]})
 
-            out_clusters.append(
-                {
-                    "id": f"topic_{cidx}",
-                    "title": title,
-                    "keywords": keywords,
-                    "size": len(paths),
-                    "paths": paths,
-                    "sample_prompt": _clean_for_title(rep)[:200],
-                }
-            )
-            if (cidx + 1) % 6 == 0:
-                if progress_cb:
-                    progress_cb({"stage": "titling", "clusters_total": len(clusters), "clusters_done": cidx + 1})
-                await asyncio.sleep(0)
+            return {
+                "id": f"topic_{cidx}",
+                "title": title,
+                "keywords": keywords,
+                "size": len(paths),
+                "paths": paths,
+                "sample_prompt": _clean_for_title(rep)[:200],
+            }
+
+        # Use semaphore to limit concurrency
+        semaphore = asyncio.Semaphore(LLM_CONCURRENCY)
+
+        async def process_with_semaphore(cluster_info: dict) -> dict:
+            async with semaphore:
+                return await process_cluster_title(cluster_info)
+
+        # Run all title generations concurrently (limited by semaphore)
+        if clusters_to_title:
+            logger.info(f"[cluster_after] Processing {len(clusters_to_title)} clusters with concurrency={LLM_CONCURRENCY}")
+            tasks = [process_with_semaphore(c) for c in clusters_to_title]
+            out_clusters = await asyncio.gather(*tasks)
+
+            # Update keyword frequency from results
+            for cluster in out_clusters:
+                for kw in cluster.get("keywords") or []:
+                    keyword_frequency[kw] = keyword_frequency.get(kw, 0) + 1
 
         out_clusters.sort(key=lambda x: x["size"], reverse=True)
         return {
@@ -1861,5 +1932,45 @@ def mount_topic_cluster_routes(
     # NOTE:
     # We intentionally do NOT keep the legacy synchronous `/cluster_iib_output` endpoint.
     # The UI should use `/cluster_iib_output_job_start` + `/cluster_iib_output_job_status` only.
+
+    # Return internal functions for use by other modules (e.g., organize_files)
+    async def start_cluster_job_for_organize(
+        folder_paths: List[str],
+        threshold: float = 0.90,
+        min_cluster_size: int = 2,
+        lang: str = "en",
+        recursive: bool = False,
+    ) -> str:
+        """
+        Start a cluster job and return job_id.
+        This is a wrapper for organize_files to use.
+        """
+        _ensure_perf_deps()
+        req = ClusterIibOutputReq(
+            folder_paths=folder_paths,
+            threshold=threshold,
+            min_cluster_size=min_cluster_size,
+            lang=lang,
+            recursive=recursive,
+        )
+        job_id = uuid.uuid4().hex
+        _job_upsert(job_id, {"status": "queued", "stage": "queued", "created_at": _job_now()})
+        asyncio.create_task(_run_cluster_job(job_id, req))
+        return job_id
+
+    async def get_cluster_job_status_for_organize(job_id: str) -> Dict:
+        """
+        Get cluster job status.
+        This is a wrapper for organize_files to use.
+        """
+        j = _job_get(job_id)
+        if not j:
+            return {"status": "not_found", "error": "job not found"}
+        return j
+
+    return {
+        "start_cluster_job": start_cluster_job_for_organize,
+        "get_cluster_job_status": get_cluster_job_status_for_organize,
+    }
 
 

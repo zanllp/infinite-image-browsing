@@ -63,7 +63,7 @@ const tags = computed(() => {
         </a-sub-menu>
 
         <a-menu-divider />
-        
+
         <template v-if="isSelectedMutilFiles">
           <a-sub-menu key="batch-add-tag" :title="$t('batchAddTag')">
             <a-menu-item key="add-custom-tag" >+ {{ $t('addNewCustomTag') }}</a-menu-item>

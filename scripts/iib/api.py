@@ -63,6 +63,7 @@ from scripts.iib.db.datamodel import (
 from scripts.iib.db.update_image_data import update_image_data, rebuild_image_index, add_image_data_single
 from scripts.iib.topic_cluster import mount_topic_cluster_routes
 from scripts.iib.tag_graph import mount_tag_graph_routes
+from scripts.iib.organize_files import mount_organize_routes
 from scripts.iib.logger import logger
 from scripts.iib.seq import seq
 import urllib.parse
@@ -942,6 +943,111 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         check_path_trust(req.path)
         open_file_with_default_app(req.path)
 
+    # ========== Flatten Folder API ==========
+
+    class FlattenFolderReq(BaseModel):
+        folder_path: str
+        dry_run: bool = True  # If True, only check for conflicts without moving
+
+    class FlattenFolderResp(BaseModel):
+        success: bool
+        total_files: int
+        conflicts: List[str]  # List of duplicate file names
+        moved_files: int = 0
+        errors: List[str] = []
+
+    @app.post(
+        api_base + "/flatten_folder",
+        dependencies=[Depends(verify_secret), Depends(write_permission_required)],
+    )
+    async def flatten_folder(req: FlattenFolderReq):
+        """
+        Flatten a folder by moving all files from subfolders to the root folder.
+        Two phases:
+        1. dry_run=True: Scan and check for filename conflicts
+        2. dry_run=False: Actually move the files
+        """
+        check_path_trust(req.folder_path)
+        folder_path = os.path.normpath(req.folder_path)
+
+        if not os.path.isdir(folder_path):
+            raise HTTPException(400, detail=f"Not a folder: {folder_path}")
+
+        # Collect all files recursively
+        all_files = []  # List of (full_path, filename)
+        for root, dirs, files in os.walk(folder_path):
+            # Skip the root folder itself
+            if root == folder_path:
+                continue
+            for f in files:
+                if is_media_file(f):
+                    full_path = os.path.join(root, f)
+                    all_files.append((full_path, f))
+
+        # Check for filename conflicts
+        filename_count = {}
+        for _, filename in all_files:
+            filename_count[filename] = filename_count.get(filename, 0) + 1
+
+        conflicts = [name for name, count in filename_count.items() if count > 1]
+
+        if req.dry_run:
+            return FlattenFolderResp(
+                success=len(conflicts) == 0,
+                total_files=len(all_files),
+                conflicts=conflicts
+            )
+
+        # If not dry_run, check for conflicts first
+        if conflicts:
+            raise HTTPException(
+                400,
+                detail=f"Cannot flatten: {len(conflicts)} filename conflicts found"
+            )
+
+        # Actually move files
+        conn = DataBase.get_conn()
+        moved_count = 0
+        errors = []
+
+        for full_path, filename in all_files:
+            try:
+                dest_path = os.path.join(folder_path, filename)
+
+                # Move the file
+                shutil.move(full_path, dest_path)
+
+                # Update database
+                img = DbImg.get(conn, full_path)
+                if img:
+                    img.update_path(conn, dest_path, force=True)
+
+                # Move associated txt file if exists
+                txt_path = get_img_geninfo_txt_path(full_path)
+                if txt_path and os.path.exists(txt_path):
+                    txt_dest = os.path.join(folder_path, os.path.basename(txt_path))
+                    shutil.move(txt_path, txt_dest)
+
+                moved_count += 1
+            except Exception as e:
+                errors.append(f"{full_path}: {str(e)}")
+
+        # Clean up empty directories
+        for root, dirs, files in os.walk(folder_path, topdown=False):
+            if root != folder_path:
+                try:
+                    if not os.listdir(root):  # Directory is empty
+                        os.rmdir(root)
+                except Exception:
+                    pass
+
+        return FlattenFolderResp(
+            success=len(errors) == 0,
+            total_files=len(all_files),
+            conflicts=[],
+            moved_files=moved_count,
+            errors=errors
+        )
 
     @app.post(
         api_base + "/batch_top_4_media_info",
@@ -1281,7 +1387,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
 
 
     # ===== 主题聚类 / Embedding（拆分到独立模块，减少 api.py 体积）=====
-    mount_topic_cluster_routes(
+    topic_cluster_funcs = mount_topic_cluster_routes(
         app=app,
         db_api_base=db_api_base,
         verify_secret=verify_secret,
@@ -1301,6 +1407,16 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         ai_model=AI_MODEL,
         openai_base_url=OPENAI_BASE_URL,
         openai_api_key=OPENAI_API_KEY,
+    )
+
+    # ===== 智能文件整理 =====
+    mount_organize_routes(
+        app=app,
+        db_api_base=db_api_base,
+        verify_secret=verify_secret,
+        write_permission_required=write_permission_required,
+        start_cluster_job_func=topic_cluster_funcs["start_cluster_job"],
+        get_cluster_job_status_func=topic_cluster_funcs["get_cluster_job_status"],
     )
 
 

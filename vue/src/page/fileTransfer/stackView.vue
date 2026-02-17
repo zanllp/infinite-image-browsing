@@ -28,10 +28,14 @@ import FileItem from '@/components/FileItem.vue'
 import fullScreenContextMenu from './fullScreenContextMenu.vue'
 import BaseFileListInfo from '@/components/BaseFileListInfo.vue'
 import { copy2clipboardI18n } from '@/util'
-import { openFolder } from '@/api'
+import { openFolder, flattenFolder } from '@/api'
 import { sortMethods } from './fileSort'
 import { isTauri } from '@/util/env'
 import MultiSelectKeep from '@/components/MultiSelectKeep.vue'
+import { openSmartOrganizeConfig } from '@/util/smartOrganize'
+import { Modal, message } from 'ant-design-vue'
+import { t } from '@/i18n'
+import { h, ref } from 'vue'
 
 const global = useGlobalStore()
 const props = defineProps<{
@@ -99,6 +103,78 @@ const onTiktokViewClick = () => {
   }
   // 只传入图片和视频文件，从当前预览索引开始
   openTiktokViewWithFiles(sortedFiles.value, previewIdx.value || 0)
+}
+
+// Flatten folder handler
+const flattenFolderLoading = ref(false)
+const onFlattenFolderClick = async () => {
+  moreActionsDropdownShow.value = false
+
+  // Step 1: Dry run to check for conflicts
+  flattenFolderLoading.value = true
+  let dryRunResult
+  try {
+    message.loading({ content: t('flattenFolderScanning'), key: 'flatten', duration: 0 })
+    dryRunResult = await flattenFolder({ folder_path: currLocation.value, dry_run: true })
+  } catch (e: any) {
+    message.destroy('flatten')
+    message.error(e.message || String(e))
+    flattenFolderLoading.value = false
+    return
+  }
+  message.destroy('flatten')
+  flattenFolderLoading.value = false
+
+  // Check if no files to move
+  if (dryRunResult.total_files === 0) {
+    message.info(t('flattenFolderNoFiles'))
+    return
+  }
+
+  // Check for conflicts
+  if (dryRunResult.conflicts.length > 0) {
+    Modal.error({
+      title: t('flattenFolderConflict'),
+      content: h('div', {}, [
+        h('p', {}, `${t('flattenFolderConflictFiles')}:`),
+        h('ul', { style: 'max-height: 300px; overflow-y: auto;' },
+          dryRunResult.conflicts.map(f => h('li', { style: 'color: red;' }, f))
+        )
+      ])
+    })
+    return
+  }
+
+  // Step 2: Confirm with user
+  Modal.confirm({
+    title: t('flattenFolder'),
+    content: h('div', {}, [
+      h('p', { style: 'color: red; font-weight: bold;' }, t('flattenFolderWarning')),
+      h('p', {}, t('flattenFolderConfirm', { count: dryRunResult.total_files }))
+    ]),
+    okText: t('confirm'),
+    okType: 'danger',
+    cancelText: t('cancel'),
+    onOk: async () => {
+      // Step 3: Execute flatten
+      try {
+        message.loading({ content: t('flattenFolderExecuting'), key: 'flatten', duration: 0 })
+        const result = await flattenFolder({ folder_path: currLocation.value, dry_run: false })
+        message.destroy('flatten')
+
+        if (result.success) {
+          message.success(t('flattenFolderSuccess', { count: result.moved_files }))
+          // Refresh the view
+          refresh()
+        } else {
+          message.error(`${t('error')}: ${result.errors?.join(', ')}`)
+        }
+      } catch (e: any) {
+        message.destroy('flatten')
+        message.error(e.message || String(e))
+      }
+    }
+  })
 }
 
 watch(
@@ -172,6 +248,7 @@ watch(
         <div class="actions">
           <a class="opt" @click.prevent="refresh"> {{ $t('refresh') }} </a>
           <a class="opt" @click.prevent="onTiktokViewClick">{{ $t('TikTok View') }}</a>
+          <a class="opt" @click.prevent="openSmartOrganizeConfig(currLocation)" :title="$t('smartOrganizeHint')">{{ $t('smartOrganize') }}</a>
           <a-dropdown>
             <a class="opt" @click.prevent>
               {{ $t('search') }}
@@ -249,6 +326,9 @@ watch(
                   </div>
                   <div style="padding: 4px;">
                     <a @click.prevent="onCreateFloderBtnClick">{{ $t('createFolder') }}</a>
+                  </div>
+                  <div style="padding: 4px;">
+                    <a @click.prevent="onFlattenFolderClick" style="color: #ff4d4f;">{{ $t('flattenFolder') }}</a>
                   </div>
                 </a-form>
               </div>

@@ -1,5 +1,42 @@
 [跳到中文](#中文)
-# English 
+# English
+
+## 2026-02-17
+### 🗂️ Smart Organize - AI-Powered File Organization \
+
+Automatically organize scattered images into meaningful folders using AI.
+
+**Features:**
+- **Semantic Clustering**: Groups images based on prompt similarity using AI embeddings
+- **Auto-Generated Names**: AI creates meaningful folder names in your preferred language
+- **Preview & Confirm**: Review the proposed organization before executing - skip or adjust any cluster
+- **Background Processing**: Large folders process asynchronously without blocking your workflow
+- **Flexible Options**: Move or copy, set minimum cluster size, include subfolders recursively
+
+**How to use:**
+1. Navigate to the folder you want to organize
+2. Click **"Smart Organize"** button in the address bar
+3. Configure options in the modal
+4. Wait for AI analysis (embedding → clustering → title generation)
+5. Preview the result - hover over filenames to see image thumbnails
+6. Confirm to execute
+
+<img width="500" alt="Smart Organize Config Modal" src="docs/imgs/smart-organize-config-modal.png" />
+
+<img width="500" alt="Smart Organize Generate Title" src="docs/imgs/smart-organize-generate-title.png" />
+
+<img width="800" alt="Smart Organize Preview" src="docs/imgs/smart-organize-preview.png" />
+
+<img width="800" alt="Smart Organize Preview List" src="docs/imgs/smart-organize-preview-list.png" />
+
+https://github.com/user-attachments/assets/c1279556-d255-4e71-b230-48523a4859bf
+
+> Requirements: Same as Topic Search - `OPENAI_BASE_URL`, `OPENAI_API_KEY`, Python deps `numpy`, `hnswlib`
+
+### Flatten Folder
+New feature to move all files from subfolders to the current folder with conflict detection.
+
+
 
 ## 2026-02-01
 ### Drag-and-drop into folders and safer move/copy
@@ -653,6 +690,42 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-02-17
+### 🗂️ 智能整理 - AI 驱动的文件整理
+
+使用 AI 自动将零散图片整理到有意义的文件夹中。
+
+**功能特性：**
+- **语义聚类**：基于 AI 向量化技术，自动将语义相似的图片分组
+- **智能命名**：AI 自动生成有意义的文件夹名称，支持多语言
+- **预览确认**：执行前可预览整理方案，支持跳过或调整特定分组
+- **后台处理**：大文件夹在后台异步处理，不影响继续使用
+- **灵活配置**：支持移动/复制、设置最小聚类大小、递归处理子文件夹
+
+**使用方法：**
+1. 进入需要整理的文件夹
+2. 点击地址栏中的「智能整理」按钮
+3. 在弹窗中配置选项
+4. 等待 AI 分析（向量化 → 聚类 → 生成标题）
+5. 预览整理方案 - 鼠标悬停文件名可查看缩略图
+6. 确认执行
+
+<img width="500" alt="智能整理配置弹窗" src="docs/imgs/smart-organize-config-modal.png" />
+
+<img width="500" alt="智能整理生成标题" src="docs/imgs/smart-organize-generate-title.png" />
+
+<img width="800" alt="智能整理预览" src="docs/imgs/smart-organize-preview.png" />
+
+<img width="800" alt="智能整理预览列表" src="docs/imgs/smart-organize-preview-list.png" />
+
+https://github.com/user-attachments/assets/c1279556-d255-4e71-b230-48523a4859bf
+
+> 前置条件：与自然语言搜索相同 - `OPENAI_BASE_URL`、`OPENAI_API_KEY`、Python 依赖 `numpy`、`hnswlib`
+
+### 压平文件夹
+新功能：将所有子文件夹中的文件移动到当前文件夹，支持文件名冲突检测。
+
 
 ## 2026-02-01
 ### 支持拖拽到文件夹与更安全的移动/复制

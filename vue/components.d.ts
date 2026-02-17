@@ -33,6 +33,7 @@ declare module '@vue/runtime-core' {
     AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
     AModal: typeof import('ant-design-vue/es')['Modal']
     AProgress: typeof import('ant-design-vue/es')['Progress']
+    ARadio: typeof import('ant-design-vue/es')['Radio']
     ARadioButton: typeof import('ant-design-vue/es')['RadioButton']
     ARadioGroup: typeof import('ant-design-vue/es')['RadioGroup']
     ARow: typeof import('ant-design-vue/es')['Row']
@@ -57,7 +58,9 @@ declare module '@vue/runtime-core' {
     HistoryRecord: typeof import('./src/components/HistoryRecord.vue')['default']
     MultiSelectKeep: typeof import('./src/components/MultiSelectKeep.vue')['default']
     NumInput: typeof import('./src/components/numInput.vue')['default']
+    OrganizeJobsPanel: typeof import('./src/components/OrganizeJobsPanel.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SmartOrganizeConfigModal: typeof import('./src/components/SmartOrganizeConfigModal.vue')['default']
   }
 }
