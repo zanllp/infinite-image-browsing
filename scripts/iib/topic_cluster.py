@@ -520,9 +520,12 @@ def _call_chat_title_sync(
     prompt_samples: List[str],
     output_lang: str,
     existing_keywords: Optional[List[str]] = None,
+    existing_folder_names: Optional[List[str]] = None,
 ) -> Optional[Dict]:
     """
     Ask LLM to generate a short topic title and a few keywords. Returns dict or None.
+    If existing_folder_names is provided, AI will prefer reusing an existing folder name
+    if the theme matches, instead of generating a new title.
     """
     logger.info("[chat_title] === _call_chat_title_sync START ===")
     logger.info("[chat_title] base_url=%s model=%s lang=%s", base_url, model, output_lang)
@@ -566,6 +569,16 @@ def _call_chat_title_sync(
         "- The output MUST start with '{' and end with '}' (no leading/trailing characters).\n"
         "\n"
     )
+    # Add existing folder names hint for file organization scenarios
+    if existing_folder_names:
+        folder_list = existing_folder_names[:100]  # Limit to 100 folders
+        sys += (
+            "IMPORTANT - Title Reuse:\n"
+            "The following titles have been used before. "
+            "If the theme matches one of them, you MUST reuse that exact title. "
+            "Only create a new title if the theme is clearly different from ALL existing ones.\n"
+            f"Existing titles: {', '.join(folder_list)}\n\n"
+        )
     if existing_keywords:
         # Dynamic keyword selection based on total unique count
         unique_count = len(existing_keywords)
@@ -744,6 +757,7 @@ async def _call_chat_title(
     prompt_samples: List[str],
     output_lang: str,
     existing_keywords: Optional[List[str]] = None,
+    existing_folder_names: Optional[List[str]] = None,
 ) -> Dict:
     """
     Same rationale as embeddings:
@@ -758,6 +772,7 @@ async def _call_chat_title(
         prompt_samples=prompt_samples,
         output_lang=output_lang,
         existing_keywords=existing_keywords,
+        existing_folder_names=existing_folder_names,
     )
     if not isinstance(ret, dict):
         raise HTTPException(status_code=502, detail="Chat API returned empty title payload")
@@ -1239,6 +1254,8 @@ def mount_topic_cluster_routes(
         lang: Optional[str] = None
         # If True, recursively scan subfolders; default True for Topic Search (backward compatible)
         recursive: Optional[bool] = True
+        # Existing folder names in dest directory (for file organize: AI will prefer reusing these)
+        existing_folder_names: Optional[List[str]] = None
 
     def _scope_cache_stale_by_folders(conn: Connection, folders: List[str]) -> Dict:
         """
@@ -1440,6 +1457,10 @@ def mount_topic_cluster_routes(
 
         recursive = bool(req.recursive) if req.recursive is not None else False
         logger.info("[cluster_after] recursive=%s", recursive)
+
+        # Extract existing folder names for AI to consider reusing
+        existing_folder_names = req.existing_folder_names or []
+        logger.info("[cluster_after] existing_folder_names count=%d", len(existing_folder_names))
 
         if progress_cb:
             logger.info("[cluster_after] Calling progress callback with clustering stage")
@@ -1707,6 +1728,7 @@ def mount_topic_cluster_routes(
                     prompt_samples=[rep] + texts[:5],
                     output_lang=output_lang,
                     existing_keywords=top_keywords,
+                    existing_folder_names=existing_folder_names,
                 )
                 title = (llm or {}).get("title")
                 keywords = (llm or {}).get("keywords", [])
@@ -1945,10 +1967,15 @@ def mount_topic_cluster_routes(
         min_cluster_size: int = 2,
         lang: str = "en",
         recursive: bool = False,
+        existing_folder_names: Optional[List[str]] = None,
     ) -> str:
         """
         Start a cluster job and return job_id.
         This is a wrapper for organize_files to use.
+
+        Args:
+            existing_folder_names: List of folder names already in dest directory.
+                                   AI will prefer reusing these names if theme matches.
         """
         _ensure_perf_deps()
         req = ClusterIibOutputReq(
@@ -1957,6 +1984,7 @@ def mount_topic_cluster_routes(
             min_cluster_size=min_cluster_size,
             lang=lang,
             recursive=recursive,
+            existing_folder_names=existing_folder_names,
         )
         job_id = uuid.uuid4().hex
         _job_upsert(job_id, {"status": "queued", "stage": "queued", "created_at": _job_now()})

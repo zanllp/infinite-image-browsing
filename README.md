@@ -93,14 +93,6 @@ AI-powered automatic file organization
 - **Background Processing**: Large folders are processed in the background, you can continue working
 - **Flexible Options**: Choose between move or copy, set minimum cluster size, include subfolders recursively
 
-**How to use:**
-1. Navigate to the folder you want to organize
-2. Click the "Smart Organize" button in the address bar
-3. Configure options (target folder, min cluster size, etc.)
-4. Wait for AI analysis to complete
-5. Preview the proposed organization
-6. Confirm to execute
-
 > **Requirements**: Same as Topic Search - requires `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and Python dependencies `numpy`, `hnswlib`
 >
 > 📸 See [Smart Organize Preview](#smart-organize) below for screenshots and video demo.
