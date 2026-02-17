@@ -124,6 +124,8 @@ export function useLocation () {
           files,
           curr: file.fullpath
         }]
+        // fixed模式下stack.length始终为1，watch不会触发滚动，需要手动滚动到顶部
+        scroller.value?.scrollToItem(0)
       } else {
         stack.value.push({
           files,
