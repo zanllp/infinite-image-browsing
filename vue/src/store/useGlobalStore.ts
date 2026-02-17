@@ -1,5 +1,6 @@
 import type { GlobalConf } from '@/api'
 import type { ExtraPathType, MatchImageByTagsReq, Tag } from '@/api/db'
+import type { OrganizeJobProgress, OrganizeFilesPreviewResp } from '@/api/organize'
 import { FileNodeInfo } from '@/api/files'
 import { i18n, t } from '@/i18n'
 import { getPreferredLang } from '@/i18n'
@@ -365,6 +366,49 @@ export const useGlobalStore = defineStore(
     const magicSwitchTiktokView = ref(false)
     const showRandomImageInStartup = ref(true)
     const showTiktokNavigator = ref(false)
+
+    // ===== Organize Jobs Management =====
+    interface OrganizeJob {
+      job_id: string
+      status: string
+      progress: OrganizeJobProgress
+      startedAt: number
+      folder_paths: string[]
+      preview?: OrganizeFilesPreviewResp
+    }
+
+    const activeOrganizeJobs = ref<OrganizeJob[]>([])
+    const showOrganizePanel = ref(true) // 控制面板显示/隐藏
+
+    // Smart organize config modal state
+    const showSmartOrganizeConfig = ref(false)
+    const smartOrganizeConfigPath = ref('')
+
+    const addOrganizeJob = (job: OrganizeJob) => {
+      activeOrganizeJobs.value.push(job)
+      showOrganizePanel.value = true // 添加任务时自动显示面板
+    }
+
+    const updateOrganizeJob = (job_id: string, update: Partial<OrganizeJob>) => {
+      const idx = activeOrganizeJobs.value.findIndex(j => j.job_id === job_id)
+      if (idx >= 0) {
+        // Deep clone to ensure Vue reactivity works properly
+        const existingJob = JSON.parse(JSON.stringify(activeOrganizeJobs.value[idx]))
+        const newJob = { ...existingJob, ...update }
+        // Force Vue reactivity by replacing the entire array item
+        activeOrganizeJobs.value.splice(idx, 1, newJob)
+        console.log('Updated job:', job_id, 'status:', newJob.status, 'preview:', newJob.preview ? `has preview (${newJob.preview.total_files} files)` : 'no preview')
+      }
+    }
+
+    const removeOrganizeJob = (job_id: string) => {
+      activeOrganizeJobs.value = activeOrganizeJobs.value.filter(j => j.job_id !== job_id)
+    }
+
+    const getOrganizeJob = (job_id: string) => {
+      return activeOrganizeJobs.value.find(j => j.job_id === job_id)
+    }
+
     return {
       computedTheme,
       showTiktokNavigator,
@@ -408,7 +452,17 @@ export const useGlobalStore = defineStore(
       batchDownloadPackOnly: ref(false),
       magicSwitchTiktokView,
       showRandomImageInStartup,
-      autoUpdateIndex: ref(true)
+      autoUpdateIndex: ref(true),
+      // Organize jobs
+      activeOrganizeJobs,
+      showOrganizePanel,
+      addOrganizeJob,
+      updateOrganizeJob,
+      removeOrganizeJob,
+      getOrganizeJob,
+      // Smart organize config modal
+      showSmartOrganizeConfig,
+      smartOrganizeConfigPath
     }
   },
   {

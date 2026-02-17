@@ -7,7 +7,7 @@
 [Installation / Running](#installation--running)
 
 
-#  Stable Diffusion webui Infinite Image Browsing
+#  Infinite Image Browsing (IIB)
 
 ### Software Support and Development Progress Overview
 | Software               | Support          | Provided by |
@@ -83,6 +83,27 @@ If you would like to support more software, please refer to: [parsers](https://g
 
 ### 🧠 Topic/Tag Analysis
 - Tag relationship graph visualization for topic clusters.
+
+### 🗂️ Smart Organize
+AI-powered automatic file organization
+
+- **Semantic Clustering**: Automatically groups similar images based on prompt semantics using AI embeddings
+- **Auto-Generated Folder Names**: AI generates meaningful folder names in your preferred language
+- **Preview Before Action**: Review the proposed organization before confirming - skip or adjust as needed
+- **Background Processing**: Large folders are processed in the background, you can continue working
+- **Flexible Options**: Choose between move or copy, set minimum cluster size, include subfolders recursively
+
+**How to use:**
+1. Navigate to the folder you want to organize
+2. Click the "Smart Organize" button in the address bar
+3. Configure options (target folder, min cluster size, etc.)
+4. Wait for AI analysis to complete
+5. Preview the proposed organization
+6. Confirm to execute
+
+> **Requirements**: Same as Topic Search - requires `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and Python dependencies `numpy`, `hnswlib`
+>
+> 📸 See [Smart Organize Preview](#smart-organize) below for screenshots and video demo.
 
 ### 🌐 Multilingual Support
 - Currently supports Simplified Chinese/Traditional Chinese/English/German.
@@ -189,6 +210,20 @@ https://user-images.githubusercontent.com/25872019/230768207-daab786b-d4ab-489f-
 ### Dark mode
 
 <img width="768" alt="image" src="https://user-images.githubusercontent.com/25872019/230064879-c95866ac-999d-4d4b-87ea-3e38c8479415.png">
+
+## Smart Organize
+
+AI-powered automatic file organization - groups similar images and creates meaningful folders.
+
+<img width="500" alt="Smart Organize Config Modal" src="docs/imgs/smart-organize-config-modal.png" />
+
+<img width="500" alt="Smart Organize Generate Title" src="docs/imgs/smart-organize-generate-title.png" />
+
+<img width="800" alt="Smart Organize Preview" src="docs/imgs/smart-organize-preview.png" />
+
+<img width="800" alt="Smart Organize Preview List" src="docs/imgs/smart-organize-preview-list.png" />
+
+https://github.com/user-attachments/assets/c1279556-d255-4e71-b230-48523a4859bf
 
 ## Natural Language Categorization & Search (Experimental)
 

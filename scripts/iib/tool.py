@@ -896,10 +896,11 @@ def accumulate_streaming_response(resp: requests.Response) -> str:
         delta = (obj.get('choices') or [{}])[0].get('delta') or {}
         chunk_text = delta.get('content') or ''
         if chunk_text:
-            # try:
-            #     print(f"[streaming] chunk_received len={len(chunk_text)} snippet={chunk_text[:200]}")
-            # except Exception:
-            #     pass
+            try:
+                if is_dev:
+                    print(f"[streaming] chunk_received len={len(chunk_text)} snippet={chunk_text[:200]}")
+            except Exception:
+                pass
             content_buffer += chunk_text
 
     return content_buffer.strip()

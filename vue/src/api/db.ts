@@ -170,6 +170,8 @@ export interface BuildIibOutputEmbeddingsReq {
   force?: boolean
   batch_size?: number
   max_chars?: number
+  /** If true, include files in subfolders. Default true for backward compatibility. */
+  recursive?: boolean
 }
 
 export interface BuildIibOutputEmbeddingsResp {

@@ -272,3 +272,23 @@ export const aiChat = async (req: AIChatRequest) => {
   const resp = await axiosInst.value.post('/ai-chat', req)
   return resp.data as AIChatResponse
 }
+
+// ========== Flatten Folder API ==========
+
+export interface FlattenFolderReq {
+  folder_path: string
+  dry_run?: boolean
+}
+
+export interface FlattenFolderResp {
+  success: boolean
+  total_files: number
+  conflicts: string[]
+  moved_files?: number
+  errors?: string[]
+}
+
+export const flattenFolder = async (req: FlattenFolderReq) => {
+  const resp = await axiosInst.value.post('/flatten_folder', req)
+  return resp.data as FlattenFolderResp
+}
