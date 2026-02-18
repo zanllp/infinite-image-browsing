@@ -1484,7 +1484,14 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
     async def delete_extra_path(extra_path: ExtraPathModel):
         path = to_abs_path(extra_path.path)
         conn = DataBase.get_conn()
-        ExtraPath.remove(conn, path, extra_path.types, img_search_dirs=get_img_search_dirs())
+        ExtraPath.remove(
+            conn,
+            path,
+            extra_path.types,
+            img_search_dirs=get_img_search_dirs(),
+            all_scanned_paths=mem["all_scanned_paths"],
+        )
+        update_extra_paths(conn)
 
     
     @app.post(
