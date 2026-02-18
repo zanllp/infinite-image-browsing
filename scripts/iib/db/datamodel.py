@@ -1223,6 +1223,7 @@ class ExtraPath:
         path: str,
         types: List[str] = None,
         img_search_dirs: Optional[List[str]] = [],
+        all_scanned_paths: Optional[List[str]] = [],
     ):
         with closing(conn.cursor()) as cur:
             path = os.path.normpath(path)
@@ -1244,6 +1245,56 @@ class ExtraPath:
             if path not in img_search_dirs:
                 Folder.remove_folder(conn, path)
             conn.commit()
+
+            # Clean up orphaned images that are no longer under any scanned path
+            if all_scanned_paths:
+                remaining_paths = [
+                    os.path.normpath(p) for p in all_scanned_paths
+                    if os.path.normpath(p) != path
+                ]
+                cls._cleanup_orphaned_images(conn, path, remaining_paths)
+
+    @classmethod
+    def _cleanup_orphaned_images(
+        cls,
+        conn,
+        removed_path: str,
+        remaining_paths: List[str],
+    ):
+        """
+        Clean up images under removed_path that are not covered by any remaining_paths.
+        An image is orphaned if it's under removed_path but not under any of the remaining paths.
+        """
+        with closing(conn.cursor()) as cur:
+            # Find all images under the removed path
+            cur.execute(
+                "SELECT id, path FROM image WHERE path LIKE ?",
+                (removed_path + os.sep + "%",)
+            )
+            rows = cur.fetchall()
+
+            if not rows:
+                return
+
+            orphaned_ids = []
+            for row in rows:
+                img_id, img_path = row[0], row[1]
+                img_path_normalized = os.path.normpath(img_path)
+
+                # Check if this image is still covered by any remaining path
+                is_still_owned = False
+                for remaining_path in remaining_paths:
+                    # Image is owned if its path starts with the remaining path
+                    if img_path_normalized.startswith(remaining_path + os.sep) or img_path_normalized == remaining_path:
+                        is_still_owned = True
+                        break
+
+                if not is_still_owned:
+                    orphaned_ids.append(img_id)
+
+            # Batch remove orphaned images
+            if orphaned_ids:
+                Image.safe_batch_remove(conn, orphaned_ids)
 
     @classmethod
     def create_table(cls, conn):
