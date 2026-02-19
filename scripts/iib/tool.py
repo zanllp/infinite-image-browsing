@@ -605,7 +605,9 @@ def read_sd_webui_gen_info_from_image(image: Image, path="") -> str:
     return geninfo
 
 
-re_param_code = r'\s*([\w ]+):\s*("(?:\\"[^,]|\\"|\\|[^\"])+"|[^,]*)(?:,|$)'
+# 增强后的正则表达式以支持所有 JSON 形式和普通文字
+# Enhanced regular expression to support all JSON formats and plain text
+re_param_code = r'\s*(\w[\w \-/]+):\s*({.*?}|\[.*?\]|"(?:\\.|[^\\"])*"|[^,]*)(?:,|$)'
 re_param = re.compile(re_param_code)
 re_imagesize = re.compile(r"^(\d+)x(\d+)$")
 re_lora_prompt = re.compile(r"<lora:([\w_\s.-]+)(?::([\d.]+))*>", re.IGNORECASE)
@@ -686,22 +688,24 @@ def parse_generation_parameters(x: str):
         else:
             prompt += ("" if prompt == "" else "\n") + line
 
+    # 增加解析和处理数组和对象的逻辑
     for k, v in re_param.findall(lastline):
         try:
-            if len(v) == 0:
-                res[k] = v
-                continue
-            if v[0] == '"' and v[-1] == '"':
+            if v.startswith('"') and v.endswith('"'):
                 v = unquote(v)
-
-            m = re_imagesize.match(v)
-            if m is not None:
-                res[f"{k}-1"] = m.group(1)
-                res[f"{k}-2"] = m.group(2)
+            elif v.startswith('[') and v.endswith(']') or v.startswith('{') and v.endswith('}'):
+                v = json.loads(v)
             else:
-                res[k] = v
-        except Exception:
-            print(f"Error parsing \"{k}: {v}\"")
+                m = re_imagesize.match(v)
+                if m:
+                    res[f"{k}-1"] = m.group(1)
+                    res[f"{k}-2"] = m.group(2)
+                    continue
+                v = v.strip()  # Remove surrounding spaces for non-JSON values
+        except Exception as e:
+            print(f"Error parsing \"{k}: {v}\": {e}")
+
+        res[k] = v
             
     prompt_parse_res = parse_prompt(prompt)
     lora = prompt_parse_res["lora"]
