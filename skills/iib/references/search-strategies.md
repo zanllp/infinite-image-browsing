@@ -21,7 +21,7 @@ curl -X POST http://127.0.0.1:<port>/infinite_image_browsing/db/search_by_substr
   -d '{"regexp": "(sunset|beach)", "size": 50}'
 
 # Generate URL with regex mode
-?action=pane&type=fuzzy-search&props=%7B%22substr%22%3A%22(%E6%B1%89%E6%9C%8D%7C%E4%B8%89%E4%BD%93)%22%2C%22isRegex%22%3Atrue%7D
+?action=pane&type=fuzzy-search&props=%7B%22substr%22%3A%22(%E5%A4%AA%E7%A9%BA%E7%94%B5%E6%A2%AF%7C%E4%B8%89%E4%BD%93)%22%2C%22isRegex%22%3Atrue%7D
 ```
 
 ### 2. Multiple Sequential Searches
