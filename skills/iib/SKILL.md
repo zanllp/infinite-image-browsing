@@ -331,8 +331,8 @@ The `props` parameter must be URL-encoded JSON. Use this encoding method:
 ```bash
 # Search for "太空电梯" OR "三体"
 # JSON: {"substr":"(太空电梯|三体)","isRegex":true}
-# Encoded: %7B%22substr%22%3A%22(%E6%B1%89%E6%9C%8D%7C%E4%BA%BA%E5%A6%BB)%22%2C%22isRegex%22%3Atrue%7D
-?action=pane&type=fuzzy-search&props=%7B%22substr%22%3A%22(%E6%B1%89%E6%9C%8D%7C%E4%BA%BA%E5%A6%BB)%22%2C%22isRegex%22%3Atrue%7D
+# Encoded: %7B%22substr%22%3A%22(%E5%A4%AA%E7%A9%BA%E7%94%B5%E6%A2%AF%7C%E4%B8%89%E4%BD%93)%22%2C%22isRegex%22%3Atrue%7D
+?action=pane&type=fuzzy-search&props=%7B%22substr%22%3A%22(%E5%A4%AA%E7%A9%BA%E7%94%B5%E6%A2%AF%7C%E4%B8%89%E4%BD%93)%22%2C%22isRegex%22%3Atrue%7D
 ```
 
 ### Available View Options
