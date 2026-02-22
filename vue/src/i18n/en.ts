@@ -564,5 +564,17 @@ You can specify which snapshot to restore to when starting IIB in the global set
   flattenFolderConfirm: 'Confirm flattening {count} files?',
   flattenFolderExecuting: 'Flattening folder...',
   flattenFolderSuccess: 'Flatten complete, moved {count} files',
-  flattenFolderNoFiles: 'No files to move'
+  flattenFolderNoFiles: 'No files to move',
+
+  // ===== Loading Tips (format: title\n\ncontent|type) =====
+  loadingTip1: '💡 Filename Uniqueness Tip\n\nIf you use simple numeric naming (e.g., 001.png), deleting and regenerating files with the same name can cause tag and cache data confusion. It\'s recommended to enable timestamp filenames in your generation software, ensuring each filename includes a timestamp (e.g., [time][prompt])|warning',
+  loadingTip2: '⌨️ Batch Operations Tip\n\nHold Ctrl/Cmd to multi-select files. Right-click menu supports batch tag editing, moving, and deletion. Shift+click to select a range of files.|info',
+  loadingTip3: '🎹 Keyboard Shortcuts\n\nTikTok view: Arrow Up/Down to navigate, Esc to exit. Fullscreen preview: configure custom delete/download shortcuts in global settings. File list: PageUp/Down to scroll, Home/End to jump, Backspace for parent folder.|info',
+  loadingTip4: '🤖 AI Clustering Note\n\nFirst-time AI clustering requires calling the embedding API. Test with small batches first. Clustering results are cached for faster subsequent viewing.|info',
+  loadingTip5: '🔍 Fuzzy Search Tips\n\nFuzzy search supports regex! Click the regex icon on the right to enable. Use ^ at the start to match tag names or filenames exactly.|info',
+  loadingTip6: '🚶 Walk Mode\n\nWalk mode uses infinite scrolling to browse all files in subfolders without manual pagination. Great for quickly browsing large image collections.|info',
+  loadingTip7: '📸 Workspace Snapshots\n\nSave your current workspace state (open folders, sorting, etc.) for quick restoration later. In global settings, set it to auto-restore on startup.|info',
+  loadingTip8: '🏷️ Auto Tagging Feature\n\nConfigure auto-tagging rules in global settings. Tags are automatically applied when images are indexed, supporting conditions like prompt, model, sampler, etc.|info',
+  loadingTip9: '⚡ Performance Tip\n\nIf you experience lag when scrolling through a large number of images quickly, you can disable "Change Indicators" in global settings for significantly better performance.|info',
+  loadingTip10: '🤖 AI Agent Integration\n\nYou can now let AI agents use IIB to help with image management, tag organization, and smart search. Through the API interface, AI can access all IIB features for automated workflows.|info'
 }

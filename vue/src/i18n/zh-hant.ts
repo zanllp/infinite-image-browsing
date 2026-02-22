@@ -544,5 +544,17 @@ export const zhHant: Partial<IIBI18nMap> = {
   flattenFolderConfirm: '確認壓平 {count} 個檔案？',
   flattenFolderExecuting: '正在壓平資料夾...',
   flattenFolderSuccess: '壓平完成，已移動 {count} 個檔案',
-  flattenFolderNoFiles: '沒有需要移動的檔案'
+  flattenFolderNoFiles: '沒有需要移動的檔案',
+
+  // ===== Loading Tips (格式: 標題\n\n內容|類型) =====
+  loadingTip1: '💡 檔案名唯一性提示\n\n如果使用簡單數字命名（如 001.png），刪除後重新生成同名檔案會導致標籤和快取資料混亂。建議在生成軟體中啟用時間戳檔案名，確保每個檔案名都包含時間戳（如 [time][prompt]）|warning',
+  loadingTip2: '⌨️ 批量操作小技巧\n\n按住 Ctrl/Cmd 可以多選檔案，右鍵功能表支持批量標籤編輯、移動和刪除。Shift+點擊可以連續選擇多個檔案。|info',
+  loadingTip3: '🎹 快捷鍵\n\nTikTok 視圖下：方向鍵上下切換圖片，Esc 退出。全螢幕預覽時可在全域設定中自訂刪除和下載快捷鍵。檔案列表區：PageUp/Down 滾動，Home/End 跳轉，Backspace 返回上層。|info',
+  loadingTip4: '🤖 AI 聚類說明\n\n首次使用 AI 聚類需要呼叫 embedding API，建議先用小批量測試。聚類結果會快取，再次查看會很快。|info',
+  loadingTip5: '🔍 模糊搜尋技巧\n\n模糊搜尋支援正則表達式！點擊右側的正則圖標可以啟用。使用 ^ 開頭可以完全匹配標籤名或檔案名。|info',
+  loadingTip6: '🚶 Walk 模式\n\nWalk 模式使用無限滾動瀏覽所有子資料夾的檔案，無需手動翻頁。適合快速瀏覽大量圖片。|info',
+  loadingTip7: '📸 工作區快照\n\n你可以儲存目前的工作區狀態（打開的資料夾、排序方式等），下次打開 IIB 時快速還原。在全域設定中可以設為啟動時自動還原。|info',
+  loadingTip8: '🏷️ 自動標籤功能\n\n在全域設定中配置自動標籤規則，當圖片被索引時會自動添加標籤。支援根據 prompt、模型、採樣器等條件自動分類。|info',
+  loadingTip9: '⚡ 效能優化提示\n\n如果在快速滾動大量圖片時感到卡頓，可以在全域設定中關閉「變更指示器」功能，這可以顯著提升瀏覽效能。|info',
+  loadingTip10: '🤖 AI Agent 整合\n\n現在您可以讓 AI agent 使用 IIB 來協助進行圖片管理、標籤整理和智慧搜尋。透過 API 介面，AI 可以存取所有 IIB 功能，實現自動化工作流程。|info'
 }

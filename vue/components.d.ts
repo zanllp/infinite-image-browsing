@@ -62,5 +62,6 @@ declare module '@vue/runtime-core' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SmartOrganizeConfigModal: typeof import('./src/components/SmartOrganizeConfigModal.vue')['default']
+    TipsCarousel: typeof import('./src/components/TipsCarousel.vue')['default']
   }
 }

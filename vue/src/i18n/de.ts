@@ -304,5 +304,17 @@ export const de: Partial<IIBI18nMap> = {
   flattenFolderConfirm: '{count} Dateien abflachen bestätigen?',
   flattenFolderExecuting: 'Ordner wird abgeflacht...',
   flattenFolderSuccess: 'Abflachung abgeschlossen, {count} Dateien verschoben',
-  flattenFolderNoFiles: 'Keine Dateien zum Verschieben'
+  flattenFolderNoFiles: 'Keine Dateien zum Verschieben',
+
+  // ===== Loading Tips (Format: Titel\n\nInhalt|Typ) =====
+  loadingTip1: '💡 Dateinamens-Eindeutigkeit-Tipp\n\nWenn Sie einfache numerische Benennung verwenden (z. B. 001.png), kann das Löschen und erneute Erstellen von Dateien mit demselben Namen zu Tag- und Cache-Datenverwirrung führen. Es wird empfohlen, Zeitstempel-Dateinamen in Ihrer Generierungs-Software zu aktivieren, um sicherzustellen, dass jeder Dateiname einen Zeitstempel enthält (z. B. [time][prompt])|warning',
+  loadingTip2: '⌨️ Batch-Operationen-Tipp\n\nHalten Sie Ctrl/Cmd gedrückt, um mehrere Dateien auszuwählen. Das Rechtsklick-Menü unterstützt Batch-Tag-Bearbeitung, Verschieben und Löschen. Shift+Klick wählt einen Bereich von Dateien aus.|info',
+  loadingTip3: '🎹 Tastaturkürzel\n\nTikTok-Ansicht: Pfeiltaste hoch/runter zum Navigieren, Esc zum Beenden. Vollbildvorschau: Benutzerdefinierte Lösch-/Download-Kürzel in globalen Einstellungen konfigurieren. Dateiliste: PageUp/Down zum Scrollen, Home/End zum Springen, Backspace für übergeordneten Ordner.|info',
+  loadingTip4: '🤖 AI-Clustering-Hinweis\n\nDie erste Verwendung von AI-Clustering erfordert den Aufruf der Embedding-API. Testen Sie zuerst mit kleinen Chargen. Clustering-Ergebnisse werden zwischengespeichert, das spätere Anzeigen geht schnell.|info',
+  loadingTip5: '🔍 Fuzzy-Suche-Tipps\n\nDie Fuzzy-Suche unterstützt Regex! Klicken Sie auf das Regex-Symbol rechts, um es zu aktivieren. Verwenden Sie ^ am Anfang für exakte Übereinstimmung von Tagnamen oder Dateinamen.|info',
+  loadingTip6: '🚶 Walk-Modus\n\nDer Walk-Modus verwendet unendliches Scrollen, um alle Dateien in Unterordnern zu durchsuchen, ohne manuell zu blättern. Ideal zum schnellen Durchsuchen großer Bildersammlungen.|info',
+  loadingTip7: '📸 Workspace-Snapshots\n\nSie können Ihren aktuellen Workspace-Status (offene Ordner, Sortierung, etc.) speichern, um ihn beim nächsten Öffnen von IIB schnell wiederherzustellen. In den globalen Einstellungen kann automatische Wiederherstellung beim Start eingestellt werden.|info',
+  loadingTip8: '🏷️ Auto-Tagging-Funktion\n\nKonfigurieren Sie Auto-Tagging-Regeln in den globalen Einstellungen. Tags werden automatisch angewendet, wenn Bilder indexiert werden, unterstützt Bedingungen wie Prompt, Modell, Sampler, etc.|info',
+  loadingTip9: '⚡ Leistungstipp\n\nWenn Sie beim schnellen Scrollen durch viele Bilder Verzögerungen bemerken, können Sie "Change Indicators" in den globalen Einstellungen deaktivieren für deutlich bessere Leistung.|info',
+  loadingTip10: '🤖 KI-Agenten-Integration\n\nSie können jetzt KI-Agenten IIB nutzen lassen, um bei Bildverwaltung, Tag-Organisation und intelligenter Suche zu helfen. Über die API-Schnittstelle kann die KI auf alle IIB-Funktionen zugreifen und automatisierte Workflows erstellen.|info'
 }

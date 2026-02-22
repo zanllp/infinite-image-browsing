@@ -26,6 +26,7 @@ import { watch } from 'vue'
 import { tagSearchHistory } from '@/store/searchHistory'
 import { useTagStore } from '@/store/useTagStore'
 import { useLocalStorage } from '@vueuse/core'
+import TipsCarousel from '@/components/TipsCarousel.vue'
 
 const props = defineProps<{ tabIdx: number; paneIdx: number, searchScope?: string }>()
 const global = useGlobalStore()
@@ -315,7 +316,7 @@ const tagIdsToString = (tagIds: TagId[]) => {
       </p>
       <div class="list-container">
       <div class="pinned-search">
-        Tips: {{ $t('pinnedSearchHistoryDesc') }}
+        <TipsCarousel :interval="10000" />
       </div>
       <template :key="name" v-for="[name, list] in classifyTags">
          <ul class="tag-list" v-if="name !== 'Media Type' || list.length > 1">
@@ -469,10 +470,9 @@ const tagIdsToString = (tagIds: TagId[]) => {
 
   .pinned-search {
     padding: 0;
-    margin: 16px;
+    margin: 8px 16px;
     border-radius: 16px;
     background: var(--zp-primary-background);
-    padding: 8px;
   }
 
   .tag-list {
