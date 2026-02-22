@@ -16,6 +16,7 @@ import { useKeepMultiSelect } from '../fileTransfer/hook'
 import MultiSelectKeep from '@/components/MultiSelectKeep.vue'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import HistoryRecord from '@/components/HistoryRecord.vue'
+import TipsCarousel from '@/components/TipsCarousel.vue'
 import { fuzzySearchHistory, FuzzySearchHistoryRecord } from '@/store/searchHistory'
 import { openTiktokViewWithFiles } from '@/util/tiktokHelper'
 import { useTagStore } from '@/store/useTagStore'
@@ -272,6 +273,9 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
       <a-button @click="saveLoadedFileAsJson" v-if="images.length">{{ $t('saveLoadedImageAsJson') }}</a-button>
       <a-button @click="saveAllFileAsJson" v-if="images.length">{{ $t('saveAllAsJson') }}</a-button>
       <a-button @click="showHistoryRecord = true">{{ $t('history') }}</a-button>
+    <div class="tips-wrapper">
+      <TipsCarousel :interval="10000" />
+    </div>
     </div>
     <ASpin size="large" :spinning="!queue.isIdle">
       <AModal v-model:visible="showGenInfo" width="70vw" mask-closable @ok="showGenInfo = false">
@@ -399,6 +403,9 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
   }
 }
 
+.tips-wrapper {
+  padding: 0 8px;
+}
 
 
 .container {

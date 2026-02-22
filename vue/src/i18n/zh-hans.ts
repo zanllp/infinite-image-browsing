@@ -542,5 +542,17 @@ export const zhHans = {
   flattenFolderConfirm: '确认压平 {count} 个文件？',
   flattenFolderExecuting: '正在压平文件夹...',
   flattenFolderSuccess: '压平完成，已移动 {count} 个文件',
-  flattenFolderNoFiles: '没有需要移动的文件'
+  flattenFolderNoFiles: '没有需要移动的文件',
+
+  // ===== Loading Tips (格式: 标题\n\n内容|类型) =====
+  loadingTip1: '💡 文件名唯一性提示\n\n如果使用简单数字命名（如 001.png），删除后重新生成同名文件会导致标签和缓存数据混乱。建议在生成软件中启用时间戳文件名，确保每个文件名都包含时间戳（如 [time][prompt]）|warning',
+  loadingTip2: '⌨️ 批量操作小技巧\n\n按住 Ctrl/Cmd 可以多选文件，右键菜单支持批量标签编辑、移动和删除。Shift+点击可以连续选择多个文件。|info',
+  loadingTip3: '🎹 快捷键\n\nTikTok 视图下：方向键上下切换图片，Esc 退出。全屏预览时可在全局设置中自定义删除和下载快捷键。文件列表区：PageUp/Down 滚动，Home/End 跳转，Backspace 返回上级。|info',
+  loadingTip4: '🤖 AI 聚类说明\n\n首次使用 AI 聚类需要调用 embedding API，建议先用小批量测试。聚类结果会缓存，再次查看会很快。|info',
+  loadingTip5: '🔍 模糊搜索技巧\n\n模糊搜索支持正则表达式！点击右侧的正则图标可以启用。使用 ^ 开头可以完全匹配标签名或文件名。|info',
+  loadingTip6: '🚶 Walk 模式\n\nWalk 模式使用无限滚动浏览所有子文件夹的文件，无需手动翻页。适合快速浏览大量图片。|info',
+  loadingTip7: '📸 工作区快照\n\n你可以保存当前的工作区状态（打开的文件夹、排序方式等），下次打开 IIB 时快速恢复。在全局设置中可以设为启动时自动恢复。|info',
+  loadingTip8: '🏷️ 自动标签功能\n\n在全局设置中配置自动标签规则，当图片被索引时会自动添加标签。支持根据 prompt、模型、采样器等条件自动分类。|info',
+  loadingTip9: '⚡ 性能优化提示\n\n如果在快速滚动大量图片时感到卡顿，可以在全局设置中关闭"变更指示器"功能，这可以显著提升浏览性能。|info',
+  loadingTip10: '🤖 AI Agent 集成\n\n现在你可以让 AI agent 来使用 IIB 帮助进行图像管理、标签整理和智能搜索。通过 API 接口，AI 可以访问所有 IIB 功能，实现自动化工作流程。|info'
 }
