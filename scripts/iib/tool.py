@@ -83,14 +83,28 @@ def backup_db_file(db_file_path):
 
     if not os.path.exists(db_file_path):
         return
-    max_backup_count = int(os.environ.get('IIB_DB_FILE_BACKUP_MAX', '8'))
+    max_backup_count = int(os.environ.get('IIB_DB_FILE_BACKUP_MAX', '4'))
     if max_backup_count < 1:
         return
     backup_folder = os.path.join(cwd,'iib_db_backup')
+    os.makedirs(backup_folder, exist_ok=True)
+
+    # Check if backup already exists today
+    current_date = datetime.now().date()
+    backup_files = os.listdir(backup_folder) if os.path.exists(backup_folder) else []
+    pattern = r"iib\.db_(\d{4}-\d{2}-\d{2})"
+
+    for f in backup_files:
+        match = re.search(pattern, f)
+        if match:
+            backup_date = datetime.strptime(match.group(1), '%Y-%m-%d').date()
+            if backup_date == current_date:
+                print(f"\033[93mIIB Database backup already exists for today ({current_date}). Skipping backup.\033[0m")
+                return
+
     current_time = datetime.now()
     timestamp = current_time.strftime('%Y-%m-%d %H-%M-%S')
     backup_filename = f"iib.db_{timestamp}"
-    os.makedirs(backup_folder, exist_ok=True)
     backup_filepath = os.path.join(backup_folder, backup_filename)
     shutil.copy2(db_file_path, backup_filepath)
     backup_files = os.listdir(backup_folder)
@@ -103,7 +117,7 @@ def backup_db_file(db_file_path):
         for i in range(files_to_remove_count):
             file_to_remove = os.path.join(backup_folder, sorted_backup_files[i][0])
             os.remove(file_to_remove)
-            
+
     print(f"\033[92mIIB Database file has been successfully backed up to the backup folder.\033[0m")
 
 def get_sd_webui_conf(**kwargs):
