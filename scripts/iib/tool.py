@@ -679,7 +679,21 @@ def parse_generation_parameters(x: str):
     done_with_prompt = False
     if not x:
         return {"meta": {}, "pos_prompt": [], "lora": [], "lyco": []}
-    
+
+    # 提取并混入 extraJsonMetaInfo 字段
+    extra_json_match = re.search(r'\nextraJsonMetaInfo:\s*(\{[\s\S]*\})\s*$', x.strip())
+    if extra_json_match:
+        try:
+            extra_json_meta_info = json.loads(extra_json_match.group(1))
+            # 混入到 res 中，确保所有值都是字符串
+            for k, v in extra_json_meta_info.items():
+                res[k] = json.dumps(v) if not isinstance(v, str) else v
+            # 从原始参数中移除 extraJsonMetaInfo 部分
+            x = re.sub(r'\nextraJsonMetaInfo:\s*\{[\s\S]*\}\s*$', '', x.strip())
+        except json.JSONDecodeError:
+            # 解析失败，保留原始字符串
+            pass
+
     *lines, lastline = x.strip().split("\n")
     if len(re_param.findall(lastline)) < 3:
         lines.append(lastline)
