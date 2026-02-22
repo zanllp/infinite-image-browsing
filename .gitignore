@@ -26,3 +26,4 @@ iib.db-wal
 .cursor/
 
 CLAUDE.md
+.claude/*

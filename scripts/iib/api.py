@@ -1116,8 +1116,8 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
 
     class SearchBySubstrReq(BaseModel):
         surstr: str
-        cursor: str
-        regexp: str
+        cursor: Optional[str] = ""
+        regexp: Optional[str] = ""
         folder_paths: List[str] = None
         size: Optional[int] = 200
         path_only: Optional[bool] = False
@@ -1128,7 +1128,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         if IIB_DEBUG:
             logger.info(req)
         conn = DataBase.get_conn()
-        folder_paths=normalize_paths(req.folder_paths, os.getcwd())
+        folder_paths=normalize_paths(req.folder_paths or [], os.getcwd())
         if(not folder_paths and req.folder_paths):
             return { "files": [], "cursor": Cursor(has_next=False) }
         imgs, next_cursor = DbImg.find_by_substring(
@@ -1147,10 +1147,10 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         }
     
     class MatchImagesByTagsReq(BaseModel):
-        and_tags: List[int]
-        or_tags: List[int]
-        not_tags: List[int]
-        cursor: str
+        and_tags: Optional[List[int]] = []
+        or_tags: Optional[List[int]] = []
+        not_tags: Optional[List[int]] = []
+        cursor: Optional[str] = ""
         folder_paths: List[str] = None
         size: Optional[int] = 200
         random_sort: Optional[bool] = False
@@ -1160,7 +1160,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         if IIB_DEBUG:
             logger.info(req)
         conn = DataBase.get_conn()
-        folder_paths=normalize_paths(req.folder_paths, os.getcwd())
+        folder_paths=normalize_paths(req.folder_paths or [], os.getcwd())
         if(not folder_paths and req.folder_paths):
             return { "files": [], "cursor": Cursor(has_next=False) }
         imgs, next_cursor = ImageTag.get_images_by_tags(

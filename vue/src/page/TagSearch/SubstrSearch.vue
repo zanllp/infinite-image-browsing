@@ -22,7 +22,21 @@ import { useTagStore } from '@/store/useTagStore'
 import { useLocalStorage } from '@vueuse/core'
 const tagStore = useTagStore()
 const showAutoUpdateFeatureTip = useLocalStorage('iib_auto_update_feature_tip_shown', false)
-const props = defineProps<{ tabIdx: number; paneIdx: number, searchScope?: string }>()
+const props = defineProps<{
+  tabIdx: number
+  paneIdx: number
+  searchScope?: string
+  /** Initial search keyword value */
+  initialSubstr?: string
+  /** Initial regex mode value */
+  initialIsRegex?: boolean
+  /** Initial path-only mode value */
+  initialPathOnly?: boolean
+  /** Initial media type filter value */
+  initialMediaType?: 'all' | 'image' | 'video'
+  /** Whether to auto-search on mount */
+  autoSearch?: boolean
+}>()
 const isRegex = ref(false)
 const substr = ref('')
 const pathOnly = ref(false)
@@ -83,7 +97,24 @@ onMounted(async () => {
       await onUpdateBtnClick()
     }
   }
-  if (props.searchScope) {
+  // Apply pre-filled values from props
+  if (props.initialSubstr !== undefined) {
+    substr.value = props.initialSubstr
+  }
+  if (props.initialIsRegex !== undefined) {
+    isRegex.value = props.initialIsRegex
+  }
+  if (props.initialPathOnly !== undefined) {
+    pathOnly.value = props.initialPathOnly
+  }
+  if (props.initialMediaType !== undefined) {
+    mediaType.value = props.initialMediaType
+  }
+  // Auto-search if substr is provided and autoSearch is not false
+  if (props.initialSubstr && props.autoSearch !== false) {
+    await query()
+  } else if (props.searchScope && !props.initialSubstr) {
+    // Legacy behavior: only search if searchScope but no search term
     await query()
   }
 })

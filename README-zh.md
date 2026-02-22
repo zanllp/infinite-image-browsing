@@ -39,14 +39,13 @@
 - 支持全屏预览，并且支持在全屏预览下使用自定义快捷键进行操作
 - 支持在全屏预览模式下通过按下方向键或点击按钮移动到前一个或后一个图像。
 - 支持播放远程服务器上的视频文件
-- 支持 WebM 视频与音频文件播放。
-- 优化视频流 Range 处理，改善大文件吞吐。
 
 ### 💻 多种使用方法
 - 您可以将其作为 SD-webui 的扩展安装。
 - 您可以使用 Python 独立运行它。
 - 还提供桌面应用程序版本。
 - 支持多种流行的AI软件
+- **NEW**：[与 AI 助手一起使用](docs/ai-agents-zh.md)（Claude Code、Cursor、OpenClaw 等）
 
 ### 🚶‍♀️ Walk模式
 - 自动加载下一个文件夹 `(类似于 os.walk)`，可让您无需分页浏览所有图像。
@@ -137,6 +136,10 @@ exe版本同样支持ComfyUI/Fooocus/NovelAI
 ## 作为库使用
 
 使用iframe接入IIB，将IIB作为你应用的文件浏览器使用。 参考 https://github.com/zanllp/sd-webui-infinite-image-browsing/blob/main/vue/usage.md
+
+## 作为 AI 助手技能
+
+IIB 可以与 Claude Code、Cursor 和 OpenClaw 等 AI 助手一起使用。详情请参阅 [AI 助手文档](docs/ai-agents-zh.md)。
 
 # 预览
 
