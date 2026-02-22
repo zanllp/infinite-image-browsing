@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(git checkout:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(npm run build:*)",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(npx vue-tsc:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)"
     ]
   }
 }

@@ -1,8 +1,10 @@
+import { memoize } from 'lodash-es'
+
 export function isAbsolute (path: string): boolean {
   return /^(?:\/|[a-z]:)/i.test(normalize(path))
 }
 
-export function normalize (path: string): string {
+function _normalize (path: string): string {
   if (!path) {
     return ''
   }
@@ -34,6 +36,7 @@ export function normalize (path: string): string {
     return result
   }
 }
+export const normalize =  memoize(_normalize)
 
 export function join (...paths: string[]): string {
   if (!paths.length) {
@@ -77,4 +80,14 @@ export function getParentDirectory(filePath: string) {
     return '.';
   }
   return filePath.substring(0, lastSeparatorIndex);
+}
+
+export function basename(filePath: string) {
+  const lastSlashIndex = filePath.lastIndexOf('/');
+  const lastBackslashIndex = filePath.lastIndexOf('\\');
+  const lastSeparatorIndex = Math.max(lastSlashIndex, lastBackslashIndex);
+  if (lastSeparatorIndex === -1) {
+    return filePath;
+  }
+  return filePath.substring(lastSeparatorIndex + 1);
 }

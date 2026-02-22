@@ -48,7 +48,7 @@ export interface GridViewFile extends FileNodeInfo {
 /**
  * A tab pane that displays files in a grid view.
  */
-interface GridViewTabPane extends TabPaneBase {
+export interface GridViewTabPane extends TabPaneBase {
   type: 'grid-view'
   /**
    * Indicates whether the files in the grid view can be deleted.
@@ -73,7 +73,7 @@ export interface GridViewFile extends FileNodeInfo {
 /**
  * A tab pane that displays files in a grid view.
  */
-interface GridViewTabPane extends TabPaneBase {
+export interface GridViewTabPane extends TabPaneBase {
   type: 'grid-view'
   /**
    * Indicates whether the files in the grid view can be deleted.
@@ -86,13 +86,13 @@ interface GridViewTabPane extends TabPaneBase {
   files: GridViewFile[]
 }
 
-interface TagSearchMatchedImageGridTabPane extends TabPaneBase {
+export interface TagSearchMatchedImageGridTabPane extends TabPaneBase {
   type: 'tag-search-matched-image-grid'
   selectedTagIds: MatchImageByTagsReq
   id: string
 }
 
-interface TopicSearchMatchedImageGridTabPane extends TabPaneBase {
+export interface TopicSearchMatchedImageGridTabPane extends TabPaneBase {
   type: 'topic-search-matched-image-grid'
   id: string
   title: string
@@ -109,6 +109,10 @@ export interface FileTransferTabPane extends TabPaneBase {
   path?: string
   mode?: FileTransferProps['mode']
   stackKey?: string
+  /** Target file path to scroll to and optionally preview */
+  targetFile?: string
+  /** Whether to open fullscreen preview for targetFile */
+  openPreview?: boolean
 }
 
 export interface TagSearchTabPane extends TabPaneBase {
@@ -119,6 +123,16 @@ export interface TagSearchTabPane extends TabPaneBase {
 export interface FuzzySearchTabPane extends TabPaneBase {
   type: 'fuzzy-search'
   searchScope?: string
+  /** Initial search keyword value (used as-is if isRegex is true, otherwise as keyword) */
+  initialSubstr?: string
+  /** Initial regex mode value */
+  initialIsRegex?: boolean
+  /** Initial path-only mode value */
+  initialPathOnly?: boolean
+  /** Initial media type filter value */
+  initialMediaType?: 'all' | 'image' | 'video'
+  /** Whether to auto-search on mount */
+  autoSearch?: boolean
 }
 
 export type TabPane =

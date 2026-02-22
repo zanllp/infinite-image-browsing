@@ -23,7 +23,6 @@ import 'multi-nprogress/nprogress.css'
 // @ts-ignore
 import { RecycleScroller } from '@zanllp/vue-virtual-scroller'
 import '@zanllp/vue-virtual-scroller/dist/vue-virtual-scroller.css'
-import { watch } from 'vue'
 import FileItem from '@/components/FileItem.vue'
 import fullScreenContextMenu from './fullScreenContextMenu.vue'
 import BaseFileListInfo from '@/components/BaseFileListInfo.vue'
@@ -35,7 +34,9 @@ import MultiSelectKeep from '@/components/MultiSelectKeep.vue'
 import { openSmartOrganizeConfig } from '@/util/smartOrganize'
 import { Modal, message } from 'ant-design-vue'
 import { t } from '@/i18n'
-import { h, ref } from 'vue'
+import { h, ref, watch, onMounted, nextTick } from 'vue'
+import { openImageFullscreenPreview } from '@/util/imagePreviewOperation'
+import { normalize } from '@/util/path'
 
 const global = useGlobalStore()
 const props = defineProps<{
@@ -46,6 +47,8 @@ const props = defineProps<{
    */
   path?: string
   mode?: Props['mode']
+  targetFile?: string
+  openPreview?: boolean
   /**
    * 页面栈,跳过不必要的api请求
    */
@@ -81,7 +84,7 @@ const {
 } = useFilesDisplay()
 const { onDrop, onFileDragStart, onFileDragEnd, onFileDropToFolder } = useFileTransfer()
 const { onFileItemClick, onContextMenuClick, showGenInfo, imageGenInfo, q } = useFileItemActions({ openNext })
-const { previewIdx, onPreviewVisibleChange, previewing, previewImgMove, canPreview, scrollToFileId } = usePreview()
+const { previewIdx, onPreviewVisibleChange, previewing, previewImgMove, canPreview, scrollToFileId,scrollToIndex } = usePreview()
 const tiktokStore = useTiktokStore()
 const { showMenuIdx } = useMobileOptimization()
 const { onClearAllSelected, onReverseSelect, onSelectAll } = useKeepMultiSelect()
@@ -200,6 +203,45 @@ watch(
     }
   }
 )
+
+// Handle view action: open target file in fullscreen preview
+onMounted(() => { 
+  const { targetFile, openPreview } = props
+  if (!targetFile || !openPreview) {
+    return
+  }
+  console.log('StackView mounted with targetFile:', targetFile, 'openPreview:', openPreview)
+ 
+  // Wait for files to load, then find and open the target file
+  nextTick(() => {
+    // Watch for sortedFiles to be populated
+    const unwatch = watch(
+      () => sortedFiles.value,
+      (files) => {
+        if (files && files.length > 0) {
+          const targetIdx = files.map(v => normalize(v.fullpath)).indexOf(normalize(targetFile))
+          if (targetIdx !== -1) {
+            unwatch()
+            nextTick(() => {
+              console.log('Found target file in stack view:', targetFile, 'at index', targetIdx)
+              scrollToIndex(targetIdx)
+              // Trigger preview by setting previewIdx and fullscreenPreviewInitialUrl
+              setTimeout(() => {
+                openImageFullscreenPreview(targetIdx,stackViewEl.value!)
+              }, 300)
+            })
+          }
+        }
+      },
+      { immediate: true }
+    )
+
+    // Auto-cleanup after 5 seconds if file not found
+    setTimeout(() => {
+      unwatch()
+    }, 5000)
+  })
+})
 
 
 </script>

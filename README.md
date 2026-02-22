@@ -48,15 +48,13 @@ If you would like to support more software, please refer to: [parsers](https://g
 - Support full-screen preview and enable custom shortcut key operations while in full-screen preview mode.
 - Support navigating to the previous or next image in full-screen preview mode by pressing arrow keys or clicking buttons.
 - Support playing video files from a remote server.
-- Support WebM videos and audio playback.
-- Improved video streaming Range handling for large files.
 
 ### 💻 Multiple Usage Methods
 - You can install it as an extension on SD-webui.
 - You can run it independently using Python.
 - The desktop app version is also available.
 - Supports multiple popular AI software.
-- **NEW**: Use with AI agents (Claude Code, Cursor, OpenClaw, etc.) via Agent Skills.
+- **NEW**: [Use with AI agents](docs/ai-agents.md) (Claude Code, Cursor, OpenClaw, etc.)
 
 
 ### 🎵 TikTok-Style View
@@ -152,31 +150,9 @@ If you need to compile it yourself, please refer to https://github.com/zanllp/sd
 
 Use iframe to access IIB and use it as a file browser for your application. Refer to https://github.com/zanllp/sd-webui-infinite-image-browsing/blob/main/vue/usage.md
 
-## With AI Agents (Claude Code, Cursor, OpenClaw, etc.)
+## As an AI Agent Skill
 
-IIB can be used as an [Agent Skill](https://agentskills.io), allowing AI agents to search, browse, tag, and organize your images through natural language.
-
-### Installation
-
-```bash
-npx skills add https://github.com/zanllp/infinite-image-browsing --skill iib
-```
-
-### Usage
-
-1. Start IIB service first:
-   ```bash
-   python app.py --port 7866
-   ```
-
-2. Then ask your AI agent to help with image tasks:
-   - "Find all images with 'sunset' in the prompt"
-   - "Tag these images as favorites"
-   - "Organize my Downloads folder by theme"
-   - "Show me the generation parameters of this image"
-
-The agent will use IIB's API to perform these operations. See [skills/iib/SKILL.md](skills/iib/SKILL.md) for the full API documentation.
-
+IIB can be used with AI agents like Claude Code, Cursor, and OpenClaw. See [AI Agents Documentation](docs/ai-agents.md) for details.
 
 # Preview
 
