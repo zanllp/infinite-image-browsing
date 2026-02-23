@@ -1,6 +1,42 @@
 [跳到中文](#中文)
 # English
 
+## 2026-02-23
+### 🎬 Inline Video Playback
+Added inline video playback feature for video items wider than 400px.
+
+**Features:**
+- **Play Here Button**: Hover over a video to see the "Play Here" button in the bottom-left corner
+- **Inline Playback**: Click to play the video directly in the grid item without opening a modal
+- **Auto-Stop Others**: Automatically stops any other playing videos when starting a new one
+- **Multi-language Support**: Button text is fully internationalized (English, Chinese, German)
+- **Smart Reset**: Automatically stops playback when the list is reordered or refreshed
+
+**How to use:**
+1. Make sure your grid cell width is greater than 400px (adjustable in settings)
+2. Hover over any video thumbnail
+3. Click the "Play Here" button in the bottom-left corner
+4. The video plays inline with full controls
+5. Click elsewhere or play another video to stop
+
+**Note:** The center play icon still opens the modal player for full-screen viewing.
+
+<img width="400" alt="Inline video playback" src="docs/imgs/file-item-play-here.png" />
+
+## 2026-02-22
+### 📝 Parse extra JSON metadata
+Parse and mixin `extraJsonMetaInfo` field from image metadata.
+
+### 🎡 Tips carousel
+Added tips carousel component with 10 multilingual tips to help users discover features.
+
+### 🗄️ Optimize database backup
+Optimized database backup to run once per day and reduced max backups to 4.
+
+### 📚 Docs improvements
+Fixed URL encoding example with correct keywords and reorganized skill documentation.
+
+
 ## 2026-02-17
 ### 🗂️ Smart Organize - AI-Powered File Organization \
 
@@ -690,6 +726,41 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-02-23
+### 🎬 视频原地播放功能
+为宽度超过 400px 的视频 item 添加了原地播放功能。
+
+**功能特性：**
+- **"在此播放"按钮**：鼠标悬停在视频上时，左下角会显示播放按钮
+- **原地播放**：点击按钮直接在网格 item 内播放视频，无需打开弹窗
+- **自动停止其他视频**：播放新视频时，会自动停止其他正在播放的视频
+- **多语言支持**：按钮文字支持多语言（英文、简体中文、繁体中文、德语）
+- **智能重置**：列表重新排序或刷新时，自动停止播放
+
+**使用方法：**
+1. 确保网格单元格宽度大于 400px（可在设置中调整）
+2. 将鼠标悬停在任意视频缩略图上
+3. 点击左下角的"在此播放"按钮
+4. 视频将在 item 内播放，带有完整的控制条
+5. 点击其他位置或播放其他视频即可停止
+
+**注意：** 中心的播放图标仍然可以打开模态框播放器进行全屏查看。
+
+<img width="400" alt="视频原地播放" src="docs/imgs/file-item-play-here.png" />
+## 2026-02-22
+### 📝 解析额外 JSON 元数据
+解析并混入图片元数据中的 `extraJsonMetaInfo` 字段。
+
+### 🎡 提示轮播
+新增提示轮播组件，包含 10 条多语言提示，帮助用户发现功能。
+
+### 🗄️ 优化数据库备份
+优化数据库备份为每天一次，并减少最大备份数为 4 个。
+
+### 📚 文档改进
+修复 URL 编码示例中的关键词，并重组技能文档。
+
 
 ## 2026-02-17
 ### 🗂️ 智能整理 - AI 驱动的文件整理

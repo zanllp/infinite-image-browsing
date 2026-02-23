@@ -556,5 +556,8 @@ export const zhHant: Partial<IIBI18nMap> = {
   loadingTip7: '📸 工作區快照\n\n你可以儲存目前的工作區狀態（打開的資料夾、排序方式等），下次打開 IIB 時快速還原。在全域設定中可以設為啟動時自動還原。|info',
   loadingTip8: '🏷️ 自動標籤功能\n\n在全域設定中配置自動標籤規則，當圖片被索引時會自動添加標籤。支援根據 prompt、模型、採樣器等條件自動分類。|info',
   loadingTip9: '⚡ 效能優化提示\n\n如果在快速滾動大量圖片時感到卡頓，可以在全域設定中關閉「變更指示器」功能，這可以顯著提升瀏覽效能。|info',
-  loadingTip10: '🤖 AI Agent 整合\n\n現在您可以讓 AI agent 使用 IIB 來協助進行圖片管理、標籤整理和智慧搜尋。透過 API 介面，AI 可以存取所有 IIB 功能，實現自動化工作流程。|info'
+  loadingTip10: '🤖 AI Agent 整合\n\n現在您可以讓 AI agent 使用 IIB 來協助進行圖片管理、標籤整理和智慧搜尋。透過 API 介面，AI 可以存取所有 IIB 功能，實現自動化工作流程。|info',
+
+  // ===== 視頻原地播放 =====
+  playInline: '在此播放'
 }

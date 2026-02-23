@@ -576,5 +576,8 @@ You can specify which snapshot to restore to when starting IIB in the global set
   loadingTip7: '📸 Workspace Snapshots\n\nSave your current workspace state (open folders, sorting, etc.) for quick restoration later. In global settings, set it to auto-restore on startup.|info',
   loadingTip8: '🏷️ Auto Tagging Feature\n\nConfigure auto-tagging rules in global settings. Tags are automatically applied when images are indexed, supporting conditions like prompt, model, sampler, etc.|info',
   loadingTip9: '⚡ Performance Tip\n\nIf you experience lag when scrolling through a large number of images quickly, you can disable "Change Indicators" in global settings for significantly better performance.|info',
-  loadingTip10: '🤖 AI Agent Integration\n\nYou can now let AI agents use IIB to help with image management, tag organization, and smart search. Through the API interface, AI can access all IIB features for automated workflows.|info'
+  loadingTip10: '🤖 AI Agent Integration\n\nYou can now let AI agents use IIB to help with image management, tag organization, and smart search. Through the API interface, AI can access all IIB features for automated workflows.|info',
+
+  // ===== Video Inline Play =====
+  playInline: 'Play Here'
 }
