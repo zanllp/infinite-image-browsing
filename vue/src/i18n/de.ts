@@ -316,5 +316,8 @@ export const de: Partial<IIBI18nMap> = {
   loadingTip7: '📸 Workspace-Snapshots\n\nSie können Ihren aktuellen Workspace-Status (offene Ordner, Sortierung, etc.) speichern, um ihn beim nächsten Öffnen von IIB schnell wiederherzustellen. In den globalen Einstellungen kann automatische Wiederherstellung beim Start eingestellt werden.|info',
   loadingTip8: '🏷️ Auto-Tagging-Funktion\n\nKonfigurieren Sie Auto-Tagging-Regeln in den globalen Einstellungen. Tags werden automatisch angewendet, wenn Bilder indexiert werden, unterstützt Bedingungen wie Prompt, Modell, Sampler, etc.|info',
   loadingTip9: '⚡ Leistungstipp\n\nWenn Sie beim schnellen Scrollen durch viele Bilder Verzögerungen bemerken, können Sie "Change Indicators" in den globalen Einstellungen deaktivieren für deutlich bessere Leistung.|info',
-  loadingTip10: '🤖 KI-Agenten-Integration\n\nSie können jetzt KI-Agenten IIB nutzen lassen, um bei Bildverwaltung, Tag-Organisation und intelligenter Suche zu helfen. Über die API-Schnittstelle kann die KI auf alle IIB-Funktionen zugreifen und automatisierte Workflows erstellen.|info'
+  loadingTip10: '🤖 KI-Agenten-Integration\n\nSie können jetzt KI-Agenten IIB nutzen lassen, um bei Bildverwaltung, Tag-Organisation und intelligenter Suche zu helfen. Über die API-Schnittstelle kann die KI auf alle IIB-Funktionen zugreifen und automatisierte Workflows erstellen.|info',
+
+  // ===== Video Inline Play =====
+  playInline: 'Hier abspielen'
 }

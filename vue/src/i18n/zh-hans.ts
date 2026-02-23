@@ -554,5 +554,8 @@ export const zhHans = {
   loadingTip7: '📸 工作区快照\n\n你可以保存当前的工作区状态（打开的文件夹、排序方式等），下次打开 IIB 时快速恢复。在全局设置中可以设为启动时自动恢复。|info',
   loadingTip8: '🏷️ 自动标签功能\n\n在全局设置中配置自动标签规则，当图片被索引时会自动添加标签。支持根据 prompt、模型、采样器等条件自动分类。|info',
   loadingTip9: '⚡ 性能优化提示\n\n如果在快速滚动大量图片时感到卡顿，可以在全局设置中关闭"变更指示器"功能，这可以显著提升浏览性能。|info',
-  loadingTip10: '🤖 AI Agent 集成\n\n现在你可以让 AI agent 来使用 IIB 帮助进行图像管理、标签整理和智能搜索。通过 API 接口，AI 可以访问所有 IIB 功能，实现自动化工作流程。|info'
+  loadingTip10: '🤖 AI Agent 集成\n\n现在你可以让 AI agent 来使用 IIB 帮助进行图像管理、标签整理和智能搜索。通过 API 接口，AI 可以访问所有 IIB 功能，实现自动化工作流程。|info',
+
+  // ===== 视频原地播放 =====
+  playInline: '在此播放'
 }

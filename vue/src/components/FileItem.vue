@@ -6,7 +6,7 @@ import type { FileNodeInfo } from '@/api/files'
 import { isImageFile, isVideoFile, isAudioFile } from '@/util'
 import { toImageThumbnailUrl, toVideoCoverUrl, toRawFileUrl } from '@/util/file'
 import type { MenuInfo } from 'ant-design-vue/lib/menu/src/interface'
-import { computed, ref } from 'vue'
+import { computed, ref, nextTick, watch } from 'vue'
 import ContextMenu from './ContextMenu.vue'
 import ChangeIndicator from './ChangeIndicator.vue'
 import { useTagStore } from '@/store/useTagStore'
@@ -16,10 +16,12 @@ import { openVideoModal, openAudioModal } from './functionalCallableComp'
 import type { GenDiffInfo } from '@/api/files'
 import { play } from '@/icon'
 import { Top4MediaInfo } from '@/api'
-import { watch } from 'vue'
 import { debounce } from 'lodash-es'
-
 import { closeImageFullscreenPreview } from '@/util/imagePreviewOperation'
+import { eventEmitter as videoEventEmitter, useEventListen } from './videoEventEmitter'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const global = useGlobalStore()
 const tagStore = useTagStore()
@@ -97,6 +99,75 @@ const taggleLikeTag = () => {
 
 const minShowDetailWidth = 160
 
+// 视频原地播放相关
+const isPlayingInline = ref(false)
+const videoElementRef = ref<HTMLVideoElement | null>(null)
+
+// 切换原地播放
+const toggleInlinePlay = (event: MouseEvent) => {
+  console.log('toggleInlinePlay', { event, isPlayingInline: isPlayingInline.value, videoRef: videoElementRef.value })
+  event.stopPropagation()
+
+  // 如果要开始播放，先通知其他视频停止
+  if (!isPlayingInline.value) {
+    videoEventEmitter.emit('stopInlinePlay')
+  }
+
+  // 先切换状态，让video元素渲染出来
+  isPlayingInline.value = !isPlayingInline.value
+
+  // 使用 nextTick 确保 video 元素已经渲染
+  if (!isPlayingInline.value) {
+    // 如果是暂停，直接暂停
+    if (videoElementRef.value) {
+      videoElementRef.value.pause()
+    }
+  } else {
+    // 如果是播放，等待DOM更新后再播放
+    nextTick(() => {
+      if (videoElementRef.value) {
+        console.log('Playing video', videoElementRef.value)
+        videoElementRef.value.play().catch(err => {
+          console.error('Play failed:', err)
+          isPlayingInline.value = false
+        })
+      } else {
+        console.error('Video ref is null after nextTick')
+        isPlayingInline.value = false
+      }
+    })
+  }
+}
+
+// 处理其他视频播放的通知
+const handleStopInlinePlay = () => {
+  if (isPlayingInline.value && videoElementRef.value) {
+    videoElementRef.value.pause()
+    isPlayingInline.value = false
+  }
+}
+
+// 监听停止事件
+useEventListen('stopInlinePlay', handleStopInlinePlay)
+
+// 视频播放结束处理
+const handleVideoEnded = () => {
+  isPlayingInline.value = false
+}
+
+// 判断是否显示原地播放按钮（宽度大于400且未在播放）
+const shouldShowInlinePlayBtn = computed(() => {
+  return props.cellWidth > 400 && !isPlayingInline.value
+})
+
+// 监听 idx 变化，如果正在播放则停止
+watch(() => props.idx, () => {
+  if (isPlayingInline.value && videoElementRef.value) {
+    videoElementRef.value.pause()
+    isPlayingInline.value = false
+  }
+})
+
 const handleDragOver = (event: DragEvent) => {
   if (props.file.type !== 'dir') {
     return
@@ -136,13 +207,22 @@ const handleFileClick = (event: MouseEvent) => {
 
 // 处理视频点击事件
 const handleVideoClick = () => {
+  // 如果正在原地播放，先停止播放
+  if (isPlayingInline.value) {
+    isPlayingInline.value = false
+    if (videoElementRef.value) {
+      videoElementRef.value.pause()
+    }
+    return
+  }
+
   if (global.magicSwitchTiktokView) {
     // 直接触发TikTok视图
     emit('tiktokView', props.file, props.idx)
   } else {
     // 正常打开视频模态框
     openVideoModal(
-      props.file, 
+      props.file,
       (id) => emit('contextMenuClick', { key: `toggle-tag-${id}` } as any, props.file, props.idx),
       () => emit('tiktokView', props.file, props.idx)
     )
@@ -222,11 +302,31 @@ const handleAudioClick = () => {
             </a-tag>
           </div>
         </div>
-        <div :class="`idx-${idx} item-content video`" :url="toVideoCoverUrl(file)"
-          :style="{ 'background-image': `url('${file.cover_url ?? toVideoCoverUrl(file)}')` }" v-else-if="isVideoFile(file.name)"
+        <div :class="[`idx-${idx} item-content video`, { 'playing-inline': isPlayingInline }]" :url="toVideoCoverUrl(file)"
+          :style="{ 'background-image': isPlayingInline ? 'none' : `url('${file.cover_url ?? toVideoCoverUrl(file)}')` }" v-else-if="isVideoFile(file.name)"
           @click="handleVideoClick">
 
-          <div class="play-icon">
+          <!-- 原地播放视频元素 -->
+          <video
+            v-if="cellWidth > 400 && isPlayingInline"
+            :ref="(el) => videoElementRef = el as HTMLVideoElement"
+            :src="toRawFileUrl(file)"
+            class="inline-video-player"
+            @ended="handleVideoEnded"
+            @click.stop
+            controls
+          />
+
+          <!-- 遮罩层和原地播放按钮 -->
+          <div v-if="shouldShowInlinePlayBtn" class="inline-play-overlay" @click="toggleInlinePlay">
+            <div class="inline-play-btn">
+              <img :src="play" class="play-icon-img">
+              <span class="play-text">{{ t('playInline') }}</span>
+            </div>
+          </div>
+
+          <!-- 原有的中心播放图标（用于打开modal） -->
+          <div class="play-icon" v-show="!isPlayingInline">
             <img :src="play" style="width: 40px;height: 40px;">
           </div>
           <div class="tags-container" v-if="customTags && cellWidth > minShowDetailWidth">
@@ -295,6 +395,81 @@ const handleAudioClick = () => {
     background-size: cover;
     background-position: center;
     cursor: pointer;
+
+    &.playing-inline {
+      background-color: #000;
+    }
+
+    .inline-video-player {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .inline-play-overlay {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-start;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 5;
+    }
+
+    .inline-play-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(20, 20, 20, 0.9) 100%);
+      backdrop-filter: blur(8px);
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.3),
+        0 0 0 1px rgba(0, 0, 0, 0.1) inset,
+        0 1px 0 rgba(255, 255, 255, 0.1) inset;
+
+      &:hover {
+        background: linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(30, 30, 30, 0.95) 100%);
+        border-color: rgba(255, 255, 255, 0.25);
+        transform: translateY(-1px);
+        box-shadow:
+          0 4px 12px rgba(0, 0, 0, 0.4),
+          0 0 0 1px rgba(0, 0, 0, 0.1) inset,
+          0 1px 0 rgba(255, 255, 255, 0.15) inset;
+      }
+
+      &:active {
+        transform: translateY(0);
+        background: rgba(0, 0, 0, 0.95);
+      }
+
+      .play-icon-img {
+        width: 24px;
+        height: 24px;
+        filter: brightness(0) invert(1);
+        flex-shrink: 0;
+      }
+
+      .play-text {
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        white-space: nowrap;
+      }
+    }
+
+    &:hover .inline-play-overlay {
+      opacity: 1;
+    }
   }
 
   &.audio {
