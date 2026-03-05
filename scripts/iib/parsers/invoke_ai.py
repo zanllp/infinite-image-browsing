@@ -12,13 +12,17 @@ class InvokeAIParser:
     def parse(clz, img: Image, file_path):
         if not clz.test(img, file_path):
             raise Exception("The input image does not match the current parser.")
-        raw_infos = json.loads(img.info["invokeai_graph"])
-        core_metadata = {}
-        for key in raw_infos['nodes']:
-            if key.startswith("core_metadata"):
-                core_metadata = raw_infos['nodes'][key]
-                break
-          
+        if 'invokeai_metadata' in img.info:
+            core_metadata = json.loads(img.info['invokeai_metadata'])
+            core_metadata.pop("canvas_v2_metadata", None)
+        elif 'invokeai_graph' in img.info:
+            raw_infos = json.loads(img.info["invokeai_graph"])
+            core_metadata = {}
+            for key in raw_infos['nodes']:
+                if key.startswith("core_metadata"):
+                    core_metadata = raw_infos['nodes'][key]
+                    break
+            
         positive_prompt = core_metadata.get("positive_prompt", "None")
         negative_prompt = core_metadata.get("negative_prompt", "None")
         steps = core_metadata.get("steps", 'Unknown')
@@ -60,6 +64,6 @@ class InvokeAIParser:
     @classmethod
     def test(clz, img: Image, file_path: str):
         try:
-            return 'invokeai_graph' in img.info
+            return 'invokeai_graph' in img.info or 'invokeai_metadata' in img.info
         except Exception as e:
             return False
