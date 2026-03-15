@@ -338,7 +338,7 @@ export const de: Partial<IIBI18nMap> = {
   fixErrorsBeforeSave: 'Bitte beheben Sie alle Fehler vor dem Speichern',
   extraMetaInfoTitle: 'Extra Meta Info (KV-Editor)',
   addKvButton: '+ Hinzufügen',
-  extraMetaInfoHint: 'Unterstützt alle gültigen JSON-Werte (Objekte, Arrays, Zahlen, Boolesche Werte, etc.). String-Modus fügt automatisch doppelte Anführungszeichen hinzu.',
+  extraMetaInfoHint: 'Kann beliebige komplexe Informationen speichern, eine perfekte Ergänzung zu den Einschränkungen des Params-Formats. Im JSON-Modus werden auch alle gültigen JSON-Werte unterstützt (Objekte, Arrays, Zahlen, Boolesche Werte, etc.)',
   noExtraMetaInfo: 'Keine Extra Meta Info, klicken Sie auf "Hinzufügen" um Schlüssel-Wert-Paare hinzuzufügen',
   otherInfoHint: 'Unterstützt nur einfache Zeichenfolgen oder Zahlen, keine speziellen Symbole oder Zeilenumbrüche',
 

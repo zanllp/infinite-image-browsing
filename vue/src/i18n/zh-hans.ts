@@ -576,7 +576,7 @@ export const zhHans = {
   fixErrorsBeforeSave: '请修正所有错误后再保存',
   extraMetaInfoTitle: 'Extra Meta Info (KV 编辑器)',
   addKvButton: '+ 添加',
-  extraMetaInfoHint: '支持任何合法 JSON 值（对象、数组、数字、布尔等）。字符串模式会自动添加双引号。',
+  extraMetaInfoHint: '可以保存任何的复杂信息，是对params格式缺陷的完美补充。json模式下还支持任何合法 JSON 值（对象、数组、数字、布尔等）',
   noExtraMetaInfo: '暂无 Extra Meta Info，点击"添加"按钮添加键值对',
   otherInfoHint: '仅支持简单字符串或数值，不能包含特殊符号或换行',
 

@@ -13,7 +13,7 @@ Promise.resolve().then(async () => {
     <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Infinite Image Browsing</title>
-    <script type="module" crossorigin src="/infinite_image_browsing/fe-static/assets/index-d9bd93cc.js"></script>
+    <script type="module" crossorigin src="/infinite_image_browsing/fe-static/assets/index-ac2041d9.js"></script>
     <link rel="stylesheet" href="/infinite_image_browsing/fe-static/assets/index-882e7f3d.css">
   </head>
 

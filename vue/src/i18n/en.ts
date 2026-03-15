@@ -598,7 +598,7 @@ You can specify which snapshot to restore to when starting IIB in the global set
   fixErrorsBeforeSave: 'Please fix all errors before saving',
   extraMetaInfoTitle: 'Extra Meta Info (KV Editor)',
   addKvButton: '+ Add',
-  extraMetaInfoHint: 'Supports any valid JSON values (objects, arrays, numbers, booleans, etc.). String mode will automatically add double quotes.',
+  extraMetaInfoHint: 'Can save any complex information, a perfect supplement to the limitations of params format. In JSON mode, it also supports any valid JSON values (objects, arrays, numbers, booleans, etc.)',
   noExtraMetaInfo: 'No Extra Meta Info, click "Add" button to add key-value pairs',
   otherInfoHint: 'Only supports simple strings or numbers, cannot contain special symbols or line breaks',
 

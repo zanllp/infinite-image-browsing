@@ -578,7 +578,7 @@ export const zhHant: Partial<IIBI18nMap> = {
   fixErrorsBeforeSave: '請修正所有錯誤後再保存',
   extraMetaInfoTitle: 'Extra Meta Info (KV 編輯器)',
   addKvButton: '+ 添加',
-  extraMetaInfoHint: '支持任何合法 JSON 值（對象、數組、數字、布爾等）。字符串模式會自動添加雙引號。',
+  extraMetaInfoHint: '可以保存任何的複雜信息，是對params格式缺陷的完美補充。json模式下還支持任何合法 JSON 值（對象、數組、數字、布爾等）',
   noExtraMetaInfo: '暫無 Extra Meta Info，點擊"添加"按鈕添加鍵值對',
   otherInfoHint: '僅支持簡單字符串或數值，不能包含特殊符號或換行',
 
