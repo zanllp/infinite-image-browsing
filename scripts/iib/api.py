@@ -877,7 +877,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         path: str
         exif: str
 
-    @app.post(api_base + "/update_exif", dependencies=[Depends(verify_secret)])
+    @app.post(api_base + "/update_exif", dependencies=[Depends(verify_secret), Depends(write_permission_required)])
     async def update_exif(req: UpdateExifReq):
         """更新图片/视频的 exif 信息"""
         conn = DataBase.get_conn()
