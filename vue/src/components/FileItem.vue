@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FileOutlined, FolderOpenOutlined, EllipsisOutlined, HeartOutlined, HeartFilled } from '@/icon'
+import { FileOutlined, FolderOpenOutlined, EllipsisOutlined, HeartOutlined, HeartFilled, DragOutlined } from '@/icon'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { fallbackImage, ok } from 'vue3-ts-util'
 import type { FileNodeInfo } from '@/api/files'
@@ -9,6 +9,7 @@ import type { MenuInfo } from 'ant-design-vue/lib/menu/src/interface'
 import { computed, ref, nextTick, watch } from 'vue'
 import ContextMenu from './ContextMenu.vue'
 import ChangeIndicator from './ChangeIndicator.vue'
+import DraggableImage from './DraggableImage.vue'
 import { useTagStore } from '@/store/useTagStore'
 import { CloseCircleOutlined, StarFilled, StarOutlined } from '@/icon'
 import { Tag } from '@/api/db'
@@ -282,8 +283,13 @@ const handleAudioClick = () => {
               </a-menu>
             </template>
           </a-dropdown>
+          <DraggableImage size="192px" v-if="file.type === 'file' && isImageFile(file.fullpath)" :file="file">
+            <div class="float-btn-wrap">
+              <DragOutlined />
+            </div>
+          </DraggableImage>
         </div>
-        <!-- :key="fullScreenPreviewImageUrl ? undefined : file.fullpath" 
+        <!-- :key="fullScreenPreviewImageUrl ? undefined : file.fullpath"
           这么复杂是因为再全屏查看时可能因为直接删除导致fullpath变化，然后整个预览直接退出-->
         <div :key="file.fullpath" :class="`idx-${idx} item-content`" v-if="isImageFile(file.name)">
 

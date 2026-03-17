@@ -53,6 +53,7 @@ declare module '@vue/runtime-core' {
     BaseFileListInfo: typeof import('./src/components/BaseFileListInfo.vue')['default']
     ChangeIndicator: typeof import('./src/components/ChangeIndicator.vue')['default']
     ContextMenu: typeof import('./src/components/ContextMenu.vue')['default']
+    DraggableImage: typeof import('./src/components/DraggableImage.vue')['default']
     ExifBrowser: typeof import('./src/components/ExifBrowser.vue')['default']
     FileItem: typeof import('./src/components/FileItem.vue')['default']
     HistoryRecord: typeof import('./src/components/HistoryRecord.vue')['default']

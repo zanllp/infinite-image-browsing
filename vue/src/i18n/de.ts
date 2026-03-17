@@ -353,5 +353,8 @@ export const de: Partial<IIBI18nMap> = {
   jsonValuePlaceholder: 'JSON-Wert',
   stringValuePlaceholder: 'Zeichenfolgenwert',
   clearBeforeSwitchToJson: 'Bitte aktuellen Wert leeren vor dem Wechsel zu JSON-Modus',
-  clearBeforeSwitchToString: 'Bitte aktuellen Wert leeren vor dem Wechsel zu Zeichenfolgen-Modus'
+  clearBeforeSwitchToString: 'Bitte aktuellen Wert leeren vor dem Wechsel zu Zeichenfolgen-Modus',
+  dragImageToTransfer: 'Klicken Sie, um das Originalbild zu erhalten, greifen und ziehen Sie es zu anderen Apps',
+  dragImage: 'Klicken Sie, um das Originalbild zu erhalten, greifen und ziehen Sie es zu anderen Apps',
+  close: 'Schließen'
 }

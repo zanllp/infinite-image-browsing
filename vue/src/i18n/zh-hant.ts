@@ -593,5 +593,7 @@ export const zhHant: Partial<IIBI18nMap> = {
   jsonValuePlaceholder: 'JSON Value',
   stringValuePlaceholder: '字符串值',
   clearBeforeSwitchToJson: '切換到 JSON 模式前請先清空當前值',
-  clearBeforeSwitchToString: '切換到字符串模式前請先清空當前值'
+  clearBeforeSwitchToString: '切換到字符串模式前請先清空當前值',
+  dragImageToTransfer: '點擊獲取原圖，抓取拖拽至其他應用',
+  dragImage: '點擊獲取原圖，抓取拖拽至其他應用'
 }

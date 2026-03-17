@@ -591,5 +591,7 @@ export const zhHans = {
   jsonValuePlaceholder: 'JSON Value',
   stringValuePlaceholder: '字符串值',
   clearBeforeSwitchToJson: '切换到 JSON 模式前请先清空当前值',
-  clearBeforeSwitchToString: '切换到字符串模式前请先清空当前值'
+  clearBeforeSwitchToString: '切换到字符串模式前请先清空当前值',
+  dragImageToTransfer: '点击获取原图，抓取拖拽至其他应用',
+  dragImage: '点击获取原图，抓取拖拽至其他应用'
 }
