@@ -613,5 +613,7 @@ You can specify which snapshot to restore to when starting IIB in the global set
   jsonValuePlaceholder: 'JSON Value',
   stringValuePlaceholder: 'String Value',
   clearBeforeSwitchToJson: 'Please clear current value before switching to JSON mode',
-  clearBeforeSwitchToString: 'Please clear current value before switching to string mode'
+  clearBeforeSwitchToString: 'Please clear current value before switching to string mode',
+  dragImageToTransfer: 'Click to get original image, grab and drag to other apps',
+  dragImage: 'Click to get original image, grab and drag to other apps'
 }

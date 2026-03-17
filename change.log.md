@@ -1,6 +1,31 @@
 [跳到中文](#中文)
 # English
 
+## 2026-03-17
+### 🖼️ ComfyUI-Ready Image Dragging
+Added drag-to-transfer functionality specifically designed for ComfyUI workflow integration.
+
+**Features:**
+- **One-Click Image Access**: Click to display original images ready for dragging
+- **ComfyUI Integration**: Drag images directly into ComfyUI to restore complete workflows
+- **Dual Placement**: Available in both full-screen info panel and file grid overlays
+
+
+**How to use:**
+1. Click the "Click to get original image, grab and drag to other apps" button
+2. The original image appears instantly
+3. Drag the image directly into ComfyUI
+4. ComfyUI will automatically extract metadata and reconstruct the workflow
+
+**Use Case:**
+Perfect for moving images from IIB to ComfyUI. When you drag an image into ComfyUI:
+- The original image is loaded
+- Generation parameters are extracted from metadata
+- The complete workflow is reconstructed automatically
+- No manual parameter input required
+
+**Note:** This feature preserves all generation metadata in the image, enabling seamless workflow transfer to ComfyUI and other compatible tools.
+
 ## 2026-03-15
 ### 📝 Editable Generation Information
 Added the ability to edit image generation prompts and metadata directly in the UI.
@@ -749,6 +774,30 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-03-17
+### 🖼️ 专为ComfyUI设计的图片拖拽功能
+新增了专为ComfyUI工作流还原设计的图片拖拽传输功能。
+
+**功能特性：**
+- **一键获取原图**：点击即可显示原始图片，随时准备拖拽
+- **ComfyUI集成**：可直接将图片拖拽到ComfyUI中，自动还原完整工作流
+- **双重入口**：在全屏信息面板和文件网格中均可使用）
+
+**使用方法：**
+1. 点击"点击获取原图，抓取拖拽至其他应用"按钮
+2. 原始图片立即显示
+3. 将图片直接拖拽到ComfyUI界面中
+4. ComfyUI会自动提取元数据并重建工作流
+
+**使用场景：**
+完美支持从IIB到ComfyUI的图片转移。当您将图片拖拽到ComfyUI时：
+- 原始图片被加载
+- 从元数据中提取生成参数
+- 自动重建完整工作流
+- 无需手动输入参数
+
+**注意：** 此功能保留图片中的所有生成元数据，实现与ComfyUI及其他兼容工具的无缝工作流传输。
 
 ## 2026-03-15
 ### 📝 可编辑的生成信息

@@ -2,6 +2,7 @@
 import { getImageGenerationInfo, getImageExif } from '@/api'
 import type { FileNodeInfo } from '@/api/files'
 import ExifBrowser from '@/components/ExifBrowser.vue'
+import DraggableImage from '@/components/DraggableImage.vue'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { useLocalStorage } from '@vueuse/core'
 import type { MenuInfo } from 'ant-design-vue/lib/menu/src/interface'
@@ -184,7 +185,7 @@ function getParNode (p: any) {
 }
 
 function getTextLength(text: string): number {
-  // 中文字符按3个英文字母计算
+  // chinese characters are counted as 3 English letters
   let length = 0
   for (const char of text) {
     if (/[\u4e00-\u9fa5]/.test(char)) {
@@ -455,6 +456,7 @@ const editPromptAndReload = async () => {
 
     <div v-if="lr">
     </div>
+
     <div class="container">
       <div class="action-bar">
         <div v-if="!lr" ref="dragHandle" class="icon" style="cursor: grab" :title="t('dragToMovePanel')">
@@ -547,8 +549,9 @@ const editPromptAndReload = async () => {
             {{ $t('editPrompt') }}
           </a-button>
         </div>
-      </div>
+      </div>    
       <div class="gen-info" v-if="showFullContent">
+    
         <div class="info-tags">
           <span class="info-tag">
             <span class="name">
@@ -617,6 +620,14 @@ const editPromptAndReload = async () => {
             </a-tooltip>
           </template>
         </div>
+        <!-- 可拖拽的原图 -->
+        <DraggableImage :file="file">
+          <div class="custom-drag-trigger">
+            <DragOutlined class="trigger-icon" />
+            <span class="trigger-text">{{ $t('dragImageToTransfer') }}</span>
+          </div>
+        </DraggableImage>
+
         <a-tabs v-model:activeKey="promptTabActivedKey">
           <a-tab-pane key="structedData" :tab="$t('structuredData')">
             <div>
