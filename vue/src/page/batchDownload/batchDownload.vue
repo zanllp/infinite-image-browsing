@@ -7,7 +7,7 @@ import { useBatchDownloadStore } from '@/store/useBatchDownloadStore'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { storeToRefs } from 'pinia'
 import { useFilesDisplay, useHookShareState } from '@/page/fileTransfer/hook'
-import { getFileTransferDataFromDragEvent, toRawFileUrl } from '@/util/file'
+import { getFileTransferDataFromDragEvent, toImageUrl } from '@/util/file'
 import { axiosInst } from '@/api'
 import { createReactiveQueue } from '@/util'
 import { message } from 'ant-design-vue'
@@ -73,7 +73,7 @@ const onDeleteClick = (idx: number) => {
       key-field="fullpath" :item-secondary-size="itemSize.second" :gridItems="gridItems">
       <template v-slot="{ item: file, index: idx }">
         <file-item :idx="idx" :file="file" :cell-width="cellWidth" enable-close-icon
-          @close-icon-click="onDeleteClick(idx)" :full-screen-preview-image-url="toRawFileUrl(file)"
+          @close-icon-click="onDeleteClick(idx)" :full-screen-preview-image-url="toImageUrl(file)"
           :enable-right-click-menu="false" />
       </template>
     </RecycleScroller>

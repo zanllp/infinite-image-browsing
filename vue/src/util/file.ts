@@ -7,6 +7,11 @@ const encode = encodeURIComponent
 export const toRawFileUrl = (file: FileNodeInfo, download = false) =>
   `${apiBase.value}/file?path=${encode(file.fullpath)}&t=${encode(file.date)}${download ? `&disposition=${encode(file.name)}` : ''
   }`
+
+export const toImageUrl = (file: FileNodeInfo) => {
+  return `${apiBase.value}/img/${encode(file.name)}?path=${encode(file.fullpath)}&t=${encode(file.date)}`
+}
+
 export const toImageThumbnailUrl = (file: FileNodeInfo, size: string = '512x512') => {
   return `${apiBase.value}/image-thumbnail?path=${encode(file.fullpath)}&size=${size}&t=${encode(
     file.date

@@ -656,6 +656,47 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
             headers={"Cache-Control": "max-age=31536000", "ETag": hash},
         )
 
+    @app.get(api_base + "/img/{filename}", dependencies=[Depends(verify_secret)])
+    async def get_image(filename: str, path: str, t: str):
+        import mimetypes
+        import urllib.parse
+
+        check_path_trust(path)
+
+        # 验证文件名是否匹配
+        actual_filename = os.path.basename(path)
+        decoded_filename = urllib.parse.unquote(filename)
+
+        if actual_filename != decoded_filename:
+            raise HTTPException(status_code=400, detail="Filename mismatch")
+
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404)
+        if not os.path.isfile(path):
+            raise HTTPException(status_code=400, detail=f"{path} is not a file")
+
+        # 验证是否为图片文件
+        media_type, _ = mimetypes.guess_type(path)
+        if media_type and not media_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="Not an image file")
+
+        # 设置 Content-Disposition 为 inline，带文件名
+        headers = {}
+        encoded_filename = urllib.parse.quote(filename.encode('utf-8'))
+        headers['Content-Disposition'] = f"inline; filename*=UTF-8''{encoded_filename}"
+
+        if is_path_under_parents(path) and is_valid_media_path(path):
+            headers["Cache-Control"] = "public, max-age=31536000"
+            headers["Expires"] = (datetime.now() + timedelta(days=365)).strftime(
+                "%a, %d %b %Y %H:%M:%S GMT"
+            )
+
+        return FileResponse(
+            path,
+            media_type=media_type,
+            headers=headers,
+        )
+
     @app.get(api_base + "/file", dependencies=[Depends(verify_secret)])
     async def get_file(path: str, t: str, disposition: Optional[str] = None):
         filename = path

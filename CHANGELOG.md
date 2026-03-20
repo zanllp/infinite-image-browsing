@@ -1,6 +1,10 @@
 [跳到中文](#中文)
 # English
 
+## 2026-03-21
+### 📁 Proper Filename When Saving Images
+Fixed the issue where images saved via right-click menu were named "file" instead of their actual filenames. Now when you right-click to save or drag images to other apps, they keep their original filenames.
+
 ## 2026-03-19
 ### ⚙️ Customizable Panel Settings
 Added the ability to customize which feature blocks are displayed in the full-screen info panel.
@@ -796,6 +800,10 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-03-21
+### 📁 修复右键保存图片文件名问题
+修复了通过右键菜单保存图片时，文件名显示为"file"而不是实际文件名的问题。现在右键保存图片或拖拽到其他应用时，都会保留原始文件名。
 
 ## 2026-03-19
 ### ⚙️ 自定义面板设置

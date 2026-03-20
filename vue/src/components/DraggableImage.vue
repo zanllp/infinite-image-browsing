@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { toRawFileUrl } from '@/util/file'
+import { toImageUrl } from '@/util/file'
 import type { FileNodeInfo } from '@/api/files'
 import { DragOutlined } from '@/icon'
 
@@ -16,7 +16,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const imageUrl = computed(() => {
   if (!props.file) return ''
-  return toRawFileUrl(props.file)
+  return toImageUrl(props.file)
 })
 
 const showImage = ref(false)

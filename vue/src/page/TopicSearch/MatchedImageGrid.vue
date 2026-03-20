@@ -3,7 +3,7 @@ import fileItemCell from '@/components/FileItem.vue'
 import '@zanllp/vue-virtual-scroller/dist/vue-virtual-scroller.css'
 // @ts-ignore
 import { RecycleScroller } from '@zanllp/vue-virtual-scroller'
-import { toRawFileUrl } from '@/util/file'
+import { toImageUrl } from '@/util/file'
 import { nextTick, watch, reactive } from 'vue'
 import { copy2clipboardI18n } from '@/util'
 import fullScreenContextMenu from '@/page/fileTransfer/fullScreenContextMenu.vue'
@@ -173,7 +173,7 @@ const onTiktokViewClick = () => {
             @dragend="onFileDragEnd"
             @file-item-click="onFileItemClick"
             @tiktok-view="(_file, idx) => openTiktokViewWithFiles(images, idx)"
-            :full-screen-preview-image-url="images[previewIdx] ? toRawFileUrl(images[previewIdx]) : ''"
+            :full-screen-preview-image-url="images[previewIdx] ? toImageUrl(images[previewIdx]) : ''"
             :selected="multiSelectedIdxs.includes(idx)"
             @context-menu-click="onContextMenuClickU"
             @preview-visible-change="onPreviewVisibleChange"

@@ -4,7 +4,7 @@ import { RecycleScroller } from '@zanllp/vue-virtual-scroller'
 import '@zanllp/vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import FileItem from '@/components/FileItem.vue'
 import { useFileItemActions, useFilesDisplay, useFileTransfer, useHookShareState, useKeepMultiSelect, usePreview } from '@/page/fileTransfer/hook'
-import { toRawFileUrl } from '@/util/file'
+import { toImageUrl } from '@/util/file'
 import { ref, onMounted } from 'vue'
 import { GridViewFile, useGlobalStore } from '@/store/useGlobalStore'
 import { getRandomImages } from '@/api/db'
@@ -142,7 +142,7 @@ const onContextMenuClickU: typeof onContextMenuClick = async (e, file, idx) => {
     <RecycleScroller ref="scroller" class="file-list" :items="files.slice()" :item-size="itemSize.first"
       key-field="fullpath" :item-secondary-size="itemSize.second" :gridItems="gridItems" @scroll="onScroll">
       <template v-slot="{ item: file, index: idx }">
-        <file-item :idx="idx" :file="file" :cell-width="cellWidth" :full-screen-preview-image-url="images[previewIdx] ? toRawFileUrl(images[previewIdx]) : ''
+        <file-item :idx="idx" :file="file" :cell-width="cellWidth" :full-screen-preview-image-url="images[previewIdx] ? toImageUrl(images[previewIdx]) : ''
           " @context-menu-click="onContextMenuClickU" @preview-visible-change="onPreviewVisibleChange"
           :is-selected-mutil-files="multiSelectedIdxs.length > 1" :selected="multiSelectedIdxs.includes(idx)"
           @file-item-click="onFileItemClick" @tiktok-view="(_file, idx) => openTiktokViewWithFiles(files, idx)" />

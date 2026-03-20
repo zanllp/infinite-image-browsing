@@ -4,7 +4,7 @@ import { RecycleScroller } from '@zanllp/vue-virtual-scroller'
 import '@zanllp/vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import FileItem from '@/components/FileItem.vue'
 import { useFilesDisplay, useHookShareState } from '@/page/fileTransfer/hook'
-import { getFileTransferDataFromDragEvent, toRawFileUrl, uniqueFile } from '@/util/file'
+import { getFileTransferDataFromDragEvent, toImageUrl, uniqueFile } from '@/util/file'
 import { ref, watchEffect, toRaw } from 'vue'
 import { GridViewFile, useGlobalStore } from '@/store/useGlobalStore'
 import { useTagStore } from '@/store/useTagStore'
@@ -52,7 +52,7 @@ watchEffect(() => {
       key-field="fullpath" :item-secondary-size="itemSize.second" :gridItems="gridItems">
       <template v-slot="{ item: file, index: idx }">
         <file-item :idx="idx" :file="file" :cell-width="cellWidth" :enable-close-icon="props.removable"
-          @close-icon-click="onDeleteClick(idx)" :full-screen-preview-image-url="toRawFileUrl(file)"
+          @close-icon-click="onDeleteClick(idx)" :full-screen-preview-image-url="toImageUrl(file)"
           :extra-tags="file?.tags?.map(tag.tagConvert)" :enable-right-click-menu="false" />
       </template>
     </RecycleScroller>
