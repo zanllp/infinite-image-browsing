@@ -993,7 +993,7 @@ def open_file_with_default_app(file_path):
     if system == 'Darwin':  # macOS
         subprocess.call(['open', file_path])
     elif system == 'Windows':  # Windows
-        subprocess.call(file_path, shell=True)
+        os.startfile(file_path)
     elif system == 'Linux':  # Linux
         subprocess.call(['xdg-open', file_path])
     else:
