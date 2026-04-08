@@ -7,6 +7,8 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::io::Error;
 use std::io::Write;
+use std::process::Stdio;
+use std::time::Duration;
 use tauri::api::process::Command;
 use tauri::api::process::CommandEvent;
 use tauri::WindowEvent;
@@ -20,6 +22,7 @@ fn greet(name: &str) -> String {
 }
 struct AppState {
     port: u16,
+    child_pid: u32,
 }
 #[derive(serde::Serialize)]
 struct AppConf {
@@ -42,17 +45,44 @@ fn read_config_file(path: &str) -> Result<String, Error> {
     Ok(contents)
 }
 
-fn shutdown_api_server(port: u16) {
+fn shutdown_api_server(port: u16, child_pid: u32) {
     let url = format!("http://127.0.0.1:{}/infinite_image_browsing/shutdown", port);
-    let res = reqwest::blocking::Client::new().post(url).send();
-    if let Err(e) = res {
-        eprintln!("{}", e);
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(3))
+        .build();
+    if let Ok(client) = client {
+        let res = client.post(&url).send();
+        if let Err(e) = res {
+            eprintln!("HTTP shutdown request failed: {}", e);
+        }
+    }
+    // Fallback: force kill the process by PID to prevent orphaned processes
+    kill_process_by_pid(child_pid);
+}
+
+fn kill_process_by_pid(pid: u32) {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(&["/F", "/T", "/PID", &pid.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = std::process::Command::new("kill")
+            .args(&["-9", &pid.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
     }
 }
 
 #[tauri::command]
 fn shutdown_api_server_command(state: tauri::State<'_, AppState>) {
-    shutdown_api_server(state.port);
+    shutdown_api_server(state.port, state.child_pid);
 }
 
 fn main() {
@@ -67,11 +97,14 @@ fn main() {
         args.push("--sd_webui_dir");
         args.push(&conf.sdwebui_dir);
     }
-    let (mut rx, _child) = Command::new_sidecar("iib_api_server")
+    let (mut rx, child) = Command::new_sidecar("iib_api_server")
         .expect("failed to create `iib_api_server` binary command")
         .args(args)
         .spawn()
         .expect("Failed to spawn sidecar");
+    let child_pid = child.pid();
+    // child handle is intentionally dropped here; we use the PID to kill the process on shutdown
+    drop(child);
     let log_file = OpenOptions::new()
         .create(true)
         .write(true)
@@ -101,14 +134,14 @@ fn main() {
         }
     });
     tauri::Builder::default()
-        .manage(AppState { port })
+        .manage(AppState { port, child_pid })
         .invoke_handler(tauri::generate_handler![
             greet,
             get_tauri_conf,
             shutdown_api_server_command
         ])
         .on_window_event(move |event| match event.event() {
-            WindowEvent::CloseRequested { .. } => shutdown_api_server(port),
+            WindowEvent::CloseRequested { .. } => shutdown_api_server(port, child_pid),
             _ => (),
         })
         .run(tauri::generate_context!())
