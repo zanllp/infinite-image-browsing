@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "Infinite Image Browsing",
-    "version": "1.6.1"
+    "version": "1.7.1"
   },
   "tauri": {
     "allowlist": {
