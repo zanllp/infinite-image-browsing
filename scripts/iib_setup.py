@@ -1,5 +1,5 @@
 from scripts.iib.api import infinite_image_browsing_api, send_img_path
-from modules import script_callbacks, generation_parameters_copypaste as send
+from modules import script_callbacks, infotext_utils as send
 from scripts.iib.tool import locale
 from scripts.iib.tool import read_sd_webui_gen_info_from_image
 from PIL import Image
