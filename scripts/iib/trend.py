@@ -54,17 +54,14 @@ def mount_trend_routes(
         dependencies=[Depends(verify_secret)],
     )
     async def get_trend_stats():
+        from scripts.iib.db.datamodel import Image
+
         conn = DataBase.get_conn()
 
-        # Check cache
+        # Check cache — invalidate on version bump or image count change
         cached = GlobalSetting.get_setting(conn, TREND_CACHE_KEY)
         if cached and isinstance(cached, dict):
-            cached_count = cached.get("total_images")
-            from scripts.iib.db.datamodel import Image
-
-            current_count = Image.count(conn)
-            if cached_count == current_count:
-                cached["cached_at"] = cached.get("cached_at")
+            if cached.get("cache_version") == TREND_CACHE_VERSION and cached.get("total_images") == Image.count(conn):
                 return cached
 
         limit = _TREND_MAX_TAGS
@@ -125,6 +122,7 @@ def mount_trend_routes(
             "top_samplers": [s.model_dump() for s in top_samplers],
             "top_lora": [l.model_dump() for l in top_lora],
             "top_source": [s.model_dump() for s in top_source],
+            "cache_version": TREND_CACHE_VERSION,
             "cached_at": None,
         }
 
