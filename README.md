@@ -146,7 +146,7 @@ If you need a Dockerfile, you can refer to this link.  https://github.com/zanllp
 ## As a desktop application (without SD-webui and Python):
 The executable version also supports ComfyUI/Fooocus/NovelAI.
 
-Download and install the program from the `releases` section on the right-hand side of the repository page.
+Download and install the program from the [`releases`](https://github.com/zanllp/infinite-image-browsing/releases) section on the right-hand side of the repository page.
 If the antivirus detects a virus, it can be ignored as a false positive. There are two versions of the compiled version for Windows, with the pyinstaller version having a lower false positive rate.
 
 If you need to compile it yourself, please refer to https://github.com/zanllp/sd-webui-infinite-image-browsing/blob/main/.github/workflows/tauri_app_build.yml.
