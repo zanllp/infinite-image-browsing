@@ -600,5 +600,20 @@ export const zhHans = {
   clearBeforeSwitchToJson: '切换到 JSON 模式前请先清空当前值',
   clearBeforeSwitchToString: '切换到字符串模式前请先清空当前值',
   dragImageToTransfer: '点击获取原图，抓取拖拽至其他应用',
-  dragImage: '点击获取原图，抓取拖拽至其他应用'
+  dragImage: '点击获取原图，抓取拖拽至其他应用',
+
+  // ===== 趋势面板 =====
+  trend: '趋势',
+  trendPanel: '趋势与统计',
+  trendContributionHeatmap: '贡献热力图',
+  trendMonthlyTrend: '月度趋势',
+  trendTopModels: 'Top 模型',
+  trendTopSamplers: 'Top 采样器',
+  trendTopLora: 'Top LoRA',
+  trendTopSource: 'Top 来源',
+  trendTotalImages: '图片总数',
+  trendTotalDiskUsage: '磁盘占用',
+  trendNoData: '暂无数据，请先生成索引',
+  trendHeatmapLess: '少',
+  trendHeatmapMore: '多',
 }

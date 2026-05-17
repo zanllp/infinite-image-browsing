@@ -622,5 +622,20 @@ You can specify which snapshot to restore to when starting IIB in the global set
   clearBeforeSwitchToJson: 'Please clear current value before switching to JSON mode',
   clearBeforeSwitchToString: 'Please clear current value before switching to string mode',
   dragImageToTransfer: 'Click to get original image, grab and drag to other apps',
-  dragImage: 'Click to get original image, grab and drag to other apps'
+  dragImage: 'Click to get original image, grab and drag to other apps',
+
+  // ===== Trend Panel =====
+  trend: 'Trend',
+  trendPanel: 'Trend & Statistics',
+  trendContributionHeatmap: 'Contribution Heatmap',
+  trendMonthlyTrend: 'Monthly Trend',
+  trendTopModels: 'Top Models',
+  trendTopSamplers: 'Top Samplers',
+  trendTopLora: 'Top LoRA',
+  trendTopSource: 'Top Source',
+  trendTotalImages: 'Total Images',
+  trendTotalDiskUsage: 'Disk Usage',
+  trendNoData: 'No data yet, please generate index first',
+  trendHeatmapLess: 'Less',
+  trendHeatmapMore: 'More',
 }

@@ -66,6 +66,7 @@ from scripts.iib.db.update_image_data import update_image_data, rebuild_image_in
 from scripts.iib.topic_cluster import mount_topic_cluster_routes
 from scripts.iib.tag_graph import mount_tag_graph_routes
 from scripts.iib.organize_files import mount_organize_routes
+from scripts.iib.trend import mount_trend_routes
 from scripts.iib.logger import logger
 from scripts.iib.seq import seq
 import urllib.parse
@@ -1508,6 +1509,13 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         write_permission_required=write_permission_required,
         start_cluster_job_func=topic_cluster_funcs["start_cluster_job"],
         get_cluster_job_status_func=topic_cluster_funcs["get_cluster_job_status"],
+    )
+
+    # ===== Trend / Contribution =====
+    mount_trend_routes(
+        app=app,
+        db_api_base=db_api_base,
+        verify_secret=verify_secret,
     )
 
 

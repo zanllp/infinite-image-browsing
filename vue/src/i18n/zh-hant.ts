@@ -602,5 +602,20 @@ export const zhHant: Partial<IIBI18nMap> = {
   clearBeforeSwitchToJson: '切換到 JSON 模式前請先清空當前值',
   clearBeforeSwitchToString: '切換到字符串模式前請先清空當前值',
   dragImageToTransfer: '點擊獲取原圖，抓取拖拽至其他應用',
-  dragImage: '點擊獲取原圖，抓取拖拽至其他應用'
+  dragImage: '點擊獲取原圖，抓取拖拽至其他應用',
+
+  // ===== 趨勢面板 =====
+  trend: '趨勢',
+  trendPanel: '趨勢與統計',
+  trendContributionHeatmap: '貢獻熱力圖',
+  trendMonthlyTrend: '月度趨勢',
+  trendTopModels: 'Top 模型',
+  trendTopSamplers: 'Top 採樣器',
+  trendTopLora: 'Top LoRA',
+  trendTopSource: 'Top 來源',
+  trendTotalImages: '圖片總數',
+  trendTotalDiskUsage: '磁碟佔用',
+  trendNoData: '暫無數據，請先生成索引',
+  trendHeatmapLess: '少',
+  trendHeatmapMore: '多',
 }

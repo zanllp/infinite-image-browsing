@@ -375,3 +375,20 @@ export const getClusterTagGraphClusterPaths = async (req: TagGraphClusterPathsRe
   const resp = await axiosInst.value.post('/db/cluster_tag_graph_cluster_paths', req, { timeout: 300000 })
   return resp.data as TagGraphClusterPathsResp
 }
+
+// ===== Trend / Contribution Stats =====
+export interface TrendStats {
+  total_images: number
+  total_disk_usage: number
+  daily_contributions: { date: string; count: number }[]
+  monthly_trends: { month: string; count: number }[]
+  top_models: { name: string; count: number }[]
+  top_samplers: { name: string; count: number }[]
+  top_source: { name: string; count: number }[]
+  top_lora: { name: string; count: number }[]
+}
+
+export const getTrendStats = async () => {
+  const resp = await axiosInst.value.get('/db/stats/trend')
+  return resp.data as TrendStats
+}

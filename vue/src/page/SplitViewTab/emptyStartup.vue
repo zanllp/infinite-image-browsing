@@ -4,7 +4,7 @@ import { Snapshot, useWorkspeaceSnapshot } from '@/store/useWorkspeaceSnapshot'
 import { uniqueId } from 'lodash-es'
 import { computed, ref } from 'vue'
 import { ok } from 'vue3-ts-util'
-import { FileDoneOutlined, GithubOutlined, LockOutlined, MailOutlined, PlusOutlined, QuestionCircleOutlined } from '@/icon'
+import { FileDoneOutlined, BarChartOutlined, GithubOutlined, LockOutlined, MailOutlined, PlusOutlined, QuestionCircleOutlined } from '@/icon'
 import { t } from '@/i18n'
 import { cloneDeep } from 'lodash-es'
 import { useImgSliStore } from '@/store/useImgSli'
@@ -51,6 +51,7 @@ const compCnMap: Partial<Record<TabPane['type'], string>> = {
   'workspace-snapshot': t('WorkspaceSnapshot'),
   'random-image': t('randomImage'),
   'global-setting': t('globalSettings'),
+  'trend': t('trend'),
 }
 type FileTransModeIn = 'preset' | ExtraPathType
 const createPane = (type: TabPane['type'], path?: string, mode?: FileTransModeIn) => {
@@ -68,6 +69,7 @@ const createPane = (type: TabPane['type'], path?: string, mode?: FileTransModeIn
     case 'fuzzy-search':
     case 'topic-search':
     case 'random-image':
+    case 'trend':
     case 'empty':
       pane = { type, name: compCnMap[type]!, key: Date.now() + uniqueId() }
       break
@@ -82,6 +84,15 @@ const createPane = (type: TabPane['type'], path?: string, mode?: FileTransModeIn
   }
   return pane
 }
+
+const openTrend = () => {
+  const pane = createPane('trend')
+  if (pane) {
+    const tab = global.tabList[0]
+    if (tab) { tab.panes.push(pane); tab.key = pane.key }
+  }
+}
+
 const openInCurrentTab = (type: TabPane['type'], path?: string, mode?: FileTransModeIn) => {
   const pane = createPane(type, path, mode)
   if (!pane) return
@@ -186,9 +197,15 @@ const modes = computed(() => {
             </div>
           </a-tooltip>
         </div>
-        
+
+        <a-tooltip :title="$t('trendPanel')">
+          <div class="trend-icon-btn" @click="openTrend">
+            <bar-chart-outlined />
+          </div>
+        </a-tooltip>
+
       </div>
-      
+
       <div v-if="global.conf?.enable_access_control && global.dontShowAgain"
         style="margin-left: 16px;font-size: 1.5em;">
         <LockOutlined title="Access Control mode" style="vertical-align: text-bottom;" />
@@ -552,6 +569,28 @@ const modes = computed(() => {
 
 .magic-switch-compact {
   flex-shrink: 0;
+}
+
+.trend-icon-btn {
+  flex-shrink: 0;
+  margin-left: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--zp-secondary);
+  background: var(--zp-tertiary-background, rgba(128, 128, 128, 0.1));
+  transition: all 0.2s;
+  font-size: 16px;
+
+  &:hover {
+    color: var(--zp-primary);
+    background: var(--zp-hover, rgba(128, 128, 128, 0.2));
+    transform: scale(1.08);
+  }
 }
 
 .ultra-cool-switch {
