@@ -3,17 +3,13 @@ Trend statistics and contribution heatmap data.
 Read-only aggregation from existing tables; no schema changes required.
 """
 
-import json
 import os
-from typing import List, Optional
+from typing import List
 from pydantic import BaseModel
 from fastapi import Depends, FastAPI
 
-from scripts.iib.db.datamodel import DataBase, GlobalSetting
-from scripts.iib.logger import logger
+from scripts.iib.db.datamodel import DataBase
 
-TREND_CACHE_KEY = "trend_stats_v1"
-TREND_CACHE_VERSION = 1
 _TREND_MAX_TAGS = int(os.getenv("IIB_TREND_MAX_TAGS", "20") or "20")
 
 
@@ -41,7 +37,6 @@ class TrendStatsResp(BaseModel):
     top_samplers: List[TagStat]
     top_source: List[TagStat]
     top_lora: List[TagStat]
-    cached_at: Optional[str] = None
 
 
 def mount_trend_routes(
@@ -54,16 +49,7 @@ def mount_trend_routes(
         dependencies=[Depends(verify_secret)],
     )
     async def get_trend_stats():
-        from scripts.iib.db.datamodel import Image
-
         conn = DataBase.get_conn()
-
-        # Check cache — invalidate on version bump or image count change
-        cached = GlobalSetting.get_setting(conn, TREND_CACHE_KEY)
-        if cached and isinstance(cached, dict):
-            if cached.get("cache_version") == TREND_CACHE_VERSION and cached.get("total_images") == Image.count(conn):
-                return cached
-
         limit = _TREND_MAX_TAGS
 
         # Daily contributions (heatmap data)
@@ -94,7 +80,6 @@ def mount_trend_routes(
             MonthlyTrend(month=row[0], count=row[1]) for row in monthly_rows
         ]
 
-        # Top models, samplers, lora from pre-computed tag.count
         def _fetch_tag_stats(tag_type: str, limit: int) -> List[TagStat]:
             rows = conn.execute(
                 "SELECT name, count FROM tag WHERE type = ? ORDER BY count DESC LIMIT ?",
@@ -107,13 +92,12 @@ def mount_trend_routes(
         top_lora = _fetch_tag_stats("lora", limit)
         top_source = _fetch_tag_stats("Source Identifier", limit)
 
-        # Total disk usage (SUM scan fast enough for typical libraries)
         disk_row = conn.execute("SELECT COALESCE(SUM(size), 0) FROM image").fetchone()
         total_disk_usage = int(disk_row[0]) if disk_row else 0
 
         total_images = sum(c.count for c in daily_contributions)
 
-        result = {
+        return {
             "total_images": total_images,
             "total_disk_usage": total_disk_usage,
             "daily_contributions": [c.model_dump() for c in daily_contributions],
@@ -122,19 +106,4 @@ def mount_trend_routes(
             "top_samplers": [s.model_dump() for s in top_samplers],
             "top_lora": [l.model_dump() for l in top_lora],
             "top_source": [s.model_dump() for s in top_source],
-            "cache_version": TREND_CACHE_VERSION,
-            "cached_at": None,
         }
-
-        # Save cache
-        try:
-            from datetime import datetime
-
-            result["cached_at"] = datetime.now().isoformat()
-            GlobalSetting.save_setting(
-                conn, TREND_CACHE_KEY, json.dumps(result, ensure_ascii=False)
-            )
-        except Exception as e:
-            logger.warning(f"Failed to cache trend stats: {e}")
-
-        return result

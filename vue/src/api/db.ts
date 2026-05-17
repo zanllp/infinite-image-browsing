@@ -386,7 +386,6 @@ export interface TrendStats {
   top_samplers: { name: string; count: number }[]
   top_source: { name: string; count: number }[]
   top_lora: { name: string; count: number }[]
-  cached_at?: string
 }
 
 export const getTrendStats = async () => {
