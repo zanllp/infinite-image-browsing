@@ -1,6 +1,27 @@
 [跳到中文](#中文)
 # English
 
+## 2026-05-17
+### 📊 Trend & Statistics Panel
+Added a new Trend & Statistics panel providing a visual overview of your image generation activity over time.
+
+**Features:**
+- **Contribution Heatmap**: GitHub-style heatmap showing daily image generation counts, with year/month labels and horizontal scroll
+- **Monthly Trend**: Bar chart showing image generation volume per month
+- **Top Models**: Distribution of your most-used generation models
+- **Top Source**: Breakdown of which software/tools generated your images (ComfyUI, SD WebUI, Fooocus, etc.)
+- **Total Images & Disk Usage**: Quick stats at a glance
+- **Localized**: Day/month labels adapt to your language setting, supporting English, Chinese, German
+
+**How to access:**
+- On the startup page, click the 📊 icon button next to the TikTok toggle, or
+- Find "Trend" under the Launch section
+
+**Design notes:**
+- Pure HTML/CSS heatmap for crisp rendering and native tooltips
+- All data read-only, no database schema changes required
+- Results are cached for fast subsequent access
+
 ## 2026-03-21
 ### 📁 Proper Filename When Saving Images
 Fixed the issue where images saved via right-click menu were named "file" instead of their actual filenames. Now when you right-click to save or drag images to other apps, they keep their original filenames.
@@ -800,6 +821,27 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-05-17
+### 📊 趋势与统计面板
+新增趋势与统计面板，直观展示图像生成活动的历史变化。
+
+**功能:**
+- **贡献热力图**: GitHub 风格的日历热力图，显示每日图像生成数量，支持年月标签和横向滚动
+- **月度趋势**: 柱状图展示每月图像生成量变化
+- **Top 模型**: 最常用的生成模型分布
+- **Top 来源**: 不同软件/工具的图像生成来源分布（ComfyUI、SD WebUI、Fooocus 等）
+- **总数与磁盘占用**: 快速查看图片总数和磁盘使用量
+- **多语言**: 日期/月份标签自动适配语言设置
+
+**入口:**
+- 启动页 TikTok 开关旁的 📊 图标按钮
+- Launch 区域下的 "趋势" 选项
+
+**设计说明:**
+- 热力图使用纯 HTML/CSS 实现，渲染清晰，支持原生 tooltip
+- 纯只读查询，不修改数据库结构
+- 结果缓存以加速后续访问
 
 ## 2026-03-21
 ### 📁 修复右键保存图片文件名问题

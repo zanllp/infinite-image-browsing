@@ -363,5 +363,20 @@ export const de: Partial<IIBI18nMap> = {
   clearBeforeSwitchToString: 'Bitte aktuellen Wert leeren vor dem Wechsel zu Zeichenfolgen-Modus',
   dragImageToTransfer: 'Klicken Sie, um das Originalbild zu erhalten, greifen und ziehen Sie es zu anderen Apps',
   dragImage: 'Klicken Sie, um das Originalbild zu erhalten, greifen und ziehen Sie es zu anderen Apps',
-  close: 'Schließen'
+  close: 'Schließen',
+
+  // ===== Trend Panel =====
+  trend: 'Trend',
+  trendPanel: 'Trend & Statistik',
+  trendContributionHeatmap: 'Beitrags-Heatmap',
+  trendMonthlyTrend: 'Monatlicher Trend',
+  trendTopModels: 'Top Modelle',
+  trendTopSamplers: 'Top Sampler',
+  trendTopLora: 'Top LoRA',
+  trendTopSource: 'Top Quelle',
+  trendTotalImages: 'Bilder insgesamt',
+  trendTotalDiskUsage: 'Speicherplatz',
+  trendNoData: 'Keine Daten, bitte zuerst Index generieren',
+  trendHeatmapLess: 'Weniger',
+  trendHeatmapMore: 'Mehr',
 }

@@ -56,6 +56,12 @@ If you would like to support more software, please refer to: [parsers](https://g
 - **NEW**: [Use with AI agents](docs/ai-agents.md) (Claude Code, Cursor, OpenClaw, etc.)
 
 
+### 📊 Trend & Statistics
+- GitHub-style contribution heatmap showing daily image generation activity.
+- Monthly trend bar chart, top models, and top source distribution.
+- Total image count and disk usage at a glance.
+- Click the 📊 icon on the startup page or find "Trend" under Launch.
+
 ### 🎵 TikTok-Style View
 - TikTok-style vertical browsing for images and videos.
 - Polished info panel with backdrop/preview return improvements.

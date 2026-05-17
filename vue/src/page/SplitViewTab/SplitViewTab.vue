@@ -32,6 +32,7 @@ const compMap: Record<TabPane['type'], ReturnType<typeof defineAsyncComponent>> 
   'grid-view': defineAsyncComponent(() => import('@/page/gridView/gridView.vue')),
   'workspace-snapshot': defineAsyncComponent(() => import('@/page/WorkspeaceSnapshot/index.vue')),
   'random-image': defineAsyncComponent(() => import('@/page/randomImage/randomImage.vue')),
+  'trend': defineAsyncComponent(() => import('@/page/Trend/TrendPanel.vue')),
 }
 const onEdit = (idx: number, targetKey: any, action: string) => {
   const tab = global.tabList[idx]
