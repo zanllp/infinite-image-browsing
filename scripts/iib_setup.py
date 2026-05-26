@@ -51,16 +51,17 @@ def on_ui_tabs():
                 img_file_info = gr.Textbox(elem_id="iib_hidden_img_file_info")
                 img_update_trigger.click(img_update_func, outputs=[img, img_file_info])
                 for tab in ["txt2img", "img2img", "inpaint", "extras"]:
-                    btn = gr.Button(f"Send to {tab}", elem_id=f"iib_hidden_tab_{tab}")
-                    # 注册粘贴
-                    send.register_paste_params_button(
-                        send.ParamBinding(
-                            paste_button=btn,
-                            tabname=tab,
-                            source_image_component=img,
-                            source_text_component=img_file_info,
+                    if hasattr(send, 'register_paste_params_button'):
+                        btn = gr.Button(f"Send to {tab}", elem_id=f"iib_hidden_tab_{tab}")
+                        # 注册粘贴
+                        send.register_paste_params_button(
+                            send.ParamBinding(
+                                paste_button=btn,
+                                tabname=tab,
+                                source_image_component=img,
+                                source_text_component=img_file_info,
+                            )
                         )
-                    )
 
         return (
             (
