@@ -1878,7 +1878,8 @@ def mount_topic_cluster_routes(
         # TopK by cosine similarity (brute force; MVP only)
         import heapq
 
-        heap: List[Tuple[float, Dict]] = []
+        heap: List[Tuple[float, int, Dict]] = []
+        heap_idx = 0
         total = 0
         for image_id, path, exif, vec_blob in rows:
             if not isinstance(path, str) or not os.path.exists(path):
@@ -1903,13 +1904,15 @@ def mount_topic_cluster_routes(
                 "sample_prompt": _clean_for_title(_extract_prompt_text(exif, max_chars=max_chars))[:200],
             }
             if len(heap) < top_k:
-                heapq.heappush(heap, (score, item))
+                heapq.heappush(heap, (score, heap_idx, item))
+                heap_idx += 1
             else:
                 if score > heap[0][0]:
-                    heapq.heapreplace(heap, (score, item))
+                    heapq.heapreplace(heap, (score, heap_idx, item))
+                    heap_idx += 1
 
         heap.sort(key=lambda x: x[0], reverse=True)
-        results = [x[1] for x in heap]
+        results = [x[2] for x in heap]
         return {
             "query": q,
             "folder": folder,
