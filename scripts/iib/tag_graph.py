@@ -24,7 +24,66 @@ _TOPK_TAGS_FOR_LLM = int(os.getenv("IIB_TAG_GRAPH_TOPK_TAGS_FOR_LLM", "500") or 
 _LLM_REQUEST_TIMEOUT_SEC = int(os.getenv("IIB_TAG_GRAPH_LLM_TIMEOUT_SEC", "180") or "180")
 _LLM_MAX_ATTEMPTS = int(os.getenv("IIB_TAG_GRAPH_LLM_MAX_ATTEMPTS", "5") or "5")
 
- 
+# JSON Schema for llama.cpp grammar-constrained decoding.
+# Enforces valid JSON structure so weak models can't produce broken output.
+# llama.cpp converts this to a GBNF grammar at inference time.
+TAG_GRAPH_JSON_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "layers": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "level": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2
+                    },
+                    "groups": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "minLength": 1
+                                },
+                                "label": {
+                                    "type": "string",
+                                    "minLength": 1
+                                },
+                                "tags": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                },
+                                "categories": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "required": ["id", "label"],
+                            "additionalProperties": False
+                        }
+                    }
+                },
+                "required": ["level", "groups"],
+                "additionalProperties": False
+            }
+        }
+    },
+    "required": ["layers"],
+    "additionalProperties": False
+}
+
+
 class TagGraphReq(BaseModel):
     folder_paths: List[str]
     lang: Optional[str] = "en"  # Language for LLM output
@@ -114,11 +173,9 @@ GUIDELINES:
 3. Every tag must belong to exactly ONE Level 1 category
 4. Use {normalized_lang} for all category labels
 5. Category IDs must be simple lowercase (e.g., "style", "char", "scene1")
-
-OUTPUT ONLY VALID JSON - NO markdown, NO explanations, NO extra text:
-{{"layers":[{{"level":1,"groups":[{{"id":"cat1","label":"Label1","tags":["tag1"]}},{{"id":"cat2","label":"Label2","tags":["tag2"]}}]}},{{"level":2,"groups":[{{"id":"super1","label":"SuperLabel","categories":["cat1","cat2"]}}]}}]}}
-
-If unsure about Level 2, OMIT it entirely. Start response with {{ and end with }}"""
+6. Level 1 groups use "tags" field (list of tag strings)
+7. Level 2 groups use "categories" field (list of Level 1 group IDs)
+8. Output must be valid JSON matching the provided schema"""
 
             user_prompt = f"Tags to categorize:\n{', '.join(tags)}"
 
@@ -131,6 +188,10 @@ If unsure about Level 2, OMIT it entirely. Start response with {{ and end with }
                 "temperature": 0.0,
                 "max_tokens": 32768,
                 "stream": True,
+                "response_format": {
+                    "type": "json_object",
+                    "schema": TAG_GRAPH_JSON_SCHEMA,
+                },
             }
 
             request_id = f"tg_{int(time.time() * 1000)}_{os.getpid()}"
@@ -250,7 +311,7 @@ If unsure about Level 2, OMIT it entirely. Start response with {{ and end with }
             )
 
         return await asyncio.to_thread(_call_sync)
- 
+
     @app.post(
         f"{db_api_base}/cluster_tag_graph",
         dependencies=[Depends(verify_secret)],
@@ -324,7 +385,7 @@ If unsure about Level 2, OMIT it entirely. Start response with {{ and end with }
             str(req.lang or ""),
         )
 
- 
+
 
         # Graph cache (best-effort): cache by topic_cluster_cache_key + lang + version.
         graph_cache_key = None
