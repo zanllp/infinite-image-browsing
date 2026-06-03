@@ -175,7 +175,11 @@ GUIDELINES:
 5. Category IDs must be simple lowercase (e.g., "style", "char", "scene1")
 6. Level 1 groups use "tags" field (list of tag strings)
 7. Level 2 groups use "categories" field (list of Level 1 group IDs)
-8. Output must be valid JSON matching the provided schema"""
+8. OUTPUT ONLY VALID JSON - NO markdown, NO explanations, NO extra text:
+{{"layers":[{{"level":1,"groups":[{{"id":"cat1","label":"Label1","tags":["tag1"]}},{{"id":"cat2","label":"Label2","tags":["tag2"]}}]}},{{"level":2,"groups":[{{"id":"super1","label":"SuperLabel","categories":["cat1","cat2"]}}]}}]}}
+
+If unsure about Level 2, OMIT it entirely. Start response with {{ and end with }}
+"""
 
             user_prompt = f"Tags to categorize:\n{', '.join(tags)}"
 
