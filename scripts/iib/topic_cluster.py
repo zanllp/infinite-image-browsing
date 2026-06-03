@@ -577,15 +577,21 @@ def _call_chat_title_sync(
         logger.error("[chat_title] No prompt samples for title generation")
         raise HTTPException(status_code=400, detail="No prompt samples for title generation")
 
+    json_example = '{"title":"...","keywords":["...","..."]}'
     sys = (
         "You are a topic naming assistant for image-generation prompts.\n"
-        "Given several prompt snippets that belong to the SAME theme, output a short topic title and 3–6 keywords.\n"
+        "Given several prompt snippets that belong to the SAME theme, output:\n"
+        "- a short topic title\n"
+        "- 3–6 keywords.\n"
         "\n"
         "Rules:\n"
         f"- Output language MUST be: {output_lang}\n"
         "- Prefer 4–12 characters for Chinese (Simplified/Traditional), otherwise 2–6 English/German words.\n"
         "- Avoid generic boilerplate like: masterpiece, best quality, highly detailed, cinematic, etc.\n"
         "- Keep distinctive terms if they help differentiate themes (e.g., Warhammer 40K, Lolita, scientific illustration).\n"
+        "- Do NOT output explanations. Do NOT output markdown/code fences.\n"
+        "- The output MUST start with '{' and end with '}' (no leading/trailing characters).\n"
+        "\n"
     )
     # Add existing folder names hint for file organization scenarios
     if existing_folder_names:
@@ -624,6 +630,7 @@ def _call_chat_title_sync(
         
         sys += strictness_msg
         sys += f"Existing keywords ({len(top_keywords)} of {unique_count} total): {', '.join(top_keywords)}\n\n"
+    sys += "Output STRICT JSON only:\n" + json_example
     user = "Prompt snippets:\n" + "\n".join([f"- {s}" for s in samples])
 
     payload = {
