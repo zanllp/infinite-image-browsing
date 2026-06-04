@@ -24,6 +24,30 @@ _np = None
 _hnswlib = None
 _PERF_DEPS_READY = False
 
+# JSON schema to enforce valid topic naming output from LLM (for llama.cpp grammar conversion)
+_TOPIC_NAMING_JSON_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24
+        },
+        "keywords": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "items": {
+                "type": "string",
+                "minLength": 1
+            }
+        }
+    },
+    "required": ["title", "keywords"],
+    "additionalProperties": False
+}
+
 
 def _ensure_perf_deps() -> None:
     """
@@ -616,6 +640,10 @@ def _call_chat_title_sync(
         "top_p": 1.0,
         "max_tokens": 4096,
         "stream": True,  # Enable streaming
+        "response_format": {
+            "type": "json_object",
+            "schema": _TOPIC_NAMING_JSON_SCHEMA,
+        },
     }
     # Some OpenAI-compatible providers may use different token limit fields / casing.
     payload["max_output_tokens"] = payload["max_tokens"]
@@ -1878,7 +1906,8 @@ def mount_topic_cluster_routes(
         # TopK by cosine similarity (brute force; MVP only)
         import heapq
 
-        heap: List[Tuple[float, Dict]] = []
+        heap: List[Tuple[float, int, Dict]] = []
+        heap_idx = 0
         total = 0
         for image_id, path, exif, vec_blob in rows:
             if not isinstance(path, str) or not os.path.exists(path):
@@ -1903,13 +1932,15 @@ def mount_topic_cluster_routes(
                 "sample_prompt": _clean_for_title(_extract_prompt_text(exif, max_chars=max_chars))[:200],
             }
             if len(heap) < top_k:
-                heapq.heappush(heap, (score, item))
+                heapq.heappush(heap, (score, heap_idx, item))
+                heap_idx += 1
             else:
                 if score > heap[0][0]:
-                    heapq.heapreplace(heap, (score, item))
+                    heapq.heapreplace(heap, (score, heap_idx, item))
+                    heap_idx += 1
 
         heap.sort(key=lambda x: x[0], reverse=True)
-        results = [x[1] for x in heap]
+        results = [x[2] for x in heap]
         return {
             "query": q,
             "folder": folder,
