@@ -383,25 +383,30 @@ class ImageEmbedding:
     def compute_text_hash(text: str) -> str:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
+    _BATCH_SIZE = 900  # SQLite default max variable number is 999
+
     @classmethod
     def get_by_image_ids(cls, conn: Connection, image_ids: List[int]):
         if not image_ids:
             return {}
-        placeholders = ",".join("?" * len(image_ids))
-        query = f"SELECT image_id, model, dim, text_hash, vec, updated_at FROM image_embedding WHERE image_id IN ({placeholders})"
-        with closing(conn.cursor()) as cur:
-            cur.execute(query, image_ids)
-            rows = cur.fetchall()
         res = {}
-        for row in rows:
-            res[row[0]] = {
-                "image_id": row[0],
-                "model": row[1],
-                "dim": row[2],
-                "text_hash": row[3],
-                "vec": row[4],
-                "updated_at": row[5],
-            }
+        with closing(conn.cursor()) as cur:
+            for i in range(0, len(image_ids), cls._BATCH_SIZE):
+                batch = image_ids[i : i + cls._BATCH_SIZE]
+                placeholders = ",".join("?" * len(batch))
+                cur.execute(
+                    f"SELECT image_id, model, dim, text_hash, vec, updated_at FROM image_embedding WHERE image_id IN ({placeholders})",
+                    batch,
+                )
+                for row in cur.fetchall():
+                    res[row[0]] = {
+                        "image_id": row[0],
+                        "model": row[1],
+                        "dim": row[2],
+                        "text_hash": row[3],
+                        "vec": row[4],
+                        "updated_at": row[5],
+                    }
         return res
 
     @classmethod
@@ -437,6 +442,8 @@ class ImageEmbeddingFail:
     for known-failing inputs. This helps keep clustering/search usable by skipping bad items.
     """
 
+    _BATCH_SIZE = 900  # SQLite default max variable number is 999
+
     @classmethod
     def create_table(cls, conn: Connection):
         with closing(conn.cursor()) as cur:
@@ -457,20 +464,21 @@ class ImageEmbeddingFail:
         if not image_ids:
             return {}
         ids = [int(x) for x in image_ids]
-        placeholders = ",".join(["?"] * len(ids))
-        with closing(conn.cursor()) as cur:
-            cur.execute(
-                f"SELECT image_id, text_hash, error, updated_at FROM image_embedding_fail WHERE model = ? AND image_id IN ({placeholders})",
-                (str(model), *ids),
-            )
-            rows = cur.fetchall()
         out: Dict[int, Dict] = {}
-        for image_id, text_hash, error, updated_at in rows or []:
-            out[int(image_id)] = {
-                "text_hash": str(text_hash or ""),
-                "error": str(error or ""),
-                "updated_at": str(updated_at or ""),
-            }
+        with closing(conn.cursor()) as cur:
+            for i in range(0, len(ids), cls._BATCH_SIZE):
+                batch = ids[i : i + cls._BATCH_SIZE]
+                placeholders = ",".join(["?"] * len(batch))
+                cur.execute(
+                    f"SELECT image_id, text_hash, error, updated_at FROM image_embedding_fail WHERE model = ? AND image_id IN ({placeholders})",
+                    (str(model), *batch),
+                )
+                for image_id, text_hash, error, updated_at in cur.fetchall() or []:
+                    out[int(image_id)] = {
+                        "text_hash": str(text_hash or ""),
+                        "error": str(error or ""),
+                        "updated_at": str(updated_at or ""),
+                    }
         return out
 
     @classmethod
