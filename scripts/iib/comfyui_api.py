@@ -91,17 +91,13 @@ class ComfyUILiteApi:
         def index():
             return self._index_response()
 
-        @app.get(f"{base}/fe-static/{{file_path:path}}")
+        @app.get("/fe-static/{file_path:path}")
         async def serve_static_file(file_path: str):
-            static_dir = index_html_path.parent
-            target = (static_dir / file_path).resolve()
-            try:
-                target.relative_to(static_dir.resolve())
-            except ValueError:
-                raise HTTPException(status_code=403)
-            if not target.exists() or not target.is_file():
-                raise HTTPException(status_code=404)
-            return FileResponse(str(target))
+            return self._serve_static_file(file_path)
+
+        @app.get(f"{base}/fe-static/{{file_path:path}}")
+        async def serve_static_file_with_base(file_path: str):
+            return self._serve_static_file(file_path)
 
         @app.get(f"{base}/hello")
         async def hello():
@@ -248,6 +244,17 @@ class ComfyUILiteApi:
         with open(index_html_path, "r", encoding="utf-8") as file:
             content = file.read().replace(DEFAULT_BASE, self.config.base)
         return Response(content=content, media_type="text/html")
+
+    def _serve_static_file(self, file_path: str) -> FileResponse:
+        static_dir = index_html_path.parent
+        target = (static_dir / file_path).resolve()
+        try:
+            target.relative_to(static_dir.resolve())
+        except ValueError:
+            raise HTTPException(status_code=403)
+        if not target.exists() or not target.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(str(target))
 
     def _resolve_trusted_path(self, raw_path: str, allow_root_parent: bool = False) -> Path:
         if raw_path in ("", "/"):

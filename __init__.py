@@ -16,6 +16,7 @@ try:
     from server import PromptServer  # type: ignore
 
     COMFYUI_BASE = "/iib"
+    LEGACY_BASE = "/infinite_image_browsing"
 
     def _get_comfyui_output_dir() -> Path:
         try:
@@ -49,10 +50,9 @@ try:
         from scripts.iib.comfyui_asgi import ComfyUIASGIMount
 
         # Avoid double registration if ComfyUI reloads custom nodes in-process.
-        for route in app.router.routes():
-            resource = route.resource
-            if getattr(resource, "canonical", None) == COMFYUI_BASE:
-                return
+        registered = {getattr(route.resource, "canonical", None) for route in app.router.routes()}
+        if COMFYUI_BASE in registered and LEGACY_BASE in registered:
+            return
 
         comfy_output_dir = _get_comfyui_output_dir()
         comfy_input_dir = _get_comfyui_input_dir()
@@ -67,8 +67,14 @@ try:
             base=COMFYUI_BASE,
         )
 
-        ComfyUIASGIMount(iib_app, COMFYUI_BASE).register(app)
-        logger.info("[Infinite Image Browsing] Mounted at %s", COMFYUI_BASE)
+        if COMFYUI_BASE not in registered:
+            ComfyUIASGIMount(iib_app, COMFYUI_BASE).register(app)
+        # Compatibility route for the already-built Vue bundle. Some generated
+        # chunks still contain /infinite_image_browsing/fe-static and the API
+        # client defaults to /infinite_image_browsing.
+        if LEGACY_BASE not in registered:
+            ComfyUIASGIMount(iib_app, LEGACY_BASE).register(app)
+        logger.info("[Infinite Image Browsing] Mounted at %s and %s", COMFYUI_BASE, LEGACY_BASE)
 
     _register_routes()
 
