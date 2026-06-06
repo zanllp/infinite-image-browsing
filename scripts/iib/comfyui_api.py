@@ -209,6 +209,17 @@ class ComfyUILiteApi:
                     res[item] = ""
             return res
 
+        @app.post(f"{base}/db/get_image_tags")
+        async def get_image_tags(req: PathsReq):
+            # The existing FileItem flow asks for tags for visible files. The
+            # ComfyUI-lite backend has no tag database, so return empty lists to
+            # keep the old frontend contract without emitting 404s.
+            return {path: [] for path in req.paths}
+
+        @app.get(f"{base}/db/basic_info")
+        async def get_db_basic_info():
+            return {"img_count": 0, "tags": [], "expired": False, "expired_dirs": []}
+
         @app.get(f"{base}/image_exif")
         async def image_exif(path: str):
             target = self._resolve_trusted_path(path)

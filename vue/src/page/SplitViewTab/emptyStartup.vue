@@ -271,7 +271,7 @@ const modes = computed(() => {
       </template>
     </a-alert-->
     <div class="content">
-      <div class="feature-item" v-if="!isComfyUI">
+      <div class="feature-item">
         <h2>{{ $t('walkMode') }}</h2>
         <ul>
           <li @click="addToExtraPath('walk')" class="item">
@@ -296,7 +296,7 @@ const modes = computed(() => {
           </actionContextMenu>
         </ul>
       </div>
-      <div class="feature-item" v-if="global.quickMovePaths.length && !isComfyUI">
+      <div class="feature-item" v-if="global.quickMovePaths.length">
         <h2>{{ $t('launchFromNormalAndFixed') }}</h2>
         <ul>
           <li @click="addToExtraPath('scanned-fixed')" class="item">

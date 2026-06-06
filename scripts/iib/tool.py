@@ -709,13 +709,18 @@ def get_comfyui_exif_data(img: Image):
         pos_prompt = all_prompts_str
         neg_prompt = ""
     else:
-        in_node = data[str(KSampler_entry["positive"][0])]
-        if in_node["class_type"] != "FluxGuidance":
-            pos_prompt = get_text_from_clip(KSampler_entry["positive"][0])
+        positive_ref = KSampler_entry.get("positive")
+        negative_ref = KSampler_entry.get("negative")
+        if positive_ref:
+            in_node = data[str(positive_ref[0])]
+            if in_node["class_type"] != "FluxGuidance":
+                pos_prompt = get_text_from_clip(positive_ref[0])
+            else:
+                pos_prompt = get_text_from_clip(in_node["inputs"]["conditioning"][0])
         else:
-            pos_prompt = get_text_from_clip(in_node["inputs"]["conditioning"][0])
+            pos_prompt = ""
 
-        neg_prompt = get_text_from_clip(KSampler_entry["negative"][0])
+        neg_prompt = get_text_from_clip(negative_ref[0]) if negative_ref else ""
 
     pos_prompt_arr = unique_by(parse_prompt(pos_prompt)["pos_prompt"])
 

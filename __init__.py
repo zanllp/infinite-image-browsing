@@ -61,10 +61,18 @@ try:
 
         from scripts.iib.comfyui_api import create_comfyui_lite_app
 
+        # Build one ASGI app per mount prefix. The aiohttp bridge intentionally
+        # passes the original request path through to FastAPI, so each app must
+        # register routes using the same prefix it is mounted under.
         iib_app = create_comfyui_lite_app(
             output_dir=str(comfy_output_dir),
             input_dir=str(comfy_input_dir),
             base=COMFYUI_BASE,
+        )
+        legacy_app = create_comfyui_lite_app(
+            output_dir=str(comfy_output_dir),
+            input_dir=str(comfy_input_dir),
+            base=LEGACY_BASE,
         )
 
         if COMFYUI_BASE not in registered:
@@ -73,7 +81,7 @@ try:
         # chunks still contain /infinite_image_browsing/fe-static and the API
         # client defaults to /infinite_image_browsing.
         if LEGACY_BASE not in registered:
-            ComfyUIASGIMount(iib_app, LEGACY_BASE).register(app)
+            ComfyUIASGIMount(legacy_app, LEGACY_BASE).register(app)
         logger.info("[Infinite Image Browsing] Mounted at %s and %s", COMFYUI_BASE, LEGACY_BASE)
 
     _register_routes()

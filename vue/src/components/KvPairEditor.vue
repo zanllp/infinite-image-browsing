@@ -147,7 +147,7 @@ const checkIsValidJson = (str: string) => {
 
 
 // 处理模式切换
-const handleModeChange = (newMode: 'str' | 'json') => {
+const handleModeChange = (newMode: any) => {
   const currentValue = localKv.value.value
 
   // 如果当前值为空，允许切换

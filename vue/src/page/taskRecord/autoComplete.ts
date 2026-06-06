@@ -34,7 +34,7 @@ export const getQuickMovePaths = async ({
       zh: '输出文件夹',
       dir: outputPath.path,
       can_delete: false,
-      types: ['walk', 'cli_access_only']
+      types: ['walk', 'scanned', 'scanned-fixed', 'cli_access_only']
     }]
   }
   

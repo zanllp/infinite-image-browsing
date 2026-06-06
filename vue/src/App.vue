@@ -107,7 +107,7 @@ const openComfyUIOutputAsDefault = () => {
     name: '输出文件夹',
     key: 'comfyui-output',
     path: output.dir,
-    mode: 'walk'
+    mode: 'scanned-fixed'
   }
   globalStore.tabList = [{ panes: [pane], key: pane.key, id: 'comfyui-output-tab' }]
   globalStore.recent = []
