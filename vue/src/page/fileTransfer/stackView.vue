@@ -39,6 +39,7 @@ import { openImageFullscreenPreview } from '@/util/imagePreviewOperation'
 import { normalize } from '@/util/path'
 
 const global = useGlobalStore()
+const isComfyUI = () => global.conf?.launch_mode === 'comfyui'
 const props = defineProps<{
   tabIdx: number
   paneIdx: number
@@ -100,6 +101,16 @@ const onDropToFolder = async (e: DragEvent, file: any) => {
 }
 
 // TikTok View 按钮点击处理
+const canBackInWalkMode = () => props.mode === 'walk' && currLocation.value && normalize(currLocation.value) !== normalize(props.path ?? '')
+const backOneLevelInWalkMode = () => {
+  if (!canBackInWalkMode()) return
+  backToLastUseTo()
+}
+const displayBreadcrumbName = (item: { curr: string }, idx: number) => {
+  if (isComfyUI() && idx === 0) return '输出文件夹'
+  return item.curr === '/' ? t('root') : item.curr.replace(/:\/$/, t('drive'))
+}
+
 const onTiktokViewClick = () => {
   if (sortedFiles.value.length === 0) {
     return
@@ -275,23 +286,25 @@ onMounted(() => {
             @press-enter="onLocEditEnter" allow-clear></AInput>
           <a-breadcrumb style="flex: 1" v-else>
             <a-breadcrumb-item v-for="(item, idx) in stack" :key="idx">
-              <a @click.prevent="back(idx)">{{ item.curr === '/' ? $t('root') : item.curr.replace(/:\/$/, $t('drive'))
-                }}</a>
+              <a @click.prevent="back(idx)">{{ displayBreadcrumbName(item, idx) }}</a>
             </a-breadcrumb-item>
           </a-breadcrumb>
 
           <AButton size="small" v-if="isLocationEditing" @click="onLocEditEnter" type="primary">{{ $t('go') }}</AButton>
           <div v-else class="location-act">
             <a @click.prevent="backToLastUseTo" style="margin: 0 8px 16px 0;" v-if="mode === 'scanned-fixed'"><ArrowLeftOutlined /></a>
-            <a @click.prevent="copyLocation" class="copy">{{ $t('copy') }}</a>
-            <a @click.prevent.stop="onEditBtnClick">{{ $t('edit') }}</a>
+            <a @click.prevent="backOneLevelInWalkMode" style="margin: 0 8px 16px 0;" v-if="canBackInWalkMode()"><ArrowLeftOutlined /> 返回上一页</a>
+            <template v-if="!isComfyUI()">
+              <a @click.prevent="copyLocation" class="copy">{{ $t('copy') }}</a>
+              <a @click.prevent.stop="onEditBtnClick">{{ $t('edit') }}</a>
+            </template>
           </div>
         </div>
         <div class="actions">
           <a class="opt" @click.prevent="refresh"> {{ $t('refresh') }} </a>
-          <a class="opt" @click.prevent="onTiktokViewClick">{{ $t('TikTok View') }}</a>
-          <a class="opt" @click.prevent="openSmartOrganizeConfig(currLocation)" :title="$t('smartOrganizeHint')">{{ $t('smartOrganize') }}</a>
-          <a-dropdown>
+          <a class="opt" v-if="!isComfyUI()" @click.prevent="onTiktokViewClick">{{ $t('TikTok View') }}</a>
+          <a class="opt" v-if="!isComfyUI()" @click.prevent="openSmartOrganizeConfig(currLocation)" :title="$t('smartOrganizeHint')">{{ $t('smartOrganize') }}</a>
+          <a-dropdown v-if="!isComfyUI()">
             <a class="opt" @click.prevent>
               {{ $t('search') }}
               <down-outlined />
@@ -307,9 +320,9 @@ onMounted(() => {
               </a-menu>
             </template>
           </a-dropdown>
-          <a class="opt" @click.prevent="onWalkBtnClick" v-if="showWalkButton"> Walk </a>
-          <a class="opt" @click.prevent.stop="selectAll"> {{ $t('selectAll') }} </a>
-          <a-dropdown>
+          <a class="opt" @click.prevent="onWalkBtnClick" v-if="showWalkButton && !isComfyUI()"> Walk </a>
+          <a class="opt" v-if="!isComfyUI()" @click.prevent.stop="selectAll"> {{ $t('selectAll') }} </a>
+          <a-dropdown v-if="!isComfyUI()">
             <a class="opt" @click.prevent>
               {{ $t('quickMove') }}
               <down-outlined />
@@ -322,7 +335,7 @@ onMounted(() => {
               </a-menu>
             </template>
           </a-dropdown>
-          <a-dropdown :trigger="['click']" v-model:visible="moreActionsDropdownShow" placement="bottomLeft"
+          <a-dropdown v-if="!isComfyUI()" :trigger="['click']" v-model:visible="moreActionsDropdownShow" placement="bottomLeft"
             :getPopupContainer="(trigger: any) => trigger.parentNode as HTMLDivElement">
             <a class="opt" @click.prevent>
               {{ $t('more') }}
@@ -353,11 +366,11 @@ onMounted(() => {
                   <a-form-item :label="$t('seedAsChange')">
                     <a-switch v-model:checked="seedChangeChecked" :disabled="!changeIndchecked" />
                   </a-form-item>
-                  <div style="padding: 4px;">
+                  <div style="padding: 4px;" v-if="!isComfyUI()">
                     <a @click.prevent="addToSearchScanPathAndQuickMove" >{{
     $t('addToSearchScanPathAndQuickMove') }}</a>
                   </div>
-                  <div style="padding: 4px;">
+                  <div style="padding: 4px;" v-if="!isComfyUI()">
                     <a @click.prevent="openFolder(currLocation + '/')">{{ $t('openWithLocalFileBrowser') }}</a>
                   </div>
                   <div style="padding: 4px;">
@@ -390,12 +403,12 @@ onMounted(() => {
               @file-item-click="onFileItemClick" @dragstart="onFileDragStart" @dragend="onFileDragEnd"
               @preview-visible-change="onPreviewVisibleChange" @context-menu-click="onContextMenuClick"
               @drop-to-folder="onDropToFolder"
-              @tiktok-view="(_file, idx) => openTiktokViewWithFiles(sortedFiles, idx)"
+              @tiktok-view="!isComfyUI() && openTiktokViewWithFiles(sortedFiles, idx)"
               :is-selected-mutil-files="multiSelectedIdxs.length > 1"
-              :enable-change-indicator="changeIndchecked"
-              :seed-change-checked="seedChangeChecked"
-              :get-gen-diff="getGenDiff"
-              :get-gen-diff-watch-dep="getGenDiffWatchDep"
+              :enable-change-indicator="!isComfyUI() && changeIndchecked"
+              :seed-change-checked="!isComfyUI() && seedChangeChecked"
+              :get-gen-diff="isComfyUI() ? undefined : getGenDiff"
+              :get-gen-diff-watch-dep="isComfyUI() ? undefined : getGenDiffWatchDep"
               :previewing="previewing"
               :cover-files="dirCoverCache.get(file.fullpath)"/>
           </template>

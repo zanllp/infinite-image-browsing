@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, watch, ref } from 'vue'
 import { getGlobalSetting, setAppFeSetting } from './api'
-import { useGlobalStore, presistKeys } from './store/useGlobalStore'
+import { useGlobalStore, presistKeys, type FileTransferTabPane } from './store/useGlobalStore'
 import { useWorkspeaceSnapshot } from './store/useWorkspeaceSnapshot'
 import { getQuickMovePaths } from '@/page/taskRecord/autoComplete'
 import SplitViewTab from '@/page/SplitViewTab/SplitViewTab.vue'
@@ -97,6 +97,22 @@ const handleOrganizePreviewCancel = () => {
 
 const presistKeysFiltered = presistKeys.filter(v => !['tabListHistoryRecord', 'recent'].includes(v))
 
+const openComfyUIOutputAsDefault = () => {
+  if (globalStore.conf?.launch_mode !== 'comfyui') return
+  const output = globalStore.quickMovePaths[0]
+  if (!output?.dir) return
+
+  const pane: FileTransferTabPane = {
+    type: 'local',
+    name: '输出文件夹',
+    key: 'comfyui-output',
+    path: output.dir,
+    mode: 'walk'
+  }
+  globalStore.tabList = [{ panes: [pane], key: pane.key, id: 'comfyui-output-tab' }]
+  globalStore.recent = []
+}
+
 let lastConf = null as any
 const watchGlobalSettingChange = once(async () => {
   globalStore.$subscribe((debounce(async () => {
@@ -165,7 +181,11 @@ useGlobalEventListen('updateGlobalSetting', async () => {
     })
   }
   watchGlobalSettingChange()
-  restoreWorkspaceSnapshot()
+  if (resp.launch_mode === 'comfyui') {
+    openComfyUIOutputAsDefault()
+  } else {
+    restoreWorkspaceSnapshot()
+  }
   exportFn(globalStore)
   resolveQueryActions(globalStore)
   // globalEvents.emit('updateGlobalSettingDone')
@@ -178,11 +198,14 @@ useGlobalEventListen('returnToIIB', async () => {
   if (!conf) {
     return
   }
+  if (conf.launch_mode === 'comfyui') {
+    return
+  }
   const gs = conf.global_setting
   if (!gs.outdir_txt2img_samples && !gs.outdir_img2img_samples) {
     return
   }
-  const set = new Set(globalStore.quickMovePaths.map(v => v.key))
+  const set = new Set(globalStore.quickMovePaths.map((v) => v.key))
   if (set.has('outdir_txt2img_samples') && set.has('outdir_img2img_samples')) {
     return
   }
@@ -231,10 +254,10 @@ onMounted(async () => {
   </a-skeleton>
 
   <!-- Organize Jobs Progress Panel -->
-  <OrganizeJobsPanel @open-preview="handleOpenOrganizePreview" />
+  <OrganizeJobsPanel v-if="globalStore.conf?.launch_mode !== 'comfyui'" @open-preview="handleOpenOrganizePreview" />
 
   <!-- Organize Preview Modal -->
-  <a-modal
+  <a-modal v-if="globalStore.conf?.launch_mode !== 'comfyui'"
     v-model:visible="showOrganizePreview"
     :title="t('smartOrganizePreview')"
     :footer="null"
@@ -251,10 +274,10 @@ onMounted(async () => {
   </a-modal>
 
   <!-- Smart Organize Config Modal -->
-  <SmartOrganizeConfigModal />
+  <SmartOrganizeConfigModal v-if="globalStore.conf?.launch_mode !== 'comfyui'" />
 
   <!-- Prompt Editor Modal (自包含组件，通过全局事件控制) -->
-  <PromptEditorModal />
+  <PromptEditorModal v-if="globalStore.conf?.launch_mode !== 'comfyui'" />
 
   <!-- Fullscreen Loading for Moving Files -->
   <div v-if="isMovingFiles" class="moving-files-overlay">

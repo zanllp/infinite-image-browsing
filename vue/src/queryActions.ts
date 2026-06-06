@@ -104,6 +104,9 @@ const createPaneFromType = (type: TabPane['type'], props: any): TabPane | null =
 }
 
 export const resolveQueryActions = async (g: ReturnType<typeof useGlobalStore>) => {
+  if (g.conf?.launch_mode === 'comfyui') {
+    return
+  }
   const paths = g.conf?.global_setting
   const params = new URLSearchParams(parent.location.search)
   const action = params.get('action')

@@ -9,5 +9,9 @@ av>=14,<15
 lxml
 filetype
 requests>=2.0.0,<3.0.0
-numpy>=1.10.0,<3.0.0
-hnswlib>=0.0.0,<1.0.0
+# Optional bridge alternative; the ComfyUI plugin currently uses scripts/iib/comfyui_asgi.py.
+# aiohttp-asgi
+# Optional: needed only for experimental topic clustering/search.
+# Install manually if you need it and your Python has a working C++ build toolchain:
+# numpy>=1.10.0,<3.0.0
+# hnswlib>=0.0.0,<1.0.0

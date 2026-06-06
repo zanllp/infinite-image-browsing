@@ -6,8 +6,8 @@ import { i18n, t } from '@/i18n'
 import { getPreferredLang } from '@/i18n'
 import { SortMethod } from '@/page/fileTransfer/fileSort'
 import { Props as FileTransferProps } from '@/page/fileTransfer/hooks'
-import type { getQuickMovePaths } from '@/page/taskRecord/autoComplete'
-import { type Dict, type ReturnTypeAsync } from '@/util'
+import type { QuickMovePath } from '@/page/taskRecord/autoComplete'
+import { type Dict } from '@/util'
 import { AnyFn, usePreferredDark } from '@vueuse/core'
 import { cloneDeep, uniqueId, last } from 'lodash-es'
 import { defineStore } from 'pinia'
@@ -252,16 +252,16 @@ export const useGlobalStore = defineStore(
   prefix + 'useGlobalStore',
   () => {
     const conf = ref<GlobalConf>()
-    const quickMovePaths = ref([] as ReturnTypeAsync<typeof getQuickMovePaths>)
+    const quickMovePaths = ref<QuickMovePath[]>([])
 
     const enableThumbnail = ref(true)
-    const gridThumbnailResolution = ref(512)
+    const gridThumbnailResolution = ref(256)
     const defaultSortingMethod = ref(SortMethod.CREATED_TIME_DESC)
-    const defaultGridCellWidth = ref(256)
+    const defaultGridCellWidth = ref(220)
 
     try {
       if (typeof parent !== 'undefined' && parent.window) {
-        defaultGridCellWidth.value = cellWidthMap(parent.window.innerHeight)
+        defaultGridCellWidth.value = Math.min(cellWidthMap(parent.window.innerHeight), 220)
       }
     } catch (error) {
       console.error(error)
@@ -346,7 +346,7 @@ export const useGlobalStore = defineStore(
         'outdir_img2img_grids',
         'outdir_txt2img_grids'
       ]
-      const res = quickMovePaths.value.filter((v) => keys.includes(v.key)).map((v) => [v.zh, v.dir])
+      const res = quickMovePaths.value.filter((v: QuickMovePath) => keys.includes(v.key)).map((v: QuickMovePath) => [v.zh, v.dir])
       return {...Object.fromEntries(res), ...extraPathAliasMap.value}
     })
 

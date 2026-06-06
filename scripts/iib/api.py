@@ -45,7 +45,7 @@ import asyncio
 from typing import List, Optional
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from PIL import Image
+from PIL import Image, ImageOps
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import hashlib
@@ -200,35 +200,39 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
             return []
 
     def update_all_scanned_paths():
-        allowed_paths = os.getenv("IIB_ACCESS_CONTROL_ALLOWED_PATHS")
-        if allowed_paths:
-            sd_webui_conf = get_sd_webui_conf(**kwargs)
-            path_config_key_map = {
-                "save": "outdir_save",
-                "extra": "outdir_extras_samples",
-                "txt2img": "outdir_txt2img_samples",
-                "img2img": "outdir_img2img_samples",
-            }
-
-            def path_map(path: str):
-                path = path.strip()
-                if path in path_config_key_map:
-                    return sd_webui_conf.get(path_config_key_map.get(path))
-                return path
-
-            paths = normalize_paths(
-                seq(allowed_paths.split(","))
-                .map(path_map)
-                .filter(lambda x: x)
-                .to_list(),
-                os.getcwd()
-            )
+        comfyui_allowed_paths = kwargs.get("allowed_paths") if kwargs.get("launch_mode") == "comfyui" else None
+        if comfyui_allowed_paths:
+            paths = normalize_paths(comfyui_allowed_paths, os.getcwd())
         else:
-            paths = (
-                get_img_search_dirs()
-                + mem["extra_paths"]
-                + kwargs.get("extra_paths_cli", [])
-            )
+            allowed_paths = os.getenv("IIB_ACCESS_CONTROL_ALLOWED_PATHS")
+            if allowed_paths:
+                sd_webui_conf = get_sd_webui_conf(**kwargs)
+                path_config_key_map = {
+                    "save": "outdir_save",
+                    "extra": "outdir_extras_samples",
+                    "txt2img": "outdir_txt2img_samples",
+                    "img2img": "outdir_img2img_samples",
+                }
+
+                def path_map(path: str):
+                    path = path.strip()
+                    if path in path_config_key_map:
+                        return sd_webui_conf.get(path_config_key_map.get(path))
+                    return path
+
+                paths = normalize_paths(
+                    seq(allowed_paths.split(","))
+                    .map(path_map)
+                    .filter(lambda x: x)
+                    .to_list(),
+                    os.getcwd()
+                )
+            else:
+                paths = (
+                    get_img_search_dirs()
+                    + mem["extra_paths"]
+                    + kwargs.get("extra_paths_cli", [])
+                )
         mem["all_scanned_paths"] = unique_by(paths)
 
     update_all_scanned_paths()
@@ -285,7 +289,13 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
             raise HTTPException(status_code=403)
 
     def filter_allowed_files(files: List[FileInfoDict]):
-        return [x for x in files if is_path_trusted(x["fullpath"])]
+        filtered = [x for x in files if is_path_trusted(x["fullpath"])]
+        if kwargs.get("launch_mode") == "comfyui":
+            # ComfyUI output folders are often cleaned/renamed by users. Avoid
+            # returning stale DB records because they produce broken thumbnails,
+            # broken preview clicks, and empty metadata panels.
+            filtered = [x for x in filtered if os.path.exists(x["fullpath"])]
+        return filtered
 
 
 
@@ -306,7 +316,9 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
             conn = DataBase.get_conn()
             all_custom_tags = Tag.get_all_custom_tag(conn)
             extra_paths = ExtraPath.get_extra_paths(conn) + [
-                ExtraPath(path, ExtraPathType.cli_only.value)
+                ExtraPath(path, "walk+" + ExtraPathType.cli_only.value, "输出文件夹")
+                if kwargs.get("launch_mode") == "comfyui"
+                else ExtraPath(path, ExtraPathType.cli_only.value)
                 for path in kwargs.get("extra_paths_cli", [])
             ]
             update_extra_paths(conn)
@@ -321,7 +333,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
             "sd_cwd": os.getcwd(),
             "all_custom_tags": all_custom_tags,
             "extra_paths": extra_paths,
-            "enable_access_control": enable_access_control,
+            "enable_access_control": True if kwargs.get("launch_mode") == "comfyui" else enable_access_control,
             "launch_mode": kwargs.get("launch_mode", "sd"),
             "export_fe_fn": bool(kwargs.get("export_fe_fn")),
             "app_fe_setting": app_fe_setting,
@@ -611,6 +623,9 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         res = {}
         for path in req.paths:
             check_path_trust(path)
+            if not os.path.exists(path):
+                res[path] = None
+                continue
             res[path] = get_file_info_by_path(path)
         return res
 
@@ -618,45 +633,59 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
     async def thumbnail(path: str, t: str, size: str = "256x256"):
         check_path_trust(path)
         if not cache_base_dir:
-            return
-        # 生成缓存文件的路径
+            raise HTTPException(status_code=500, detail="Cache directory is not available")
+        if not os.path.exists(path) or not os.path.isfile(path):
+            logger.warning("Thumbnail requested for missing image: %r", path)
+            raise HTTPException(status_code=404, detail=f"Image does not exist: {path}")
+
         hash_dir = hashlib.md5((path + t).encode("utf-8")).hexdigest()
-        hash = hash_dir + size
+        etag = hash_dir + size
         cache_dir = os.path.join(cache_base_dir, "iib_cache", hash_dir)
         cache_path = os.path.join(cache_dir, f"{size}.webp")
+        fallback_path = os.path.join(cache_dir, f"{size}.jpg")
 
-        # 如果缓存文件存在，则直接返回该文件
+        common_headers = {"Cache-Control": "max-age=31536000", "ETag": etag}
         if os.path.exists(cache_path):
-            return FileResponse(
-                cache_path,
-                media_type="image/webp",
-                headers={"Cache-Control": "max-age=31536000", "ETag": hash},
-            )
+            return FileResponse(cache_path, media_type="image/webp", headers=common_headers)
+        if os.path.exists(fallback_path):
+            return FileResponse(fallback_path, media_type="image/jpeg", headers=common_headers)
 
-                
-        # 如果小于64KB，直接返回原图
-        if os.path.getsize(path) < 64 * 1024:
-            return FileResponse(
-                path,
-                media_type="image/" + path.split(".")[-1],
-                headers={"Cache-Control": "max-age=31536000", "ETag": hash},
-            )
-        
-
-        # 如果缓存文件不存在，则生成缩略图并保存
-        with Image.open(path) as img:
+        try:
             w, h = size.split("x")
-            img.thumbnail((int(w), int(h)))
+            max_size = (int(w), int(h))
             os.makedirs(cache_dir, exist_ok=True)
-            img.save(cache_path, "webp")
-            # print(f"Image cache generated: {path}")
 
-        # 返回缓存文件
-        return FileResponse(
-            cache_path,
-            media_type="image/webp",
-            headers={"Cache-Control": "max-age=31536000", "ETag": hash},
-        )
+            with Image.open(path) as img:
+                img = ImageOps.exif_transpose(img)
+                img.thumbnail(max_size)
+
+                # Convert modes that WebP/JPEG encoders cannot save directly.
+                if img.mode in ("RGBA", "LA"):
+                    background = Image.new("RGB", img.size, (255, 255, 255))
+                    alpha = img.getchannel("A") if "A" in img.getbands() else None
+                    background.paste(img.convert("RGBA"), mask=alpha)
+                    img = background
+                elif img.mode not in ("RGB", "L"):
+                    img = img.convert("RGB")
+
+                try:
+                    img.save(cache_path, "webp", quality=82, method=4)
+                    return FileResponse(cache_path, media_type="image/webp", headers=common_headers)
+                except Exception as webp_error:
+                    logger.warning(
+                        "Failed to save webp thumbnail, falling back to jpeg. path=%s error=%s",
+                        path,
+                        webp_error,
+                    )
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
+                    img.save(fallback_path, "jpeg", quality=85, optimize=True)
+                    return FileResponse(fallback_path, media_type="image/jpeg", headers=common_headers)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("Failed to generate image thumbnail. path=%s error=%s", path, e)
+            raise HTTPException(status_code=415, detail=f"Unable to generate image thumbnail: {e}")
 
     @app.get(api_base + "/img/{filename}", dependencies=[Depends(verify_secret)])
     async def get_image(filename: str, path: str, t: str):
@@ -854,6 +883,9 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         from scripts.iib.db.update_image_data import get_exif_data
         conn = DataBase.get_conn()
         try:
+            check_path_trust(path)
+            if not os.path.exists(path) or not os.path.isfile(path):
+                return ""
             img = DbImg.get(conn, path)
 
             # dev 模式下，未编辑过的直接从文件读取（方便调试 EXIF 解析）
@@ -889,6 +921,10 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         conn = DataBase.get_conn()
         for path in req.paths:
             try:
+                check_path_trust(path)
+                if not os.path.exists(path) or not os.path.isfile(path):
+                    res[path] = ""
+                    continue
                 img = DbImg.get(conn, path)
                 if img:
                     res[path] = img.exif
@@ -902,6 +938,9 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
 
     @app.get(api_base + "/image_exif", dependencies=[Depends(verify_secret)])
     async def image_exif(path: str):
+        check_path_trust(path)
+        if not os.path.exists(path) or not os.path.isfile(path):
+            return {}
         try:
             if get_video_type(path):
                 return {}

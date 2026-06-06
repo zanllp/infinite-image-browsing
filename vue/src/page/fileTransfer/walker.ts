@@ -29,7 +29,7 @@ export class Walker {
     }
     this.walkerInitPromsie = new Promise((resolve) => {
       batchGetFilesInfo([this.entryPath]).then(async (res) => {
-        this.root.info = res[this.entryPath]
+        this.root.info = res[this.entryPath] ?? this.root.info
         await this.fetchChildren(this.root)
         resolve()
       })

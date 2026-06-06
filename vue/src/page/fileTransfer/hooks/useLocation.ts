@@ -102,10 +102,12 @@ export function useLocation () {
         h('span', { class: 'line-clamp-1', style: 'max-width: 256px' }, title)
       ])
       pane.nameFallbackStr = title
-      global.recent = global.recent.filter((v) => v.key !== pane.key)
-      global.recent.unshift({ path: loc, key: pane.key, mode: props.value.mode })
-      if (global.recent.length > 20) {
-        global.recent = global.recent.slice(0, 20)
+      if (global.conf?.launch_mode !== 'comfyui') {
+        global.recent = global.recent.filter((v) => v.key !== pane.key)
+        global.recent.unshift({ path: loc, key: pane.key, mode: props.value.mode })
+        if (global.recent.length > 20) {
+          global.recent = global.recent.slice(0, 20)
+        }
       }
     }, 300)
   )

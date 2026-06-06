@@ -1,5 +1,5 @@
 import { checkPathExists, type getGlobalSetting } from '@/api'
-import type { ExtraPathType } from '@/api/db'
+import type { ExtraPathType, ExtraPathModel } from '@/api/db'
 import { t } from '@/i18n'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { pick, type ReturnTypeAsync } from '@/util'
@@ -7,13 +7,36 @@ import { normalizeRelativePathToAbsolute } from '@/util/path'
 import { uniqBy } from 'lodash-es'
 import { delay } from 'vue3-ts-util'
 
+export type QuickMovePath = {
+  key: string
+  zh: string
+  dir: string
+  can_delete: boolean
+  types: (ExtraPathType | 'preset')[]
+}
+
 export const getQuickMovePaths = async ({
   global_setting,
   sd_cwd,
   home,
   extra_paths,
-  cwd
-}: ReturnTypeAsync<typeof getGlobalSetting>) => {
+  cwd,
+  launch_mode
+}: ReturnTypeAsync<typeof getGlobalSetting>): Promise<QuickMovePath[]> => {
+  if (launch_mode === 'comfyui') {
+    const g = useGlobalStore() as any
+    g.extraPathAliasMap = {}
+    await delay(0)
+    const outputPath = extra_paths[0]
+    if (!outputPath) return []
+    return [{
+      key: 'comfyui_output',
+      zh: '输出文件夹',
+      dir: outputPath.path,
+      can_delete: false,
+      types: ['walk', 'cli_access_only']
+    }]
+  }
   
   const picked = pick(
     global_setting,
@@ -72,13 +95,13 @@ export const getQuickMovePaths = async ({
     [t('workingFolder')]: cwd,
     [t('t2i')]: pathMap.outdir_txt2img_samples,
     [t('i2i')]: pathMap.outdir_img2img_samples,
-    ...extra_paths.filter(v => v.alias).reduce((acc, v) => {
+    ...extra_paths.filter((v: ExtraPathModel) => v.alias).reduce((acc, v: ExtraPathModel) => {
       acc[v.alias!] = normalizeRelativePathToAbsolute(v.path, sd_cwd)
       return acc
     }, {} as Record<string, string>)
   }
   await delay(0)
-  const res = Object.keys(cnMap)
+  const res: QuickMovePath[] = Object.keys(cnMap)
     .filter((k) => exists[pathMap[k as keyof typeof pathMap] as string])
     .map((k) => {
       const key = k as Keys
@@ -87,8 +110,9 @@ export const getQuickMovePaths = async ({
         zh: cnMap[key],
         dir: pathMap[key],
         can_delete: false,
-        types: ['preset' as 'preset' | ExtraPathType]
+        types: ['preset' as const]
       }
-    }).concat(extra_paths.map(v => ({ key: v.path, zh: v.alias || g.getShortPath(v.path), dir: v.path, can_delete: true, types: v.types })) as any[])
-  return uniqBy(res, v => v.key + v.types.join())
+    })
+  res.push(...extra_paths.map((v: ExtraPathModel): QuickMovePath => ({ key: v.path, zh: v.alias || g.getShortPath(v.path), dir: v.path, can_delete: true, types: v.types })))
+  return uniqBy(res, (v: QuickMovePath) => v.key + v.types.join())
 }

@@ -1,25 +1,20 @@
 <script lang="ts" setup>
 import { useGlobalStore, type TabPane } from '@/store/useGlobalStore'
-import { Snapshot, useWorkspeaceSnapshot } from '@/store/useWorkspeaceSnapshot'
 import { uniqueId } from 'lodash-es'
 import { computed, ref } from 'vue'
-import { ok } from 'vue3-ts-util'
-import { FileDoneOutlined, BarChartOutlined, GithubOutlined, LockOutlined, MailOutlined, PlusOutlined, QuestionCircleOutlined } from '@/icon'
+import { FileDoneOutlined, GithubOutlined, LockOutlined, MailOutlined, PlusOutlined, QuestionCircleOutlined } from '@/icon'
 import { t } from '@/i18n'
-import { cloneDeep } from 'lodash-es'
-import { useImgSliStore } from '@/store/useImgSli'
+
 import { addToExtraPath, onAliasExtraPathClick, onRemoveExtraPathClick } from './extraPathControlFunc'
 import actionContextMenu from './actionContextMenu.vue'
 import { ExtraPathType } from '@/api/db'
 import { onMounted } from 'vue'
-import { hasNewRelease, version, latestCommit } from '@/util/versionManager'
 import { isTauri } from '@/util/env'
 import { message } from 'ant-design-vue'
 import { useSettingSync } from '@/util'
 
 const global = useGlobalStore()
-const imgsli = useImgSliStore()
-const workspaceSnapshot = useWorkspeaceSnapshot()
+
 const props = defineProps<{
   tabIdx: number; paneIdx: number, popAddPathModal?: {
     path: string
@@ -48,14 +43,11 @@ const compCnMap: Partial<Record<TabPane['type'], string>> = {
   'fuzzy-search': t('fuzzy-search'),
   'topic-search': t('topicSearchExperimental'),
   'batch-download': t('batchDownload') + ' / ' + t('archive'),
-  'workspace-snapshot': t('WorkspaceSnapshot'),
-  'random-image': t('randomImage'),
   'global-setting': t('globalSettings'),
-  'trend': t('trend'),
 }
 type FileTransModeIn = 'preset' | ExtraPathType
 const createPane = (type: TabPane['type'], path?: string, mode?: FileTransModeIn) => {
-  let pane: TabPane
+  let pane: TabPane | undefined
   switch (type) {
     case 'grid-view':
     case 'tag-search-matched-image-grid':
@@ -65,11 +57,8 @@ const createPane = (type: TabPane['type'], path?: string, mode?: FileTransModeIn
     case 'global-setting':
     case 'tag-search':
     case 'batch-download':
-    case 'workspace-snapshot':
     case 'fuzzy-search':
     case 'topic-search':
-    case 'random-image':
-    case 'trend':
     case 'empty':
       pane = { type, name: compCnMap[type]!, key: Date.now() + uniqueId() }
       break
@@ -83,14 +72,6 @@ const createPane = (type: TabPane['type'], path?: string, mode?: FileTransModeIn
       }
   }
   return pane
-}
-
-const openTrend = () => {
-  const pane = createPane('trend')
-  if (pane) {
-    const tab = global.tabList[0]
-    if (tab) { tab.panes.push(pane); tab.key = pane.key }
-  }
 }
 
 const openInCurrentTab = (type: TabPane['type'], path?: string, mode?: FileTransModeIn) => {
@@ -120,33 +101,30 @@ const openOnTheRight = (type: TabPane['type'], path?: string, mode?: FileTransMo
   tab.key = pane.key
 }
 
-const lastRecord = computed(() => global.tabListHistoryRecord?.[1])
-
+const isComfyUI = computed(() => global.conf?.launch_mode === 'comfyui')
 
 const walkModeSupportedDir = computed(() =>
-  global.quickMovePaths.filter(
-    ({ key: k, types }) =>
+  global.quickMovePaths.filter((item) => {
+    const k = item.key
+    const types = item.types
+    return isComfyUI.value ||
       k === 'outdir_txt2img_samples' ||
       k === 'outdir_img2img_samples' ||
       k === 'outdir_txt2img_grids' ||
       k === 'outdir_img2img_grids' ||
       types.includes('walk')
-  )
+  })
 )
-const canpreviewInNewWindow = window.parent !== window
-const previewInNewWindow = () => window.parent.open('/infinite_image_browsing' + (window.parent.location.href.includes('theme=dark') ? '?__theme=dark' : ''))
-
-const restoreRecord = () => {
-  ok(lastRecord.value)
-  global.tabList = cloneDeep(lastRecord.value.tabs)
-}
-
-const restoreWorkspaceSnapshot = (item: Snapshot) => {
-  global.tabList = cloneDeep(item.tabs)
-}
+const normalModeSupportedDir = computed(() =>
+  global.quickMovePaths.filter((dir) => {
+    const ts = dir.types
+    return ts.includes('cli_access_only') || ts.includes('preset') || ts.includes('scanned') || ts.includes('scanned-fixed')
+  })
+)
 
 const machine = computed(() => {
   if (isTauri) return 'desktop application'
+  if (global.conf?.launch_mode === 'comfyui') return 'ComfyUI plugin'
   if ( global.conf?.launch_mode === 'sd') return 'sd-webui extension'
   return 'standalone'
 })
@@ -174,9 +152,9 @@ const modes = computed(() => {
   <div class="container">
     <div class="header">
       <div class="header-left">
-        <h1>{{ $t('welcome') }}</h1>
+        <h1>{{ isComfyUI ? '输出文件夹' : $t('welcome') }}</h1>
         <!-- Compact Magic Switch with Welcome -->
-        <div class="magic-switch-compact">
+        <div class="magic-switch-compact" v-if="!isComfyUI">
           <a-tooltip>
             <template #title>
               <div class="switch-tooltip">
@@ -198,12 +176,6 @@ const modes = computed(() => {
           </a-tooltip>
         </div>
 
-        <a-tooltip :title="$t('trendPanel')">
-          <div class="trend-icon-btn" @click="openTrend">
-            <bar-chart-outlined />
-          </div>
-        </a-tooltip>
-
       </div>
 
       <div v-if="global.conf?.enable_access_control && global.dontShowAgain"
@@ -211,18 +183,16 @@ const modes = computed(() => {
         <LockOutlined title="Access Control mode" style="vertical-align: text-bottom;" />
       </div>
       <div flex-placeholder />
-      <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing" target="_blank"
-        class="quick-action">Github</a>
-      <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/blob/main/.env.example" target="_blank"
-        class="quick-action">{{ $t('privacyAndSecurity') }}</a>
-      <a-badge :count="hasNewRelease ? 'new' : null" :offset="[2,0]" color="geekblue">
-        <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/releases" target="_blank"
-          class="quick-action">Releases</a>
-      </a-badge>
-      <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/wiki/Change-log" target="_blank"
-        class="quick-action">{{ $t('changlog') }}</a>
-      <a href="#" class="quick-action" @click.prevent="helpModalOpen = true">{{ $t('helpFeedback') }}</a>
-      <div class="quick-action" v-if="!isTauri">
+      <template v-if="!isComfyUI">
+        <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing" target="_blank"
+          class="quick-action">Github</a>
+        <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/blob/main/.env.example" target="_blank"
+          class="quick-action">{{ $t('privacyAndSecurity') }}</a>
+        <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/wiki/Change-log" target="_blank"
+          class="quick-action">{{ $t('changlog') }}</a>
+        <a href="#" class="quick-action" @click.prevent="helpModalOpen = true">{{ $t('helpFeedback') }}</a>
+      </template>
+      <div class="quick-action" v-if="!isTauri && !isComfyUI">
         {{ $t('sync') }}  <a-tooltip :title="$t('syncDesc')">
           <QuestionCircleOutlined/>
         </a-tooltip>  :  <a-switch v-model:checked="sync" />
@@ -301,7 +271,7 @@ const modes = computed(() => {
       </template>
     </a-alert-->
     <div class="content">
-      <div class="feature-item">
+      <div class="feature-item" v-if="!isComfyUI">
         <h2>{{ $t('walkMode') }}</h2>
         <ul>
           <li @click="addToExtraPath('walk')" class="item">
@@ -310,7 +280,6 @@ const modes = computed(() => {
             </span>
           </li>
             
-          <a-button v-if="global.showRandomImageInStartup" @click="openInCurrentTab('random-image')" type="primary" style="border-radius:100vw;margin-bottom: 8px;" ghost><span style="margin:0 6px;"><span style="margin-right: 8px;">🎲</span>{{ $t('tryMyLuck') }}</span></a-button>
           <actionContextMenu v-for="dir in walkModeSupportedDir" :key="dir.key"
             @open-in-new-tab="openInNewTab('local', dir.dir, 'walk')"
             @open-on-the-right="openOnTheRight('local', dir.dir, 'walk')">
@@ -327,7 +296,7 @@ const modes = computed(() => {
           </actionContextMenu>
         </ul>
       </div>
-      <div class="feature-item" v-if="global.quickMovePaths.length">
+      <div class="feature-item" v-if="global.quickMovePaths.length && !isComfyUI">
         <h2>{{ $t('launchFromNormalAndFixed') }}</h2>
         <ul>
           <li @click="addToExtraPath('scanned-fixed')" class="item">
@@ -336,10 +305,10 @@ const modes = computed(() => {
             </span>
           </li>
           <template
-            v-for="dir in global.quickMovePaths.filter(({ types: ts }) => ts.includes('cli_access_only') || ts.includes('preset') || ts.includes('scanned') || ts.includes('scanned-fixed')) "
+            v-for="dir in normalModeSupportedDir"
             :key="dir.key">
 
-            <actionContextMenu v-for="t in dir.types.filter(v => v !== 'walk')" :key="t"
+            <actionContextMenu v-for="t in dir.types.filter((v: ExtraPathType | 'preset') => v !== 'walk')" :key="t"
               @open-in-new-tab="openInNewTab('local', dir.dir, t)"
               @open-on-the-right="openOnTheRight('local', dir.dir, t)">
 
@@ -357,28 +326,17 @@ const modes = computed(() => {
           </template>
         </ul>
       </div>
-      <div class="feature-item">
+      <div class="feature-item" v-if="!isComfyUI">
         <h2>{{ $t('launch') }}</h2>
         <ul>
           <li v-for="comp in Object.keys(compCnMap) as TabPane['type'][]" :key="comp" class="item"
             @click.prevent="openInCurrentTab(comp)">
             <span class="text line-clamp-1">{{ compCnMap[comp] }}</span>
           </li>
-          <li class="item" @click="imgsli.opened = true">
-            <span class="text line-clamp-1">{{ $t('imgCompare') }}</span>
-          </li>
-          <li class="item" v-if="canpreviewInNewWindow" @click="previewInNewWindow">
-            <span class="text line-clamp-1">{{ $t('openThisAppInNewWindow') }}</span>
-          </li>
-          <li class="item" v-if="lastRecord?.tabs.length" @click="restoreRecord">
-            <span class="text line-clamp-1">{{ $t('restoreLastWorkspaceState') }}</span>
-          </li>
-          <li class="item" v-for="item in workspaceSnapshot.snapshots" :key="item.id" @click="restoreWorkspaceSnapshot(item)">
-            <span class="text line-clamp-1">{{ $t('restoreWorkspaceSnapshot', [item.name]) }}</span>
-          </li>
+
         </ul>
       </div>
-      <div class="feature-item recent" v-if="global.recent.length">
+      <div class="feature-item recent" v-if="global.recent.length && !isComfyUI">
         <div class="title">
           <h2>{{ $t('recent') }}</h2>
           <AButton @click="global.recent = []" type="link">{{ $t('clear') }}</AButton>
@@ -398,16 +356,7 @@ const modes = computed(() => {
         Mode: {{ modes }}
       </div>
       <div>
-        Version: {{ version.tag }} ({{machine}})
-      </div>
-      <div v-if="version.hash">
-        Hash: {{ version.hash }}
-      </div>
-      <div v-if="latestCommit && version.hash && latestCommit.sha !== version.hash">
-        Not the latest commit
-      </div>
-      <div v-if="latestCommit">
-        Latest Commit: {{ latestCommit.sha }} (Updated at {{ latestCommit.commit.author?.date }})
+        Mode: {{ machine }}
       </div>
     </div>
   </div>

@@ -91,7 +91,7 @@ export function useFileItemActions (
         multiSelectedIdxs.value.push(idx)
       }
       e.stopPropagation()
-    } else {
+    } else if (file.type === 'dir') {
       await openNext(file)
     }
   }
