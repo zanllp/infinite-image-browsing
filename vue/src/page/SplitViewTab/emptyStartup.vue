@@ -378,7 +378,7 @@ const modes = computed(() => {
           </li>
         </ul>
       </div>
-      <div class="feature-item recent" v-if="global.recent.length">
+      <div class="feature-item recent" v-if="global.showRecentInStartup && global.recent.length">
         <div class="title">
           <h2>{{ $t('recent') }}</h2>
           <AButton @click="global.recent = []" type="link">{{ $t('clear') }}</AButton>
