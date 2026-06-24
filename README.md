@@ -295,10 +295,25 @@ All calls use an **OpenAI-compatible** provider:
 
 - **`OPENAI_BASE_URL`**: e.g. `https://your-host/v1`
 - **`OPENAI_API_KEY`**: your API key
-- **`EMBEDDING_MODEL`**: embeddings model used for clustering
+- **`EMBEDDING_MODEL`**: embeddings model used for clustering and semantic search
 - **`AI_MODEL`**: default chat model (fallback)
 - **`TOPIC_TITLE_MODEL`**: chat model used for cluster titles (falls back to `AI_MODEL`)
 - **`IIB_PROMPT_NORMALIZE`**: `1/0` enable prompt normalization
 - **`IIB_PROMPT_NORMALIZE_MODE`**: `balanced` (recommended) / `theme_only`
+
+##### Optional: TwelveLabs Marengo embedding backend
+
+Embeddings normally go to an OpenAI-compatible `/embeddings` endpoint. As an opt-in
+alternative you can embed prompt text with [TwelveLabs](https://twelvelabs.io) Marengo,
+which embeds text/image/audio/video into one shared latent space:
+
+- Set **`EMBEDDING_MODEL=marengo3.0`**.
+- `OPENAI_API_KEY` is then used as your TwelveLabs API key; `OPENAI_BASE_URL` is ignored
+  for embeddings (the OpenAI-compatible chat path for cluster titles is unaffected).
+- Install the optional dependency: `pip install 'twelvelabs>=1.2.8'`.
+
+This is fully opt-in and non-breaking — the default OpenAI-compatible path is unchanged
+unless you select a Marengo model. You can grab a free API key (generous free tier) at
+<https://twelvelabs.io>.
 
 > Note: There is **no mock fallback** for AI calls. If the provider/model fails or returns invalid output, the API will return an error directly.

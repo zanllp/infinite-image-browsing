@@ -1,6 +1,15 @@
 [跳到中文](#中文)
 # English
 
+## 2026-06-23
+### 🔎 Optional TwelveLabs Marengo embedding backend
+Added an opt-in TwelveLabs Marengo backend for prompt-text embeddings used by topic clustering and semantic search.
+
+- Set `EMBEDDING_MODEL=marengo3.0` to route embeddings through TwelveLabs Marengo instead of an OpenAI-compatible endpoint.
+- `OPENAI_API_KEY` is reused as the TwelveLabs API key; `OPENAI_BASE_URL` is ignored for embeddings.
+- Fully opt-in and non-breaking: the default OpenAI-compatible path is unchanged unless a Marengo model is selected.
+- Requires the optional dependency `twelvelabs>=1.2.8`. Free API key at https://twelvelabs.io .
+
 ## 2026-05-17
 ### 📊 Trend & Statistics Panel
 Added a new Trend & Statistics panel providing a visual overview of your image generation activity over time.
@@ -821,6 +830,15 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-06-23
+### 🔎 可选的 TwelveLabs Marengo 向量后端
+为主题聚类与语义搜索所用的提示词文本向量，新增可选的 TwelveLabs Marengo 后端。
+
+- 设置 `EMBEDDING_MODEL=marengo3.0`，即可将向量计算改为走 TwelveLabs Marengo，而非 OpenAI 兼容接口。
+- 此时 `OPENAI_API_KEY` 复用为 TwelveLabs API Key；向量计算会忽略 `OPENAI_BASE_URL`。
+- 完全可选且不影响现有行为：未选择 Marengo 模型时，默认的 OpenAI 兼容路径保持不变。
+- 需要可选依赖 `twelvelabs>=1.2.8`。可在 https://twelvelabs.io 获取免费 API Key。
 
 ## 2026-05-17
 ### 📊 趋势与统计面板

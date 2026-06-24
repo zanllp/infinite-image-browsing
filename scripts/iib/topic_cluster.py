@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from scripts.iib.db.datamodel import DataBase, ImageEmbedding, ImageEmbeddingFail, TopicClusterCache, TopicTitleCache
 from scripts.iib.tool import cwd, accumulate_streaming_response
 from scripts.iib.logger import logger
+from scripts.iib.marengo_embedding import is_marengo_model, marengo_text_embeddings
 
 # Perf deps (required for this feature)
 _np = None
@@ -429,6 +430,12 @@ def _call_embeddings_sync(
 ) -> List[List[float]]:
     logger.info("[embeddings] === _call_embeddings_sync START ===")
     logger.info("[embeddings] base_url=%s model=%s n_inputs=%s", base_url, model, len(inputs))
+
+    # Opt-in TwelveLabs Marengo backend: selected purely by the embedding model
+    # name (e.g. EMBEDDING_MODEL=marengo3.0). Marengo is not OpenAI-compatible,
+    # so it has its own client; the OpenAI path below is untouched otherwise.
+    if is_marengo_model(model):
+        return marengo_text_embeddings(inputs=inputs, model=model, api_key=api_key)
 
     if not api_key:
         logger.error("[embeddings] API Key not configured")
