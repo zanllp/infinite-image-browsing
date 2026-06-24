@@ -6,7 +6,7 @@
 Added an opt-in TwelveLabs Marengo backend for prompt-text embeddings used by topic clustering and semantic search.
 
 - Set `EMBEDDING_MODEL=marengo3.0` to route embeddings through TwelveLabs Marengo instead of an OpenAI-compatible endpoint.
-- `OPENAI_API_KEY` is reused as the TwelveLabs API key; `OPENAI_BASE_URL` is ignored for embeddings.
+- Set `TWELVELABS_API_KEY` to your TwelveLabs key (falls back to `OPENAI_API_KEY` if unset, for backward compatibility); `OPENAI_BASE_URL` is ignored for embeddings.
 - Fully opt-in and non-breaking: the default OpenAI-compatible path is unchanged unless a Marengo model is selected.
 - Requires the optional dependency `twelvelabs>=1.2.8`. Free API key at https://twelvelabs.io .
 
@@ -836,7 +836,7 @@ Triggered under the same circumstances as above, there will be a button to updat
 为主题聚类与语义搜索所用的提示词文本向量，新增可选的 TwelveLabs Marengo 后端。
 
 - 设置 `EMBEDDING_MODEL=marengo3.0`，即可将向量计算改为走 TwelveLabs Marengo，而非 OpenAI 兼容接口。
-- 此时 `OPENAI_API_KEY` 复用为 TwelveLabs API Key；向量计算会忽略 `OPENAI_BASE_URL`。
+- 设置 `TWELVELABS_API_KEY` 为你的 TwelveLabs Key（未设置时回退到 `OPENAI_API_KEY`，以保持向后兼容）；向量计算会忽略 `OPENAI_BASE_URL`。
 - 完全可选且不影响现有行为：未选择 Marengo 模型时，默认的 OpenAI 兼容路径保持不变。
 - 需要可选依赖 `twelvelabs>=1.2.8`。可在 https://twelvelabs.io 获取免费 API Key。
 

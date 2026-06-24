@@ -308,8 +308,9 @@ alternative you can embed prompt text with [TwelveLabs](https://twelvelabs.io) M
 which embeds text/image/audio/video into one shared latent space:
 
 - Set **`EMBEDDING_MODEL=marengo3.0`**.
-- `OPENAI_API_KEY` is then used as your TwelveLabs API key; `OPENAI_BASE_URL` is ignored
-  for embeddings (the OpenAI-compatible chat path for cluster titles is unaffected).
+- Set **`TWELVELABS_API_KEY`** to your TwelveLabs key (falls back to `OPENAI_API_KEY` if
+  unset, for backward compatibility). `OPENAI_BASE_URL` is ignored for embeddings, and the
+  OpenAI-compatible chat path used for cluster titles is unaffected.
 - Install the optional dependency: `pip install 'twelvelabs>=1.2.8'`.
 
 This is fully opt-in and non-breaking — the default OpenAI-compatible path is unchanged

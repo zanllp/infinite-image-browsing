@@ -52,7 +52,7 @@ def marengo_text_embeddings(
     if not api_key:
         raise HTTPException(
             status_code=500,
-            detail="TwelveLabs API key not configured (set OPENAI_API_KEY)",
+            detail="TwelveLabs API key not configured (set TWELVELABS_API_KEY)",
         )
 
     try:
