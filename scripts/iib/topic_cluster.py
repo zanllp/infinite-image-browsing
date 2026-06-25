@@ -1201,6 +1201,22 @@ def mount_topic_cluster_routes(
             if len(vectors) != len(batch):
                 raise HTTPException(status_code=500, detail="Embeddings count mismatch")
             for item, vec in zip(batch, vectors):
+                if vec is None:
+                    # Marengo content filter: single prompt was rejected but the
+                    # rest of the batch is fine. Record as a per-item failure.
+                    try:
+                        ImageEmbeddingFail.upsert(
+                            conn,
+                            image_id=int(item["id"]),
+                            model=str(model),
+                            text_hash=str(item.get("text_hash") or ""),
+                            error="Marengo returned empty embedding (token limit exceeded or content filtered)",
+                        )
+                    except Exception:
+                        pass
+                    failed += 1
+                    embedded_done += 1
+                    continue
                 ImageEmbedding.upsert(
                     conn=conn,
                     image_id=item["id"],
