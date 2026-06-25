@@ -11,3 +11,6 @@ filetype
 requests>=2.0.0,<3.0.0
 numpy>=1.10.0,<3.0.0
 hnswlib>=0.0.0,<1.0.0
+# Optional: TwelveLabs Marengo embedding backend (set EMBEDDING_MODEL=marengo3.0).
+# Only needed if you opt in; the default OpenAI-compatible path does not require it.
+# twelvelabs>=1.2.8
