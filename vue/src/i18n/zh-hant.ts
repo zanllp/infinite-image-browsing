@@ -6,6 +6,8 @@ export const zhHant: Partial<IIBI18nMap> = {
   randomImageSettings: '隨機圖片設定',
   showRandomImageInStartup: '在啟動頁面顯示隨機圖片',
   showRandomImageInStartupDesc: '控制隨機圖片選項是否在啟動頁面顯示',
+  showRecentInStartup: '在啟動頁面顯示最近記錄',
+  showRecentInStartupDesc: '控制最近瀏覽的面板是否在啟動頁面顯示',
   randomImageSettingNotification: '提示：您可以在全域設定頁面中控制是否在啟動頁面顯示隨機圖片選項',
   // 换一批
   shuffle: '換一批',

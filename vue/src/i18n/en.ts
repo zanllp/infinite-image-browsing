@@ -6,6 +6,8 @@ export const en: IIBI18nMap = {
   randomImageSettings: 'Random Image Settings',
   showRandomImageInStartup: 'Show Random Image in Startup',
   showRandomImageInStartupDesc: 'Control whether the random image option is displayed on the startup page',
+  showRecentInStartup: 'Show Recent in Startup',
+  showRecentInStartupDesc: 'Control whether the recent files panel is displayed on the startup page',
   randomImageSettingNotification: 'Tip: You can control whether to show the random image option on the startup page in Global Settings',
   shuffle: 'Shuffle',
   pathOnly: 'Path Only',

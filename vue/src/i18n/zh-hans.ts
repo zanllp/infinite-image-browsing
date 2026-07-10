@@ -4,6 +4,8 @@ export const zhHans = {
   randomImageSettings: '随机图像设置',
   showRandomImageInStartup: '在启动页面显示随机图像',
   showRandomImageInStartupDesc: '控制随机图像选项是否在启动页面显示',
+  showRecentInStartup: '在启动页面显示最近记录',
+  showRecentInStartupDesc: '控制最近浏览的面板是否在启动页面显示',
   randomImageSettingNotification: '提示：您可以在全局设置页面中控制是否在启动页面显示随机图像选项',
   shuffle: '换一批',
   pathOnly: '仅路径',

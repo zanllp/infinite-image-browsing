@@ -18,11 +18,36 @@ from pydantic import BaseModel
 from scripts.iib.db.datamodel import DataBase, ImageEmbedding, ImageEmbeddingFail, TopicClusterCache, TopicTitleCache
 from scripts.iib.tool import cwd, accumulate_streaming_response
 from scripts.iib.logger import logger
+from scripts.iib.marengo_embedding import is_marengo_model, marengo_text_embeddings
 
 # Perf deps (required for this feature)
 _np = None
 _hnswlib = None
 _PERF_DEPS_READY = False
+
+# JSON schema to enforce valid topic naming output from LLM (for llama.cpp grammar conversion)
+_TOPIC_NAMING_JSON_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24
+        },
+        "keywords": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "items": {
+                "type": "string",
+                "minLength": 1
+            }
+        }
+    },
+    "required": ["title", "keywords"],
+    "additionalProperties": False
+}
 
 
 def _ensure_perf_deps() -> None:
@@ -402,9 +427,19 @@ def _call_embeddings_sync(
     model: str,
     base_url: str,
     api_key: str,
+    tl_api_key: Optional[str] = None,
 ) -> List[List[float]]:
     logger.info("[embeddings] === _call_embeddings_sync START ===")
     logger.info("[embeddings] base_url=%s model=%s n_inputs=%s", base_url, model, len(inputs))
+
+    # Opt-in TwelveLabs Marengo backend: selected purely by the embedding model
+    # name (e.g. EMBEDDING_MODEL=marengo3.0). Marengo is not OpenAI-compatible,
+    # so it has its own dedicated key (TWELVELABS_API_KEY) and client; the
+    # OpenAI path below is untouched otherwise.
+    if is_marengo_model(model):
+        return marengo_text_embeddings(
+            inputs=inputs, model=model, api_key=tl_api_key or api_key
+        )
 
     if not api_key:
         logger.error("[embeddings] API Key not configured")
@@ -497,6 +532,7 @@ async def _call_embeddings(
     model: str,
     base_url: str,
     api_key: str,
+    tl_api_key: Optional[str] = None,
 ) -> List[List[float]]:
     """
     IMPORTANT:
@@ -509,6 +545,7 @@ async def _call_embeddings(
         model=model,
         base_url=base_url,
         api_key=api_key,
+        tl_api_key=tl_api_key,
     )
 
 
@@ -616,6 +653,10 @@ def _call_chat_title_sync(
         "top_p": 1.0,
         "max_tokens": 4096,
         "stream": True,  # Enable streaming
+        "response_format": {
+            "type": "json_object",
+            "schema": _TOPIC_NAMING_JSON_SCHEMA,
+        },
     }
     # Some OpenAI-compatible providers may use different token limit fields / casing.
     payload["max_output_tokens"] = payload["max_tokens"]
@@ -789,6 +830,7 @@ def mount_topic_cluster_routes(
     openai_api_key: str,
     embedding_model: str,
     ai_model: str,
+    twelvelabs_api_key: str = "",
 ):
     """
     Mount embedding + topic clustering endpoints (MVP: manual, iib_output only).
@@ -976,13 +1018,18 @@ def mount_topic_cluster_routes(
         logger.info("[build_embeddings] folder=%s model=%s force=%s batch_size=%s max_chars=%s recursive=%s",
                     folder, model, force, batch_size, max_chars, recursive)
 
-        if not openai_api_key:
-            logger.error("[build_embeddings] OpenAI API Key not configured")
-            raise HTTPException(status_code=500, detail="OpenAI API Key not configured")
+        if is_marengo_model(model):
+            if not twelvelabs_api_key:
+                logger.error("[build_embeddings] TwelveLabs API Key not configured")
+                raise HTTPException(status_code=500, detail="TwelveLabs API Key not configured")
+        else:
+            if not openai_api_key:
+                logger.error("[build_embeddings] OpenAI API Key not configured")
+                raise HTTPException(status_code=500, detail="OpenAI API Key not configured")
 
-        if not openai_base_url:
-            logger.error("[build_embeddings] OpenAI Base URL not configured")
-            raise HTTPException(status_code=500, detail="OpenAI Base URL not configured")
+            if not openai_base_url:
+                logger.error("[build_embeddings] OpenAI Base URL not configured")
+                raise HTTPException(status_code=500, detail="OpenAI Base URL not configured")
 
         logger.info("[build_embeddings] Configuration check passed")
         logger.info("[build_embeddings] API URL: %s", openai_base_url)
@@ -1107,6 +1154,7 @@ def mount_topic_cluster_routes(
                     model=model,
                     base_url=openai_base_url,
                     api_key=openai_api_key,
+                    tl_api_key=twelvelabs_api_key,
                 )
                 logger.info("[build_embeddings] Embedding API success for batch %d/%d",
                           bi+1, len(batches))
@@ -1153,6 +1201,22 @@ def mount_topic_cluster_routes(
             if len(vectors) != len(batch):
                 raise HTTPException(status_code=500, detail="Embeddings count mismatch")
             for item, vec in zip(batch, vectors):
+                if vec is None:
+                    # Marengo content filter: single prompt was rejected but the
+                    # rest of the batch is fine. Record as a per-item failure.
+                    try:
+                        ImageEmbeddingFail.upsert(
+                            conn,
+                            image_id=int(item["id"]),
+                            model=str(model),
+                            text_hash=str(item.get("text_hash") or ""),
+                            error="Marengo returned empty embedding (token limit exceeded or content filtered)",
+                        )
+                    except Exception:
+                        pass
+                    failed += 1
+                    embedded_done += 1
+                    continue
                 ImageEmbedding.upsert(
                     conn=conn,
                     image_id=item["id"],
@@ -1213,12 +1277,16 @@ def mount_topic_cluster_routes(
     async def build_iib_output_embeddings(req: BuildIibOutputEmbeddingReq):
         # TopicSearch feature requires perf deps; fail at API layer, not at server start.
         _ensure_perf_deps()
-        if not openai_api_key:
-            raise HTTPException(status_code=500, detail="OpenAI API Key not configured")
-        if not openai_base_url:
-            raise HTTPException(status_code=500, detail="OpenAI Base URL not configured")
         folder = req.folder or os.path.join(cwd, "iib_output")
         model = req.model or embedding_model
+        if is_marengo_model(model):
+            if not twelvelabs_api_key:
+                raise HTTPException(status_code=500, detail="TwelveLabs API Key not configured")
+        else:
+            if not openai_api_key:
+                raise HTTPException(status_code=500, detail="OpenAI API Key not configured")
+            if not openai_base_url:
+                raise HTTPException(status_code=500, detail="OpenAI Base URL not configured")
         batch_size = max(1, min(int(req.batch_size or 64), 256))
         max_chars = max(256, min(int(req.max_chars or 4000), 8000))
         force = bool(req.force)
@@ -1805,10 +1873,14 @@ def mount_topic_cluster_routes(
     async def search_iib_output_by_prompt(req: PromptSearchReq):
         # TopicSearch feature requires perf deps; fail at API layer, not at server start.
         _ensure_perf_deps()
-        if not openai_api_key:
-            raise HTTPException(status_code=500, detail="OpenAI API Key not configured")
-        if not openai_base_url:
-            raise HTTPException(status_code=500, detail="OpenAI Base URL not configured")
+        if is_marengo_model(req.model or embedding_model):
+            if not twelvelabs_api_key:
+                raise HTTPException(status_code=500, detail="TwelveLabs API Key not configured")
+        else:
+            if not openai_api_key:
+                raise HTTPException(status_code=500, detail="OpenAI API Key not configured")
+            if not openai_base_url:
+                raise HTTPException(status_code=500, detail="OpenAI Base URL not configured")
 
         q = (req.query or "").strip()
         if not q:
@@ -1851,7 +1923,7 @@ def mount_topic_cluster_routes(
             if q_text2:
                 q_text = q_text2
         q_text = _truncate_for_embedding_tokens(q_text, _EMBEDDING_MAX_TOKENS_SOFT)
-        vecs = await _call_embeddings(inputs=[q_text], model=model, base_url=openai_base_url, api_key=openai_api_key)
+        vecs = await _call_embeddings(inputs=[q_text], model=model, base_url=openai_base_url, api_key=openai_api_key, tl_api_key=twelvelabs_api_key)
         if not vecs or not isinstance(vecs[0], list) or not vecs[0]:
             raise HTTPException(status_code=502, detail="Embedding API returned empty vector")
         qv = array("f", [float(x) for x in vecs[0]])
@@ -1878,7 +1950,8 @@ def mount_topic_cluster_routes(
         # TopK by cosine similarity (brute force; MVP only)
         import heapq
 
-        heap: List[Tuple[float, Dict]] = []
+        heap: List[Tuple[float, int, Dict]] = []
+        heap_idx = 0
         total = 0
         for image_id, path, exif, vec_blob in rows:
             if not isinstance(path, str) or not os.path.exists(path):
@@ -1903,13 +1976,15 @@ def mount_topic_cluster_routes(
                 "sample_prompt": _clean_for_title(_extract_prompt_text(exif, max_chars=max_chars))[:200],
             }
             if len(heap) < top_k:
-                heapq.heappush(heap, (score, item))
+                heapq.heappush(heap, (score, heap_idx, item))
+                heap_idx += 1
             else:
                 if score > heap[0][0]:
-                    heapq.heapreplace(heap, (score, item))
+                    heapq.heapreplace(heap, (score, heap_idx, item))
+                    heap_idx += 1
 
         heap.sort(key=lambda x: x[0], reverse=True)
-        results = [x[1] for x in heap]
+        results = [x[2] for x in heap]
         return {
             "query": q,
             "folder": folder,

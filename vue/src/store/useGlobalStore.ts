@@ -234,6 +234,7 @@ export const presistKeys = [
   'batchDownloadPackOnly',
   'magicSwitchTiktokView',
   'showRandomImageInStartup',
+  'showRecentInStartup',
   'showTiktokNavigator',
   'autoUpdateIndex',
   'fullscreenMenuBlockVisibility'
@@ -389,6 +390,7 @@ export const useGlobalStore = defineStore(
     const previewBgOpacity = ref(0.6)
     const magicSwitchTiktokView = ref(false)
     const showRandomImageInStartup = ref(true)
+    const showRecentInStartup = ref(true)
     const showTiktokNavigator = ref(false)
 
     // Fullscreen menu block visibility settings
@@ -486,6 +488,7 @@ export const useGlobalStore = defineStore(
       batchDownloadPackOnly: ref(false),
       magicSwitchTiktokView,
       showRandomImageInStartup,
+      showRecentInStartup,
       autoUpdateIndex: ref(true),
       fullscreenMenuBlockVisibility,
       // Organize jobs

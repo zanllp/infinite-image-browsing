@@ -227,6 +227,8 @@ export const de: Partial<IIBI18nMap> = {
   randomImageSettings: 'Zufallsbild-Einstellungen',
   showRandomImageInStartup: 'Zufallsbild in Startseite anzeigen',
   showRandomImageInStartupDesc: 'Kontrolliert, ob die Zufallsbild-Option auf der Startseite angezeigt wird',
+  showRecentInStartup: 'Zuletzt verwendet in Startseite anzeigen',
+  showRecentInStartupDesc: 'Kontrolliert, ob der Bereich "Zuletzt verwendet" auf der Startseite angezeigt wird',
   randomImageSettingNotification: 'Tipp: Sie können in den globalen Einstellungen steuern, ob die Zufallsbild-Option auf der Startseite angezeigt wird',
   mediaType: 'Medientyp',
   all: 'Alle',

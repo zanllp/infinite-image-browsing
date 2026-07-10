@@ -102,10 +102,22 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
+# Dedicated TwelveLabs key for the optional Marengo embedding backend, kept
+# separate from OPENAI_API_KEY so the OpenAI-compatible chat path (cluster
+# titles) and the Marengo embedding path can use different services without
+# clobbering each other. Falls back to the SDK's own var and then to
+# OPENAI_API_KEY for backward compatibility.
+TWELVELABS_API_KEY = (
+    os.getenv("TWELVELABS_API_KEY")
+    or os.getenv("TWELVE_LABS_API_KEY")
+    or OPENAI_API_KEY
+)
+
 print(f"AI Model: {AI_MODEL or 'Not configured'}")
 print(f"OpenAI Base URL: {OPENAI_BASE_URL}")
 print(f"OpenAI API Key: {'Configured' if OPENAI_API_KEY else 'Not configured'}")
 print(f"Embedding Model: {EMBEDDING_MODEL or 'Not configured'}")
+print(f"TwelveLabs API Key: {'Configured' if TWELVELABS_API_KEY else 'Not configured'}")
 
 WRITEABLE_PERMISSIONS = ["read-write", "write-only"]
 
@@ -1486,6 +1498,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         write_permission_required=write_permission_required,
         openai_base_url=OPENAI_BASE_URL,
         openai_api_key=OPENAI_API_KEY,
+        twelvelabs_api_key=TWELVELABS_API_KEY,
         embedding_model=EMBEDDING_MODEL,
         ai_model=AI_MODEL,
     )
