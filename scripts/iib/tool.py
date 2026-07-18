@@ -463,23 +463,71 @@ def get_img_geninfo_txt_path(path: str):
     if os.path.exists(txt_path):
         return txt_path
 
+def _find_comfyui_exif_tags(exif_bytes: bytes):
+    """Find workflow: and prompt: strings in EXIF data using piexif.load()."""
+    try:
+        loaded = piexif.load(exif_bytes)
+    except Exception:
+        return None, None
+
+    workflow_str = None
+    prompt_str = None
+
+    # Check IFD0 (0th) for workflow: and prompt: strings
+    ifd0 = loaded.get('0th', {})
+    for tag_id, val in ifd0.items():
+        if isinstance(val, bytes):
+            try:
+                decoded = val.decode('utf-8', errors='ignore')
+            except Exception:
+                continue
+            if decoded.lower().startswith('workflow:'):
+                workflow_str = decoded
+            elif decoded.lower().startswith('prompt:'):
+                prompt_str = decoded
+
+    return workflow_str, prompt_str
+
+
 def is_img_created_by_comfyui(img: Image):
     if img.format == "PNG":
         prompt = img.info.get('prompt') or img.info.get('parameters')
         return prompt and (img.info.get('workflow') or ("class_type" in prompt)) # ermanitu
     elif img.format == "WEBP" or img.format == "JPEG":
         exif = img.info.get("exif")
+        if not exif:
+            return False
+
+        # Primary: use piexif.load() to properly parse structured EXIF
+        workflow_str, prompt_str = _find_comfyui_exif_tags(exif)
+        if workflow_str and prompt_str:
+            try:
+                workflow = json.loads(workflow_str.split(":", 1)[1])
+                prompt = json.loads(prompt_str.split(":", 1)[1])
+                return (
+                    workflow
+                    and prompt
+                    and any("class_type" in x.keys() for x in prompt.values())
+                )
+            except Exception:
+                pass
+
+        # Fallback: split by null bytes (for some non-standard EXIF encodings)
         split = [x.decode("utf-8", errors="ignore") for x in exif.split(b"\x00")]
         workflow_str = find(split, lambda x: x.lower().startswith("workflow:"))
         prompt_str = find(split, lambda x: x.lower().startswith("prompt:"))
         if workflow_str and prompt_str:
-            workflow = json.loads(workflow_str.split(":", 1)[1])
-            prompt = json.loads(prompt_str.split(":", 1)[1])
-            return (
-                workflow
-                and prompt
-                and any("class_type" in x.keys() for x in prompt.values())
-            )
+            try:
+                workflow = json.loads(workflow_str.split(":", 1)[1])
+                prompt = json.loads(prompt_str.split(":", 1)[1])
+                return (
+                    workflow
+                    and prompt
+                    and any("class_type" in x.keys() for x in prompt.values())
+                )
+            except Exception:
+                pass
+
         # Fallback: non-standard EXIF (e.g. UserComment in IFD0 with type BYTE)
         # where null-byte split produces single chars instead of meaningful entries
         raw = _extract_usercomment_from_raw_exif(exif)
@@ -504,8 +552,41 @@ def is_img_created_by_comfyui(img: Image):
     else:
         return False  # unsupported format
 
+def _has_webui_gen_info(img: Image) -> bool:
+    """Check if image has SD WebUI generation info (parameters)."""
+    if img.info.get('parameters'):
+        return True
+    # For WebP/JPEG, parameters may be in EXIF UserComment
+    if img.format in ("WEBP", "JPEG"):
+        exif = img.info.get("exif")
+        if exif:
+            try:
+                loaded = piexif.load(exif)
+                exif_section = loaded.get('Exif', {})
+                user_comment = exif_section.get(piexif.ExifIFD.UserComment, b'')
+                if user_comment:
+                    try:
+                        text = piexif.helper.UserComment.load(user_comment)
+                        if text:
+                            return True
+                    except Exception:
+                        pass
+                    # Try raw decode fallback
+                    raw = _extract_usercomment_from_raw_exif(exif)
+                    if raw:
+                        try:
+                            decoded = raw.decode("utf-16", errors="ignore").strip('\x00')
+                        except Exception:
+                            decoded = raw.decode("utf-8", errors="ignore").strip('\x00')
+                        if decoded:
+                            return True
+            except Exception:
+                pass
+    return False
+
+
 def is_img_created_by_comfyui_with_webui_gen_info(img: Image):
-    return is_img_created_by_comfyui(img) and img.info.get('parameters')
+    return is_img_created_by_comfyui(img) and _has_webui_gen_info(img)
 
 
 
@@ -612,13 +693,19 @@ def get_comfyui_exif_data(img: Image):
     prompt = None
     if img.format == "PNG":
         prompt = img.info.get('prompt')
-    elif img.format == "WEBP":
+    elif img.format == "WEBP" or img.format == "JPEG":
         exif = img.info.get("exif")
         if exif:
-            split = [x.decode("utf-8", errors="ignore") for x in exif.split(b"\x00")]
-            prompt_str = find(split, lambda x: x.lower().startswith("prompt:"))
+            # Primary: use piexif.load() to properly parse structured EXIF
+            _, prompt_str = _find_comfyui_exif_tags(exif)
             if prompt_str:
-                prompt = prompt_str.split(":", 1)[1] if prompt_str else None
+                prompt = prompt_str.split(":", 1)[1]
+            else:
+                # Fallback: split by null bytes (for some non-standard EXIF encodings)
+                split = [x.decode("utf-8", errors="ignore") for x in exif.split(b"\x00")]
+                prompt_str = find(split, lambda x: x.lower().startswith("prompt:"))
+                if prompt_str:
+                    prompt = prompt_str.split(":", 1)[1] if prompt_str else None
     if not prompt:
         return {}
 
