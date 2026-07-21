@@ -216,6 +216,11 @@ def extract_comfyui_prompt_with_wildcard_support(data: Dict, KSampler_entry: Dic
         inputs = node.get("inputs", {}) or {}
         class_type = node.get("class_type", "")
 
+        if class_type == "ConditioningZeroOut":
+            # The conditioning is discarded by this node — the prompt does
+            # not actually participate in generation.
+            return ""
+
         if class_type == "FluxGuidance":
             conditioning = inputs.get("conditioning")
             if isinstance(conditioning, list) and len(conditioning) >= 1:
@@ -244,6 +249,59 @@ def extract_comfyui_prompt_with_wildcard_support(data: Dict, KSampler_entry: Dic
         return "", ""
 
 
+def _find_sampler_node_id(data: Dict[str, Any]):
+    """Locate the sampler node in a ComfyUI prompt graph.
+
+    Prefers core KSampler* class types. Falls back to any node whose inputs
+    take positive/negative conditioning — the signature of a sampler — so
+    custom sampler nodes (e.g. ClownsharKSampler) are still recognized,
+    scored by how many typical sampler inputs they expose.
+    """
+    for i in data.keys():
+        try:
+            if data[i]["class_type"].startswith("KSampler"):
+                return i
+        except Exception:
+            pass
+
+    def sampler_likeness(node):
+        if not isinstance(node, dict):
+            return 0
+        inputs = node.get("inputs", {}) or {}
+        if "positive" not in inputs or "negative" not in inputs:
+            return 0
+        score = 2
+        for key in ("seed", "steps", "cfg", "sampler_name", "scheduler", "model", "latent_image"):
+            if key in inputs:
+                score += 1
+        return score
+
+    best_id, best_score = None, 0
+    for i, node in data.items():
+        score = sampler_likeness(node)
+        if score > best_score:
+            best_id, best_score = i, score
+    return best_id
+
+
+def _collect_all_clip_texts(data: Dict[str, Any]):
+    """Collect text from every CLIPTextEncode node. Used when no sampler
+    node can be located at all, so prompts from ComfyUI's own nodes are
+    still surfaced."""
+    texts = []
+    for node_data in data.values():
+        try:
+            if "CLIPTextEncode" in node_data.get("class_type", ""):
+                text = node_data.get("inputs", {}).get("text", "")
+                if isinstance(text, list):  # type:CLIPTextEncode (NSP) mode:Wildcards
+                    text = data[text[0]]["inputs"].get("text", "")
+                if text:
+                    texts.append(text.strip())
+        except Exception:
+            pass
+    return texts
+
+
 def get_comfyui_exif_data(img: Image):
     prompt = None
     if img.format == "PNG":
@@ -265,27 +323,34 @@ def get_comfyui_exif_data(img: Image):
         return {}
 
     data: Dict[str, Any] = json.loads(prompt)
-    meta_key = '3'
-    for i in data.keys():
-        try:
-            if data[i]["class_type"].startswith("KSampler"):
-                meta_key = i
-                break
-        except Exception:
-            pass
+    meta_key = _find_sampler_node_id(data)
 
-    if meta_key not in data:
-        return {}
+    if meta_key is None or meta_key not in data:
+        # No sampler-like node at all — still surface the prompts from
+        # ComfyUI's own CLIPTextEncode nodes instead of returning nothing.
+        pos_prompt = "\nBREAK\n".join(_collect_all_clip_texts(data))
+        return {
+            "meta": {"Source Identifier": "ComfyUI"},
+            "pos_prompt": unique_by(parse_prompt(pos_prompt)["pos_prompt"]),
+            "pos_prompt_raw": pos_prompt,
+            "neg_prompt_raw": ""
+        }
 
     meta = {}
     KSampler_entry = data[meta_key]["inputs"]
+    is_custom_sampler = not data[meta_key].get("class_type", "").startswith("KSampler")
 
     # As a workaround to bypass parsing errors in the parser.
     # https://github.com/jiw0220/stable-diffusion-image-metadata/blob/00b8d42d4d1a536862bba0b07c332bdebb2a0ce5/src/index.ts#L130
     meta["Steps"] = KSampler_entry.get("steps", "Unknown")
     meta["Sampler"] = KSampler_entry.get("sampler_name", "Unknown")
     try:
-        meta["Model"] = data[KSampler_entry["model"][0]]["inputs"].get("ckpt_name")
+        model_inputs = data[KSampler_entry["model"][0]]["inputs"]
+        meta["Model"] = (
+            model_inputs.get("ckpt_name")
+            or model_inputs.get("unet_name")
+            or model_inputs.get("model_name")
+        )
     except Exception:
         meta["Model"] = None
     meta["Source Identifier"] = "ComfyUI"
@@ -351,13 +416,32 @@ def get_comfyui_exif_data(img: Image):
         pos_prompt = all_prompts_str
         neg_prompt = ""
     else:
-        in_node = data[str(KSampler_entry["positive"][0])]
-        if in_node["class_type"] != "FluxGuidance":
-            pos_prompt = get_text_from_clip(KSampler_entry["positive"][0])
+        if is_custom_sampler:
+            # Custom sampler node (unrecognized class_type): resolve prompts
+            # generically, traversing intermediate nodes such as
+            # FluxGuidance / ConditioningZeroOut.
+            pos_prompt, neg_prompt = extract_comfyui_prompt_with_wildcard_support(
+                data, KSampler_entry
+            )
         else:
-            pos_prompt = get_text_from_clip(in_node["inputs"]["conditioning"][0])
+            in_node = data[str(KSampler_entry["positive"][0])]
+            if in_node["class_type"] != "FluxGuidance":
+                pos_prompt = get_text_from_clip(KSampler_entry["positive"][0])
+            else:
+                pos_prompt = get_text_from_clip(in_node["inputs"]["conditioning"][0])
 
-        neg_prompt = get_text_from_clip(KSampler_entry["negative"][0])
+            neg_prompt = get_text_from_clip(KSampler_entry["negative"][0])
+
+            # Standard sampler, but prompt resolution failed through an
+            # unrecognized intermediate node — retry with generic resolution.
+            if not pos_prompt.strip() or not neg_prompt.strip():
+                pos_fb, neg_fb = extract_comfyui_prompt_with_wildcard_support(
+                    data, KSampler_entry
+                )
+                if not pos_prompt.strip() and pos_fb:
+                    pos_prompt = pos_fb
+                if not neg_prompt.strip() and neg_fb:
+                    neg_prompt = neg_fb
 
     pos_prompt_arr = unique_by(parse_prompt(pos_prompt)["pos_prompt"])
 
