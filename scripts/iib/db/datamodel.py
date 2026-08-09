@@ -37,6 +37,34 @@ class Cursor:
         self.next = next
 
 
+def make_page_cursor(date, image_id) -> str:
+    """Build the cursor for the next page from the last row of this page.
+
+    image.date is not unique (a bulk scan stamps hundreds of images with the
+    same second), so the id is carried along as a tiebreaker.
+    """
+    return "{}|{}".format(date, image_id)
+
+
+def page_cursor_clause(cursor: str, params: List, table="image"):
+    """WHERE fragment continuing after `cursor`, appending its params.
+
+    Returns None when there is no cursor. Cursors written by older versions
+    were a bare date; those still work, minus the tiebreaker.
+    """
+    if not cursor:
+        return None
+    date, sep, image_id = cursor.rpartition("|")
+    if sep:
+        try:
+            params.extend((date, date, int(image_id)))
+            return "({t}.date < ? OR ({t}.date = ? AND {t}.id < ?))".format(t=table)
+        except ValueError:
+            pass
+    params.append(cursor)
+    return "({}.date < ?)".format(table)
+
+
 class DataBase:
     local = threading.local()
 
@@ -283,9 +311,9 @@ class Image:
                 else:
                     where_clauses.append("(path LIKE ? OR exif LIKE ?)")
                     params.extend((f"%{substring}%", f"%{substring}%"))
-            if cursor:
-                where_clauses.append("(date < ?)")
-                params.append(cursor)
+            cursor_clause = page_cursor_clause(cursor, params)
+            if cursor_clause:
+                where_clauses.append(cursor_clause)
             if folder_paths:
                 folder_clauses = []
                 for folder_path in folder_paths:
@@ -309,7 +337,7 @@ class Image:
             if where_clauses:
                 sql += " WHERE "
                 sql += " AND ".join(where_clauses)
-            sql += " ORDER BY date DESC LIMIT ? "
+            sql += " ORDER BY image.date DESC, image.id DESC LIMIT ? "
             params.append(limit)
             cur.execute(sql, params)
             rows = cur.fetchall()
@@ -324,8 +352,11 @@ class Image:
             else:
                 deleted_ids.append(img.id)
         cls.safe_batch_remove(conn, deleted_ids)
-        if images:
-            api_cur.next = str(images[-1].date)
+        if rows:
+            # Advance past the last row read, not the last row kept: a trailing
+            # run of deleted files would otherwise rewind the cursor.
+            last = cls.from_row(rows[-1])
+            api_cur.next = make_page_cursor(last.date, last.id)
         return images, api_cur
     
     @classmethod
@@ -1021,9 +1052,10 @@ class ImageTag:
                 print(folder_path)
             where_clauses.append("(" + " OR ".join(folder_clauses) + ")")
 
-        if cursor and not random_sort:
-            where_clauses.append("(image.date < ?)")
-            params.append(cursor)
+        if not random_sort:
+            cursor_clause = page_cursor_clause(cursor, params)
+            if cursor_clause:
+                where_clauses.append(cursor_clause)
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
         query += " GROUP BY image.id"
@@ -1041,7 +1073,7 @@ class ImageTag:
                 except (ValueError, TypeError):
                     pass  # Invalid cursor, start from beginning
         else:
-            query += " ORDER BY date DESC LIMIT ?"
+            query += " ORDER BY image.date DESC, image.id DESC LIMIT ?"
         params.append(limit)
         api_cur = Cursor()
         with closing(conn.cursor()) as cur:
@@ -1057,14 +1089,15 @@ class ImageTag:
                     deleted_ids.append(img.id)
             Image.safe_batch_remove(conn, deleted_ids)
             api_cur.has_next = len(rows) >= limit
-            if images:
-                if random_sort:
+            if random_sort:
+                if images:
                     # For random sort, use offset-based cursor
                     current_offset = int(cursor) if cursor else 0
                     api_cur.next = str(current_offset + len(images))
-                else:
-                    # For date sort, use date-based cursor
-                    api_cur.next = str(images[-1].date)
+            elif rows:
+                # Advance past the last row read, not the last row kept: a
+                # trailing run of deleted files would otherwise rewind.
+                api_cur.next = make_page_cursor(rows[-1][3], rows[-1][0])
             return images, api_cur
 
     @classmethod
