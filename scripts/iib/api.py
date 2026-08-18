@@ -146,12 +146,15 @@ def _parse_thumbnail_size(size: str):
 
 
 def _ensure_thumbnail(path: str, cache_path: str, width: int, height: int):
-    lock_idx = int(hashlib.md5(cache_path.encode("utf-8")).hexdigest()[:8], 16) % len(_THUMBNAIL_LOCKS)
-    with _THUMBNAIL_LOCKS[lock_idx]:
-        if os.path.exists(cache_path):
-            return
+    if os.path.exists(cache_path):
+        return
 
-        with _THUMBNAIL_GENERATION_SLOTS:
+    lock_idx = int(hashlib.md5(cache_path.encode("utf-8")).hexdigest()[:8], 16) % len(_THUMBNAIL_LOCKS)
+    # Wait for a generation slot *before* taking the per-key lock, so threads
+    # waiting for a slot do not hold a stripe lock (which would needlessly
+    # serialize unrelated cache keys that hash to the same stripe).
+    with _THUMBNAIL_GENERATION_SLOTS:
+        with _THUMBNAIL_LOCKS[lock_idx]:
             if os.path.exists(cache_path):
                 return
 
@@ -165,6 +168,11 @@ def _ensure_thumbnail(path: str, cache_path: str, width: int, height: int):
                     img.thumbnail((width, height))
                     img.save(temp_path, "WEBP", quality=80, method=1)
                 os.replace(temp_path, cache_path)
+            except Exception:
+                # Deleted or broken source images used to surface as opaque 500s,
+                # hammered on every retry; report them as 404 so the client can
+                # fall back to the raw file instead.
+                raise HTTPException(status_code=404, detail="Failed to generate thumbnail")
             finally:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
