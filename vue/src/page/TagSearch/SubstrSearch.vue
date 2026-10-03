@@ -21,6 +21,7 @@ import { fuzzySearchHistory, FuzzySearchHistoryRecord } from '@/store/searchHist
 import { openTiktokViewWithFiles } from '@/util/tiktokHelper'
 import { useTagStore } from '@/store/useTagStore'
 import { useLocalStorage } from '@vueuse/core'
+import { SearchSelect, type SearchSelectConv } from 'vue3-ts-util'
 const tagStore = useTagStore()
 const showAutoUpdateFeatureTip = useLocalStorage('iib_auto_update_feature_tip_shown', false)
 const props = defineProps<{
@@ -103,7 +104,7 @@ const toTagLabel = (tag: Tag) =>
 
 const tagMap = computed(() => new Map((info.value?.tags ?? []).map(tag => [tag.id, tag])))
 
-const tagOptions = computed(() =>
+const tags = computed(() =>
   (info.value?.tags ?? [])
     .filter(tag => !EXCLUDED_TAG_TYPES.includes(tag.type))
     .sort((a, b) => {
@@ -111,8 +112,13 @@ const tagOptions = computed(() =>
       const customDiff = (b.type === 'custom' ? 1 : 0) - (a.type === 'custom' ? 1 : 0)
       return customDiff || (b.count ?? 0) - (a.count ?? 0)
     })
-    .map(tag => ({ label: toTagLabel(tag), value: tag.id }))
 )
+
+const tagConv: SearchSelectConv<Tag> = {
+  value: (v: Tag) => v.id,
+  text: (v: Tag) => toTagLabel(v),
+  optionText: (v: Tag) => toTagLabel(v)
+}
 
 const tagNameOf = (id: TagId) => {
   const tag = tagMap.value.get(id)
@@ -300,13 +306,13 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
       </template>
     </div>
     <div class="search-bar">
-      <ASelect
-        v-model:value="andTags"
+      <SearchSelect
+        :conv="tagConv"
         mode="multiple"
-        :show-search="false"
-        :options="tagOptions"
+        :options="tags"
+        v-model:value="andTags"
         :placeholder="$t('tagFilterAnd')"
-        :disabled="!queue.isIdle"
+        :disabled="!queue.isIdle || !tags.length"
         :max-tag-count="2"
         allow-clear
         style="width: 300px; margin: 0 4px 0 0; flex-shrink: 0;"
