@@ -162,6 +162,7 @@ export const zhHans = {
   sourceText: '源文本',
   structuredData: '结构化数据',
   searchScope: '搜索范围',
+  tagFilterAnd: '标签筛选（AND）',
   specifiedSearchFolder: '指定搜索的文件夹，使用逗号或者换行分割多个',
   batchAddTag: '批量添加Tag',
   batchRemoveTag: '批量移除Tag',

@@ -1,4 +1,4 @@
-import { type MatchImageByTagsReq } from '@/api/db'
+import { type MatchImageByTagsReq, type TagId } from '@/api/db'
 import { HistoryRecord } from '@/util/HistoryRecord'
 import { prefix } from '@/util/const'
 import { useLocalStorage } from '@vueuse/core'
@@ -8,7 +8,8 @@ export type FuzzySearchHistoryRecord ={
   substr: string, 
   folder_paths_str: string,
   isRegex: boolean,
-  mediaType?: string
+  mediaType?: string,
+  and_tags?: TagId[]
 }
 
 export const fuzzySearchHistory = useLocalStorage(`${prefix}fuzzy-search-HistoryRecord`, new HistoryRecord(), {

@@ -291,7 +291,7 @@ class Image:
     @classmethod
     def find_by_substring(
         cls, conn: Connection, substring: str, limit: int = 500, cursor="", regexp="", path_only=False,
-        folder_paths: List[str] = [], media_type: str = None
+        folder_paths: List[str] = [], media_type: str = None, and_tags: List[int] = None
     ) -> tuple[List["Image"], Cursor]:
         api_cur = Cursor()
         with closing(conn.cursor()) as cur:
@@ -333,6 +333,23 @@ class Image:
                 params.append(media_type_name)
             else:
                 sql = "SELECT * FROM image"
+
+            # 标签过滤，语义为"同时含有全部所选标签"
+            if and_tags:
+                tag_ids = list(dict.fromkeys(and_tags))
+                where_clauses.append(
+                    """(image.id IN (
+  SELECT image_id
+  FROM image_tag
+  WHERE tag_id IN ({})
+  GROUP BY image_id
+  HAVING COUNT(DISTINCT tag_id) = ?
+))""".format(
+                        ",".join("?" * len(tag_ids))
+                    )
+                )
+                params.extend(tag_ids)
+                params.append(len(tag_ids))
             
             if where_clauses:
                 sql += " WHERE "

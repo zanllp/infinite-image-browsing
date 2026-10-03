@@ -6,8 +6,9 @@ import {
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { fallbackImage, ok } from 'vue3-ts-util'
 import type { FileNodeInfo } from '@/api/files'
-import { isImageFile, isVideoFile, isAudioFile } from '@/util'
+import { isImageFile, isVideoFile, isAudioFile, formatDuration } from '@/util'
 import { toImageThumbnailUrl, toVideoCoverUrl, toRawFileUrl } from '@/util/file'
+import { getCachedVideoDuration, loadVideoDuration } from '@/util/videoDuration'
 import type { MenuInfo } from 'ant-design-vue/lib/menu/src/interface'
 import { computed, ref, nextTick, watch, onBeforeUnmount } from 'vue'
 import ContextMenu from './ContextMenu.vue'
@@ -253,6 +254,42 @@ const fileTypeIcon = computed(() => {
   return FileOutlined
 })
 
+// 视频时长懒加载：只在信息行可见时探测，缓存/限流都在 util 里
+const videoDuration = ref<number | null>(null)
+let videoDurationTimer: number | undefined
+
+const syncVideoDuration = () => {
+  window.clearTimeout(videoDurationTimer)
+  if (!isVideoFile(props.file.name)) {
+    videoDuration.value = null
+    return
+  }
+  const cached = getCachedVideoDuration(props.file)
+  if (cached !== undefined) {
+    videoDuration.value = cached
+    return
+  }
+  videoDuration.value = null
+  // 延迟一点再探测，快速滚动时不至于每个 cell 都打请求
+  const target = props.file
+  videoDurationTimer = window.setTimeout(() => {
+    loadVideoDuration(target).then((duration) => {
+      // cell 被复用成别的文件时丢弃这次结果
+      if (props.file.fullpath === target.fullpath && props.file.date === target.date) {
+        videoDuration.value = duration
+      }
+    })
+  }, 200)
+}
+
+watch(
+  [() => props.file.fullpath, () => props.file.date, () => props.cellWidth],
+  syncVideoDuration,
+  { immediate: true }
+)
+
+onBeforeUnmount(() => window.clearTimeout(videoDurationTimer))
+
 // 处理文件点击事件
 const handleFileClick = (event: MouseEvent) => {
   // 检查magic switch是否开启且是图片文件（视频有自己的处理逻辑）
@@ -412,6 +449,7 @@ const handleAudioClick = () => {
               {{ tag.name }}
             </a-tag>
           </div>
+          <span class="duration-badge" v-if="videoDuration && !isPlayingInline">{{ formatDuration(videoDuration) }}</span>
         </div>
         <div :class="`idx-${idx} item-content audio`" v-else-if="isAudioFile(file.name)"
           @click="handleAudioClick">
@@ -652,6 +690,24 @@ const handleAudioClick = () => {
       transition: opacity 0.2s ease;
       z-index: 10;
     }
+  }
+
+  // 视频时长角标，放封面左下角（右下角会被 tag 占掉）
+  .duration-badge {
+    position: absolute;
+    left: 6px;
+    bottom: 6px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 13px;
+    font-weight: bold;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    z-index: 6;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
   }
 
   .more {
