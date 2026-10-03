@@ -5,7 +5,8 @@ import { FileNodeInfo, mkdirs } from '@/api/files'
 import { setTargetFrameAsCover, getImageGenerationInfo, openWithDefaultApp } from '@/api'
 import { parse } from '@/util/stable-diffusion-image-metadata'
 import { t } from '@/i18n'
-import { downloadFiles, globalEvents, toRawFileUrl, toStreamVideoUrl, toStreamAudioUrl } from '@/util'
+import { downloadFiles, formatDuration, globalEvents, toRawFileUrl, toStreamVideoUrl, toStreamAudioUrl } from '@/util'
+import { getCachedVideoDuration } from '@/util/videoDuration'
 import { DownloadOutlined, FileTextOutlined, EditOutlined } from '@/icon'
 import { isStandalone } from '@/util/env'
 import { addCustomTag, getDbBasicInfo, rebuildImageIndex, renameFile } from '@/api/db'
@@ -57,6 +58,8 @@ const openMediaModalImpl = (
     return !!tagStore.tagMap.get(file.fullpath)?.some(v => v.id === id)
   }
   const videoRef = ref<HTMLVideoElement | null>(null)
+  // 网格里通常已经探测过，直接复用；否则等 loadedmetadata
+  const videoDuration = ref(mediaType === 'video' ? getCachedVideoDuration(file) ?? 0 : 0)
   const imageGenInfo = ref('')
   const promptLoading = ref(false)
 
@@ -186,12 +189,24 @@ const openMediaModalImpl = (
         }}
       >
         {mediaType === 'video' ? (
-          <video ref={videoRef} style={{ maxHeight: isStandalone ? '80vh' : '60vh', maxWidth: '100%', minWidth: '70%' }} src={toStreamVideoUrl(file)} controls autoplay></video>
+          <video ref={videoRef} style={{ maxHeight: isStandalone ? '80vh' : '60vh', maxWidth: '100%', minWidth: '70%' }} src={toStreamVideoUrl(file)} controls autoplay
+            onLoadedmetadata={() => {
+              const duration = videoRef.value?.duration
+              if (typeof duration === 'number' && Number.isFinite(duration) && duration > 0) {
+                videoDuration.value = duration
+              }
+            }}></video>
         ) : (
           <>
             <div style={{ fontSize: '80px', marginBottom: '16px' }}>🎵</div>
             <audio style={{ width: '100%', maxWidth: '500px' }} src={toStreamAudioUrl(file)} controls autoplay></audio>
           </>
+        )}
+
+        {mediaType === 'video' && videoDuration.value > 0 && (
+          <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--zp-secondary)' }}>
+            {formatDuration(videoDuration.value)}
+          </div>
         )}
 
         {/* 标签选择区域 */}

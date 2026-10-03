@@ -6,8 +6,9 @@ import {
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { fallbackImage, ok } from 'vue3-ts-util'
 import type { FileNodeInfo } from '@/api/files'
-import { isImageFile, isVideoFile, isAudioFile } from '@/util'
+import { isImageFile, isVideoFile, isAudioFile, formatDuration } from '@/util'
 import { toImageThumbnailUrl, toVideoCoverUrl, toRawFileUrl } from '@/util/file'
+import { getCachedVideoDuration, loadVideoDuration } from '@/util/videoDuration'
 import type { MenuInfo } from 'ant-design-vue/lib/menu/src/interface'
 import { computed, ref, nextTick, watch, onBeforeUnmount } from 'vue'
 import ContextMenu from './ContextMenu.vue'
@@ -253,6 +254,42 @@ const fileTypeIcon = computed(() => {
   return FileOutlined
 })
 
+// 视频时长懒加载：只在信息行可见时探测，缓存/限流都在 util 里
+const videoDuration = ref<number | null>(null)
+let videoDurationTimer: number | undefined
+
+const syncVideoDuration = () => {
+  window.clearTimeout(videoDurationTimer)
+  if (!isVideoFile(props.file.name) || props.cellWidth <= minShowDetailWidth) {
+    videoDuration.value = null
+    return
+  }
+  const cached = getCachedVideoDuration(props.file)
+  if (cached !== undefined) {
+    videoDuration.value = cached
+    return
+  }
+  videoDuration.value = null
+  // 延迟一点再探测，快速滚动时不至于每个 cell 都打请求
+  const target = props.file
+  videoDurationTimer = window.setTimeout(() => {
+    loadVideoDuration(target).then((duration) => {
+      // cell 被复用成别的文件时丢弃这次结果
+      if (props.file.fullpath === target.fullpath && props.file.date === target.date) {
+        videoDuration.value = duration
+      }
+    })
+  }, 200)
+}
+
+watch(
+  [() => props.file.fullpath, () => props.file.date, () => props.cellWidth],
+  syncVideoDuration,
+  { immediate: true }
+)
+
+onBeforeUnmount(() => window.clearTimeout(videoDurationTimer))
+
 // 处理文件点击事件
 const handleFileClick = (event: MouseEvent) => {
   // 检查magic switch是否开启且是图片文件（视频有自己的处理逻辑）
@@ -444,6 +481,7 @@ const handleAudioClick = () => {
           <div class="basic-info">
             <div style="margin-right: 4px;">
               {{ file.type }} {{ file.size }}
+              <template v-if="videoDuration">· {{ formatDuration(videoDuration) }}</template>
             </div>
             <div>
               {{ file.date }}
