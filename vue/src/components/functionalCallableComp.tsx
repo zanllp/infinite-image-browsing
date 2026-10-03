@@ -2,7 +2,7 @@ import { Button, Input, Modal, message, Spin } from 'ant-design-vue'
 import { StyleValue, ref } from 'vue'
 import * as Path from '@/util/path'
 import { FileNodeInfo, mkdirs } from '@/api/files'
-import { setTargetFrameAsCover, getImageGenerationInfo } from '@/api'
+import { setTargetFrameAsCover, getImageGenerationInfo, openWithDefaultApp } from '@/api'
 import { parse } from '@/util/stable-diffusion-image-metadata'
 import { t } from '@/i18n'
 import { downloadFiles, globalEvents, toRawFileUrl, toStreamVideoUrl, toStreamAudioUrl } from '@/util'
@@ -306,6 +306,247 @@ export const openAudioModal = (
   onTagClick?: (id: string| number) => void,
   onTiktokView?: () => void
 ) => openMediaModalImpl(file, onTagClick, onTiktokView, 'audio')
+
+// ===== 轻量文件预览（json/txt/md 等文本、svg 等图片、pdf），统一走 modal，不引入额外依赖 =====
+
+const FILE_PREVIEW_MAX_BYTES = 512 * 1024
+
+const filePreviewTextExts = new Set([
+  'txt', 'text', 'log', 'md', 'markdown', 'rst',
+  'json', 'jsonc', 'json5', 'geojson', 'ndjson',
+  'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'properties', 'env',
+  'csv', 'tsv', 'xml', 'html', 'htm', 'xhtml',
+  'css', 'scss', 'sass', 'less',
+  'js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'vue', 'svelte',
+  'py', 'rb', 'php', 'go', 'rs', 'java', 'kt', 'kts', 'swift',
+  'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'sql', 'r', 'lua', 'pl',
+  'sh', 'bash', 'zsh', 'fish', 'bat', 'cmd', 'ps1', 'psm1',
+  'dart', 'scala', 'clj', 'ex', 'exs', 'erl', 'hs', 'jl', 'nim', 'zig',
+  'patch', 'diff', 'srt', 'vtt', 'ass', 'tex', 'bib',
+  'gitignore', 'gitattributes', 'dockerignore', 'editorconfig'
+])
+
+const filePreviewImageExts = new Set(['svg', 'ico', 'cur'])
+
+const getFileExt = (name: string) => {
+  const idx = name.lastIndexOf('.')
+  return idx < 0 ? '' : name.slice(idx + 1).toLowerCase()
+}
+
+export type FilePreviewKind = 'text' | 'image' | 'pdf' | 'other'
+
+/** 大致判断文件能用哪种方式预览，供 UI 显示对应提示 */
+export const getFilePreviewKind = (name: string): FilePreviewKind => {
+  const ext = getFileExt(name)
+  if (ext === 'pdf') {
+    return 'pdf'
+  }
+  if (filePreviewImageExts.has(ext)) {
+    return 'image'
+  }
+  return filePreviewTextExts.has(ext) ? 'text' : 'other'
+}
+
+// 二进制文件通常包含 \0，用它先挡掉大部分非文本；再按 utf-8 -> gbk 的顺序解码
+const decodeFileText = (bytes: Uint8Array, forceDecode: boolean): string | null => {
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return new TextDecoder('utf-16le').decode(bytes)
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return new TextDecoder('utf-16be').decode(bytes)
+  }
+  if (bytes.indexOf(0) !== -1) {
+    return null
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch (e) {
+    // 不是 utf-8，继续尝试 gbk
+  }
+  try {
+    const gbk = new TextDecoder('gbk').decode(bytes)
+    if (!gbk.includes('\uFFFD')) {
+      return gbk
+    }
+  } catch (e) {
+    // 当前环境不支持 gbk
+  }
+  if (!forceDecode) {
+    return null
+  }
+  try {
+    return new TextDecoder('windows-1252').decode(bytes)
+  } catch (e) {
+    return null
+  }
+}
+
+// 只取前 N 字节，避免把超大文件整个读进内存
+const readFilePrefix = async (resp: Response, max: number) => {
+  const reader = resp.body?.getReader()
+  if (!reader) {
+    const buf = new Uint8Array(await resp.arrayBuffer())
+    return { bytes: buf.slice(0, max), truncated: buf.byteLength > max }
+  }
+  const chunks: Uint8Array[] = []
+  let size = 0
+  let truncated = false
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) {
+      break
+    }
+    if (!value?.byteLength) {
+      continue
+    }
+    chunks.push(value)
+    size += value.byteLength
+    if (size >= max) {
+      truncated = true
+      await reader.cancel()
+      break
+    }
+  }
+  const bytes = new Uint8Array(Math.min(size, max))
+  let offset = 0
+  for (const chunk of chunks) {
+    if (offset >= bytes.length) {
+      break
+    }
+    const part = chunk.subarray(0, bytes.length - offset)
+    bytes.set(part, offset)
+    offset += part.byteLength
+  }
+  return { bytes, truncated }
+}
+
+export const openFilePreviewModal = (file: FileNodeInfo) => {
+  const global = useGlobalStore()
+  const ext = getFileExt(file.name)
+  const fileUrl = toRawFileUrl(file)
+  const previewKind = getFilePreviewKind(file.name)
+  // other 也要 fetch 一次按 content-type 再判断
+  const initialKind: 'text' | 'image' | 'pdf' = previewKind === 'other' ? 'text' : previewKind
+  const kind = ref<'text' | 'image' | 'pdf' | 'unsupported'>(initialKind)
+  const loading = ref(initialKind === 'text')
+  const content = ref('')
+  const truncated = ref(false)
+  const error = ref('')
+
+  const load = async () => {
+    try {
+      const resp = await fetch(fileUrl)
+      if (!resp.ok) {
+        throw new Error(`${resp.status} ${resp.statusText}`)
+      }
+      const mime = (resp.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+      if (mime.startsWith('image/')) {
+        kind.value = 'image'
+        return
+      }
+      if (mime.includes('pdf')) {
+        kind.value = 'pdf'
+        return
+      }
+      const { bytes, truncated: isTruncated } = await readFilePrefix(resp, FILE_PREVIEW_MAX_BYTES)
+      const knownText = filePreviewTextExts.has(ext) || mime.startsWith('text/') ||
+        ['application/json', 'application/xml', 'application/javascript', 'application/x-yaml', 'application/x-sh'].includes(mime)
+      const text = decodeFileText(bytes, knownText)
+      if (text == null) {
+        kind.value = 'unsupported'
+        return
+      }
+      let out = text
+      if (['json', 'jsonc', 'geojson'].includes(ext) || mime === 'application/json') {
+        try {
+          out = JSON.stringify(JSON.parse(out), null, 2)
+        } catch (e) {
+          // 不是合法 json 或者内容被截断，按原文显示
+        }
+      }
+      content.value = out
+      truncated.value = isTruncated
+    } catch (e: any) {
+      error.value = e?.message ?? String(e)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  if (kind.value === 'text') {
+    load()
+  }
+
+  const renderBody = () => {
+    if (loading.value) {
+      return <div style={{ textAlign: 'center', padding: '32px' }}><Spin /></div>
+    }
+    if (error.value) {
+      return <div style={{ color: '#ff4d4f' }}>{t('filePreviewLoadFailed')}: {error.value}</div>
+    }
+    if (kind.value === 'unsupported') {
+      return <div style={{ padding: '8px 0', color: 'var(--zp-secondary)' }}>{t('filePreviewUnsupported')}</div>
+    }
+    if (kind.value === 'image') {
+      return (
+        <div style={{ textAlign: 'center' }}>
+          <img src={fileUrl} style={{ maxWidth: '100%', maxHeight: '70vh' }} />
+        </div>
+      )
+    }
+    if (kind.value === 'pdf') {
+      return <iframe src={fileUrl} style={{ width: '100%', height: '70vh', border: 'none' }}></iframe>
+    }
+    return (
+      <div>
+        {truncated.value && (
+          <div style={{ color: 'var(--zp-secondary)', marginBottom: '6px' }}>
+            {t('filePreviewTruncated', { size: `${Math.round(FILE_PREVIEW_MAX_BYTES / 1024)}KB` })}
+          </div>
+        )}
+        {content.value
+          ? (
+            <pre style={{
+              margin: 0,
+              maxHeight: '70vh',
+              overflow: 'auto',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all',
+              background: 'var(--zp-secondary-background)',
+              color: 'var(--zp-primary)',
+              padding: '12px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              lineHeight: '1.6em'
+            }}>{content.value}</pre>
+          )
+          : <div style={{ color: 'var(--zp-secondary)' }}>{t('filePreviewEmpty')}</div>}
+      </div>
+    )
+  }
+
+  Modal.confirm({
+    width: '80vw',
+    title: file.name,
+    icon: null,
+    content: () => (
+      <div>
+        <div style={{ color: 'var(--zp-secondary)', fontSize: '0.85em', marginBottom: '8px', wordBreak: 'break-all' }}>
+          {file.fullpath}
+        </div>
+        {renderBody()}
+        <div style={{ display: 'flex', gap: '8px', marginTop: '12px', justifyContent: 'flex-end' }}>
+          <Button size="small" onClick={() => downloadFiles([toRawFileUrl(file, true)])}>{t('download')}</Button>
+          {global.conf && !global.conf.is_readonly && (
+            <Button size="small" onClick={() => openWithDefaultApp(file.fullpath)}>{t('openWithDefaultApp')}</Button>
+          )}
+        </div>
+      </div>
+    ),
+    maskClosable: true,
+    wrapClassName: 'hidden-antd-btns-modal'
+  })
+}
 
 export const openRebuildImageIndexModal = () => {
   Modal.confirm({
