@@ -99,8 +99,9 @@ const info = ref<DataBaseBasicInfo>()
 // pos/size 动辄几十万条，直接在前端过滤掉，选择器里只留常用类型
 const EXCLUDED_TAG_TYPES = ['pos', 'size']
 
-const toTagLabel = (tag: Tag) =>
-  `${tag.type ? `[${tag.type}] ` : ''}${tag.display_name ? `${tag.display_name} : ${tag.name}` : tag.name}`
+// 跟标签搜索页的 toTagDisplayName 保持一致
+const toTagDisplayName = (tag: Tag, withType = false) =>
+  (withType ? `[${tag.type}] ` : '') + (tag.display_name ? `${tag.display_name} : ${tag.name}` : tag.name)
 
 const tagMap = computed(() => new Map((info.value?.tags ?? []).map(tag => [tag.id, tag])))
 
@@ -116,13 +117,13 @@ const tags = computed(() =>
 
 const tagConv: SearchSelectConv<Tag> = {
   value: (v: Tag) => v.id,
-  text: (v: Tag) => toTagLabel(v),
-  optionText: (v: Tag) => toTagLabel(v)
+  text: (v: Tag) => toTagDisplayName(v),
+  optionText: (v: Tag) => toTagDisplayName(v, true)
 }
 
 const tagNameOf = (id: TagId) => {
   const tag = tagMap.value.get(id)
-  return tag ? toTagLabel(tag) : String(id)
+  return tag ? toTagDisplayName(tag, true) : String(id)
 }
 const tagIdsToString = (ids?: TagId[]) => (ids ?? []).map(tagNameOf).join(', ')
 
