@@ -107,6 +107,20 @@ export const getImagesBySubstr = async (req: SearchBySubstrReq) => {
   }
 }
 
+export interface SearchTagsReq {
+  keyword?: string
+  ids?: TagId[]
+  types?: string[]
+  exclude_types?: string[]
+  limit?: number
+}
+
+// 标签选择器用的轻量查询，避免为了一个下拉拉回整张标签表
+export const searchTags = async (req: SearchTagsReq) => {
+  const resp = await axiosInst.value.post('/db/search_tags', req)
+  return resp.data as { tags: Tag[] }
+}
+
 const extraPaths = '/db/extra_paths'
 export type ExtraPathType =  'scanned' | 'walk' | 'cli_access_only' | '' | 'scanned-fixed'
 

@@ -1232,6 +1232,29 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
             "expired": len(expired_dirs) != 0,
             "expired_dirs": expired_dirs,
         }
+
+    class SearchTagsReq(BaseModel):
+        keyword: Optional[str] = ""
+        ids: Optional[List[int]] = []
+        types: Optional[List[str]] = []
+        exclude_types: Optional[List[str]] = []
+        limit: Optional[int] = 200
+
+    @app.post(db_api_base + "/search_tags", dependencies=[Depends(verify_secret)])
+    async def search_tags(req: SearchTagsReq):
+        if IIB_DEBUG:
+            logger.info(req)
+        conn = DataBase.get_conn()
+        return {
+            "tags": Tag.search(
+                conn,
+                keyword=(req.keyword or "").strip(),
+                ids=req.ids,
+                types=req.types,
+                exclude_types=req.exclude_types,
+                limit=req.limit,
+            )
+        }
     
     
     

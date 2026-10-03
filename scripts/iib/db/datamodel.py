@@ -857,7 +857,7 @@ class Tag:
                 rows = cur.fetchall()
                 for row in rows:
                     tags.append(cls.from_row(row))
-                
+
                 # Get top 4096 pos tags ordered by count (descending)
                 cur.execute("SELECT * FROM tag WHERE type = 'pos' ORDER BY count DESC LIMIT 4096")
                 pos_rows = cur.fetchall()
@@ -872,6 +872,41 @@ class Tag:
             
             print(f"tag: loaded {len(tags)} tags (total: {total_count})")
             return tags
+
+    @classmethod
+    def search(
+        cls,
+        conn: Connection,
+        keyword: str = "",
+        ids: List[int] = None,
+        types: List[str] = None,
+        exclude_types: List[str] = None,
+        limit: int = 200,
+    ) -> List["Tag"]:
+        """按关键词/类型取标签，给前端的标签选择器用，避免每次拉全表。"""
+        where_clauses = []
+        params = []
+        if ids:
+            where_clauses.append("id IN ({})".format(",".join("?" * len(ids))))
+            params.extend(ids)
+        else:
+            if keyword:
+                where_clauses.append("name LIKE ?")
+                params.append(f"%{keyword}%")
+            if types:
+                where_clauses.append("type IN ({})".format(",".join("?" * len(types))))
+                params.extend(types)
+            if exclude_types:
+                where_clauses.append("type NOT IN ({})".format(",".join("?" * len(exclude_types))))
+                params.extend(exclude_types)
+        sql = "SELECT * FROM tag"
+        if where_clauses:
+            sql += " WHERE " + " AND ".join(where_clauses)
+        sql += " ORDER BY count DESC LIMIT ?"
+        params.append(max(1, min(limit or 200, 1000)))
+        with closing(conn.cursor()) as cur:
+            rows = cur.execute(sql, params).fetchall()
+        return [cls.from_row(row) for row in rows]
 
     @classmethod
     def get_or_create(cls, conn: Connection, name: str, type: str):
