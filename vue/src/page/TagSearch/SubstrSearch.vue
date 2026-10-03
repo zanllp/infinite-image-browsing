@@ -106,7 +106,11 @@ const tagMap = computed(() => new Map((info.value?.tags ?? []).map(tag => [tag.i
 const tagOptions = computed(() =>
   (info.value?.tags ?? [])
     .filter(tag => !EXCLUDED_TAG_TYPES.includes(tag.type))
-    .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
+    .sort((a, b) => {
+      // custom 的排最前，其余按 count 降序
+      const customDiff = (b.type === 'custom' ? 1 : 0) - (a.type === 'custom' ? 1 : 0)
+      return customDiff || (b.count ?? 0) - (a.count ?? 0)
+    })
     .map(tag => ({ label: toTagLabel(tag), value: tag.id }))
 )
 
