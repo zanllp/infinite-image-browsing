@@ -94,7 +94,9 @@ const {
 const info = ref<DataBaseBasicInfo>()
 
 // 标签多选，选中多个时是 AND（同时含有）
-const toTagLabel = (tag: Tag) => `${tag.display_name || tag.name}${tag.count ? ` (${tag.count})` : ''}`
+// label 跟标签搜索页保持一致：[类型] 显示名 : 原始名
+const toTagLabel = (tag: Tag) =>
+  `${tag.type ? `[${tag.type}] ` : ''}${tag.display_name ? `${tag.display_name} : ${tag.name}` : tag.name}`
 
 const tagOptions = computed(() =>
   (info.value?.tags ?? [])
@@ -299,7 +301,7 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
         :max-tag-count="2"
         allow-clear
         option-filter-prop="label"
-        style="width: 260px; margin: 4px 4px 4px 0; flex-shrink: 0;"
+        style="width: 300px; margin: 4px 4px 4px 0; flex-shrink: 0;"
       />
       <div class="form-name">{{ $t('searchScope') }}</div>
       <ATextarea :auto-size="{ maxRows: 8 }" v-model:value="folder_paths_str"
