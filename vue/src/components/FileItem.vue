@@ -260,7 +260,7 @@ let videoDurationTimer: number | undefined
 
 const syncVideoDuration = () => {
   window.clearTimeout(videoDurationTimer)
-  if (!isVideoFile(props.file.name) || props.cellWidth <= minShowDetailWidth) {
+  if (!isVideoFile(props.file.name)) {
     videoDuration.value = null
     return
   }
@@ -449,6 +449,7 @@ const handleAudioClick = () => {
               {{ tag.name }}
             </a-tag>
           </div>
+          <span class="duration-badge" v-if="videoDuration && !isPlayingInline">{{ formatDuration(videoDuration) }}</span>
         </div>
         <div :class="`idx-${idx} item-content audio`" v-else-if="isAudioFile(file.name)"
           @click="handleAudioClick">
@@ -481,7 +482,6 @@ const handleAudioClick = () => {
           <div class="basic-info">
             <div style="margin-right: 4px;">
               {{ file.type }} {{ file.size }}
-              <template v-if="videoDuration">· {{ formatDuration(videoDuration) }}</template>
             </div>
             <div>
               {{ file.date }}
@@ -690,6 +690,24 @@ const handleAudioClick = () => {
       transition: opacity 0.2s ease;
       z-index: 10;
     }
+  }
+
+  // 视频时长角标，放封面左下角（右下角会被 tag 占掉）
+  .duration-badge {
+    position: absolute;
+    left: 6px;
+    bottom: 6px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 13px;
+    font-weight: bold;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    z-index: 6;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
   }
 
   .more {
