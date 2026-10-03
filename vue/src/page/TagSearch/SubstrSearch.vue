@@ -100,7 +100,6 @@ const TAG_OPTION_LIMIT = 1000
 const DEFAULT_EXCLUDE_TAG_TYPES = ['pos', 'size']
 
 const tagLoading = ref(false)
-const tagLoaded = ref(false)
 const tagOptionIds = ref<TagId[]>([])
 const tagCache = reactive(new Map<TagId, { label: string; value: TagId }>())
 
@@ -117,8 +116,9 @@ const tagOptions = computed(() => {
   return ids.map(id => tagCache.get(id)).filter((v): v is { label: string; value: TagId } => !!v)
 })
 
-const loadTagOptions = async () => {
-  if (tagLoaded.value) {
+// 每次打开下拉都后台刷一次：先用缓存立刻显示，拉到新的再覆盖，避免新标签看不到
+const refreshTagOptions = async () => {
+  if (tagLoading.value) {
     return
   }
   tagLoading.value = true
@@ -129,7 +129,6 @@ const loadTagOptions = async () => {
     })
     rememberTags(tags)
     tagOptionIds.value = tags.map(tag => tag.id)
-    tagLoaded.value = true
   } catch (e) {
     console.error('load tag options failed', e)
   } finally {
@@ -139,7 +138,7 @@ const loadTagOptions = async () => {
 
 const onTagDropdownVisibleChange = (open: boolean) => {
   if (open) {
-    loadTagOptions()
+    refreshTagOptions()
   }
 }
 
@@ -211,6 +210,8 @@ const onUpdateBtnClick = makeAsyncFunctionSingle(
       await updateImageData()
       info.value = await getDbBasicInfo()
       tagStore.tagMap.clear()
+      // 索引更新后可能多出新的自动标签，重拉一次
+      refreshTagOptions()
       return info.value
     }).res
 )
@@ -250,7 +251,12 @@ useGlobalEventListen('returnToIIB', async () => {
   info.value!.expired = res.expired
 })
 
-useGlobalEventListen('searchIndexExpired', () => info.value && (info.value.expired = true))
+useGlobalEventListen('searchIndexExpired', () => {
+  if (info.value) {
+    info.value.expired = true
+  }
+  refreshTagOptions()
+})
 
 const onRegexpClick = () => {
   isRegex.value = !isRegex.value
