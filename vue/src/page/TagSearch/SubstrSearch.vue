@@ -309,7 +309,7 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
         :disabled="!queue.isIdle"
         :max-tag-count="2"
         allow-clear
-        style="width: 300px; margin: 4px 4px 4px 0; flex-shrink: 0;"
+        style="width: 300px; margin: 0 4px 0 0; flex-shrink: 0;"
       />
       <div class="form-name">{{ $t('searchScope') }}</div>
       <ATextarea :auto-size="{ maxRows: 8 }" v-model:value="folder_paths_str"
