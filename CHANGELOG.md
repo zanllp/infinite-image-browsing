@@ -9,7 +9,7 @@ Clicking a file that isn't an image, video, or audio no longer does nothing — 
 Video files now show a bold duration badge in the bottom-left corner of the thumbnail (like a player time chip), and the video player modal shows the duration as well. Durations are read lazily in the browser, cached per file, capped at 3 concurrent probes and debounced so fast scrolling doesn't fire requests. Formats the browser can't decode (mkv/avi/flv) simply show nothing.
 
 ### 🏷️ Tag filter (AND) in fuzzy search
-The fuzzy search page has a tag multi-select next to the search scope: selecting several tags only returns files that contain all of them (AND), combined with the existing scope, media type and regex filters. The selection is stored in the search history too. Tag options are loaded on demand from a new `/db/tag_options` endpoint that skips the huge `pos` / `size` tag types, so the dropdown no longer pulls the whole tag table; it refreshes in the background whenever the dropdown is opened (and after an index update), so newly added tags show up.
+The fuzzy search page has a tag multi-select next to the search scope: selecting several tags only returns files that contain all of them (AND), combined with the existing scope, media type and regex filters. The selection is stored in the search history too. The picker reuses the tag list the page already loads and filters the huge `pos` / `size` tag types out in the frontend.
 
 ## 2026-08-21
 ### 🔒 Fix path traversal in is_path_trusted (CWE-22/CWE-59)
@@ -881,7 +881,7 @@ Triggered under the same circumstances as above, there will be a button to updat
 视频文件现在会在封面左下角显示加粗的时长角标（类似播放器的时间胶囊），视频播放弹窗里也会显示。时长由浏览器懒加载，按文件缓存、最多 3 个并发，并做了延迟触发，快速滚动时不会打请求。浏览器无法解码的格式（mkv/avi/flv）就不显示。
 
 ### 🏷️ 模糊搜索支持标签筛选（AND）
-模糊搜索页的「搜索范围」左边新增标签多选：选中多个标签时只返回同时含有全部标签的文件（AND），并与已有的范围、媒体类型、正则等条件叠加。筛选条件也会一起存进搜索历史。标签选项改为按需从新的 `/db/tag_options` 接口获取（跳过 `pos` / `size` 这两类海量标签），不再为了这一个下拉拉回整张标签表；每次打开下拉都会后台刷新一次（更新索引后也会刷），新加的标签能及时出现。
+模糊搜索页的「搜索范围」左边新增标签多选：选中多个标签时只返回同时含有全部标签的文件（AND），并与已有的范围、媒体类型、正则等条件叠加。筛选条件也会一起存进搜索历史。标签选项直接用页面本来就拉到的标签列表，在前端过滤掉 `pos` / `size` 这两类海量标签。
 
 ## 2026-08-21
 ### 🔒 修复 is_path_trusted 的路径穿越问题（CWE-22/CWE-59）

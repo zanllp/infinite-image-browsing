@@ -1233,26 +1233,6 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
             "expired_dirs": expired_dirs,
         }
 
-    class TagOptionsReq(BaseModel):
-        ids: Optional[List[int]] = []
-        types: Optional[List[str]] = []
-        exclude_types: Optional[List[str]] = []
-        limit: Optional[int] = 1000
-
-    @app.post(db_api_base + "/tag_options", dependencies=[Depends(verify_secret)])
-    async def get_tag_options(req: TagOptionsReq):
-        if IIB_DEBUG:
-            logger.info(req)
-        conn = DataBase.get_conn()
-        return {
-            "tags": Tag.get_options(
-                conn,
-                ids=req.ids,
-                types=req.types,
-                exclude_types=req.exclude_types,
-                limit=req.limit,
-            )
-        }
     
     
     

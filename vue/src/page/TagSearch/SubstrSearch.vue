@@ -1,15 +1,15 @@
 <script lang="ts" setup>
-import { computed, h, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import fileItemCell from '@/components/FileItem.vue'
 import '@zanllp/vue-virtual-scroller/dist/vue-virtual-scroller.css'
 // @ts-ignore
 import { RecycleScroller } from '@zanllp/vue-virtual-scroller'
 import { toImageUrl } from '@/util/file'
-import { getDbBasicInfo, getExpiredDirs, getImagesBySubstr, getTagOptions, updateImageData, type DataBaseBasicInfo, type Tag, type TagId, SearchBySubstrReq } from '@/api/db'
+import { getDbBasicInfo, getExpiredDirs, getImagesBySubstr, updateImageData, type DataBaseBasicInfo, type Tag, type TagId, SearchBySubstrReq } from '@/api/db'
 import { copy2clipboardI18n,  makeAsyncFunctionSingle, useGlobalEventListen } from '@/util'
 import fullScreenContextMenu from '@/page/fileTransfer/fullScreenContextMenu.vue'
 import { LeftCircleOutlined, RightCircleOutlined, regex, AimOutlined } from '@/icon'
-import { message, Spin } from 'ant-design-vue'
+import { message } from 'ant-design-vue'
 import { t } from '@/i18n'
 import { createImageSearchIter, useImageSearch } from './hook'
 import { useKeepMultiSelect } from '../fileTransfer/hook'
@@ -95,77 +95,29 @@ const info = ref<DataBaseBasicInfo>()
 
 // 标签多选，选中多个时是 AND（同时含有）
 // label 跟标签搜索页保持一致：[类型] 显示名 : 原始名
-const TAG_OPTION_LIMIT = 1000
-// pos/size 动辄几十万条，选择器里不放，搜索交给主输入框
-const DEFAULT_EXCLUDE_TAG_TYPES = ['pos', 'size']
-
-const tagLoading = ref(false)
-const tagOptionIds = ref<TagId[]>([])
-const tagCache = reactive(new Map<TagId, { label: string; value: TagId }>())
+// pos/size 动辄几十万条，直接在前端过滤掉，选择器里只留常用类型
+const EXCLUDED_TAG_TYPES = ['pos', 'size']
 
 const toTagLabel = (tag: Tag) =>
   `${tag.type ? `[${tag.type}] ` : ''}${tag.display_name ? `${tag.display_name} : ${tag.name}` : tag.name}`
 
-const rememberTags = (tags: Tag[]) => {
-  tags.forEach(tag => tagCache.set(tag.id, { label: toTagLabel(tag), value: tag.id }))
+const tagMap = computed(() => new Map((info.value?.tags ?? []).map(tag => [tag.id, tag])))
+
+const tagOptions = computed(() =>
+  (info.value?.tags ?? [])
+    .filter(tag => !EXCLUDED_TAG_TYPES.includes(tag.type))
+    .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
+    .map(tag => ({ label: toTagLabel(tag), value: tag.id }))
+)
+
+const tagNameOf = (id: TagId) => {
+  const tag = tagMap.value.get(id)
+  return tag ? toTagLabel(tag) : String(id)
 }
-
-// 已选中的必须一直在 options 里，否则 antd 只会显示 id
-const tagOptions = computed(() => {
-  const ids = Array.from(new Set([...andTags.value, ...tagOptionIds.value]))
-  return ids.map(id => tagCache.get(id)).filter((v): v is { label: string; value: TagId } => !!v)
-})
-
-// 每次打开下拉都后台刷一次：先用缓存立刻显示，拉到新的再覆盖，避免新标签看不到
-const refreshTagOptions = async () => {
-  if (tagLoading.value) {
-    return
-  }
-  tagLoading.value = true
-  try {
-    const { tags } = await getTagOptions({
-      exclude_types: DEFAULT_EXCLUDE_TAG_TYPES,
-      limit: TAG_OPTION_LIMIT
-    })
-    rememberTags(tags)
-    tagOptionIds.value = tags.map(tag => tag.id)
-  } catch (e) {
-    console.error('load tag options failed', e)
-  } finally {
-    tagLoading.value = false
-  }
-}
-
-const onTagDropdownVisibleChange = (open: boolean) => {
-  if (open) {
-    refreshTagOptions()
-  }
-}
-
-const loadTagsForIds = async (ids: TagId[]) => {
-  const unknown = Array.from(new Set(ids)).filter(id => !tagCache.has(id))
-  if (!unknown.length) {
-    return
-  }
-  try {
-    const { tags } = await getTagOptions({ ids: unknown, limit: unknown.length })
-    rememberTags(tags)
-  } catch (e) {
-    console.error('load tags by ids failed', e)
-  }
-}
-
-const tagNameOf = (id: TagId) => tagCache.get(id)?.label ?? String(id)
 const tagIdsToString = (ids?: TagId[]) => (ids ?? []).map(tagNameOf).join(', ')
 
 onMounted(async () => {
   info.value = await getDbBasicInfo()
-  // 历史记录里已经用过的标签，先把名字补上
-  const historyTagIds = new Set<TagId>()
-  fuzzySearchHistory.value.getRecords().forEach(rec => (rec.and_tags ?? []).forEach(id => historyTagIds.add(id)))
-  if (historyTagIds.size) {
-    loadTagsForIds(Array.from(historyTagIds))
-  }
   if (info.value.img_count && info.value.expired) {
     if (g.autoUpdateIndex) {
       await onUpdateBtnClick()
@@ -210,8 +162,6 @@ const onUpdateBtnClick = makeAsyncFunctionSingle(
       await updateImageData()
       info.value = await getDbBasicInfo()
       tagStore.tagMap.clear()
-      // 索引更新后可能多出新的自动标签，重拉一次
-      refreshTagOptions()
       return info.value
     }).res
 )
@@ -223,7 +173,6 @@ const reuse = (rec: FuzzySearchHistoryRecord & { id: string; time: string }) => 
   isRegex.value = rec.isRegex
   mediaType.value = rec.mediaType || 'all'
   andTags.value = rec.and_tags ?? []
-  loadTagsForIds(andTags.value)
   showHistoryRecord.value = false
   query()
 }
@@ -251,12 +200,7 @@ useGlobalEventListen('returnToIIB', async () => {
   info.value!.expired = res.expired
 })
 
-useGlobalEventListen('searchIndexExpired', () => {
-  if (info.value) {
-    info.value.expired = true
-  }
-  refreshTagOptions()
-})
+useGlobalEventListen('searchIndexExpired', () => info.value && (info.value.expired = true))
 
 const onRegexpClick = () => {
   isRegex.value = !isRegex.value
@@ -357,13 +301,11 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
         mode="multiple"
         :show-search="false"
         :options="tagOptions"
-        :not-found-content="tagLoading ? h(Spin, { size: 'small' }) : undefined"
         :placeholder="$t('tagFilterAnd')"
         :disabled="!queue.isIdle"
         :max-tag-count="2"
         allow-clear
         style="width: 300px; margin: 4px 4px 4px 0; flex-shrink: 0;"
-        @dropdown-visible-change="onTagDropdownVisibleChange"
       />
       <div class="form-name">{{ $t('searchScope') }}</div>
       <ATextarea :auto-size="{ maxRows: 8 }" v-model:value="folder_paths_str"
