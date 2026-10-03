@@ -1,6 +1,10 @@
 [跳到中文](#中文)
 # English
 
+## 2026-10-04
+### ✨ Unified preview modal for more file types
+Clicking a file that isn't an image, video, or audio no longer does nothing — it now opens a single preview modal. Text-based files (json, txt, md, yaml, csv, source code, ...) are read from the existing `/file` endpoint and rendered as text: JSON is pretty-printed, non-UTF-8 content (GBK / UTF-16) is decoded when possible, and only the first 512KB is read so huge files can't lock up the browser. PDFs open in an embedded viewer and SVG/ICO images render inline; anything unrecognized falls back to a dialog with download and open-with-default-app actions. File tiles also show a type-aware icon plus a hover "Preview" hint and pointer cursor, so it's obvious which files can be opened.
+
 ## 2026-08-21
 ### 🔒 Fix path traversal in is_path_trusted (CWE-22/CWE-59)
 Hardened the trusted-path check used by path operations. `os.path.realpath()` now resolves symlinks before the comparison, and a trailing `os.sep` is added to the `startswith()` check to prevent a prefix-collision bypass.
@@ -862,6 +866,10 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-10-04
+### ✨ 更多文件类型支持统一预览
+点击非图片/视频/音频的文件不再毫无反应，而是打开同一个预览弹窗。文本类文件（json、txt、md、yaml、csv、代码等）从已有的 `/file` 接口读取后按文本展示：JSON 自动格式化，GBK / UTF-16 等非 UTF-8 编码会尝试解码，并且只读取前 512KB，避免超大文件卡住浏览器。PDF 用内置阅读器打开，SVG/ICO 直接内联展示；无法识别的类型则回退到带「下载」和「使用默认应用打开」的弹窗。文件卡片还增加了按类型区分的图标、悬停「预览」提示和手型光标，能一眼看出哪些文件可以打开。
 
 ## 2026-08-21
 ### 🔒 修复 is_path_trusted 的路径穿越问题（CWE-22/CWE-59）

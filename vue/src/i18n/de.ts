@@ -162,6 +162,12 @@ export const de: Partial<IIBI18nMap> = {
   moveSelectedFilesTo: 'Ausgewählte Dateien verschieben nach',
   confirm: 'Bestätigen',
   download: 'Herunterladen',
+  filePreviewEmpty: 'Die Datei ist leer',
+  filePreviewHint: 'Vorschau',
+  fileOpenHint: 'Öffnen',
+  filePreviewTruncated: 'Datei ist zu groß, es werden nur die ersten {size} angezeigt',
+  filePreviewUnsupported: 'Für diesen Dateityp ist keine Vorschau verfügbar. Laden Sie die Datei herunter oder öffnen Sie sie mit der Standard-App.',
+  filePreviewLoadFailed: 'Datei konnte nicht geladen werden',
   local: 'Lokal',
   sendImageFailed:
     'Fehler beim Senden des Bildes. Bitte kontaktieren Sie den Entwickler mit der Fehlermeldung aus der Konsole.',

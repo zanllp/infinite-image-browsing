@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { FileOutlined, FolderOpenOutlined, EllipsisOutlined, HeartOutlined, HeartFilled, DragOutlined } from '@/icon'
+import {
+  FileOutlined, FolderOpenOutlined, EllipsisOutlined, HeartOutlined, HeartFilled, DragOutlined,
+  EyeOutlined, FileTextOutlined, FilePdfOutlined, FileMarkdownOutlined, FileZipOutlined, FileImageOutlined
+} from '@/icon'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { fallbackImage, ok } from 'vue3-ts-util'
 import type { FileNodeInfo } from '@/api/files'
@@ -13,7 +16,7 @@ import DraggableImage from './DraggableImage.vue'
 import { useTagStore } from '@/store/useTagStore'
 import { CloseCircleOutlined, StarFilled, StarOutlined } from '@/icon'
 import { Tag } from '@/api/db'
-import { openVideoModal, openAudioModal } from './functionalCallableComp'
+import { openVideoModal, openAudioModal, openFilePreviewModal, getFilePreviewKind } from './functionalCallableComp'
 import type { GenDiffInfo } from '@/api/files'
 import { play } from '@/icon'
 import { Top4MediaInfo } from '@/api'
@@ -214,6 +217,42 @@ const handleDrop = (event: DragEvent) => {
   emit('dropToFolder', event, props.file, props.idx)
 }
 
+// 非图片/视频/音频的文件，点击后会打开统一的预览 modal
+const previewable = computed(() =>
+  props.file.type === 'file' &&
+  !isImageFile(props.file.name) &&
+  !isVideoFile(props.file.name) &&
+  !isAudioFile(props.file.name)
+)
+
+const previewHintKey = computed<'filePreviewHint' | 'fileOpenHint'>(() =>
+  getFilePreviewKind(props.file.name) === 'other' ? 'fileOpenHint' : 'filePreviewHint'
+)
+
+const archiveExts = ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz']
+
+// 按文件类型给个直观的图标，让用户知道这是个能打开的文件
+const fileTypeIcon = computed(() => {
+  const ext = props.file.name.split('.').pop()?.toLowerCase() ?? ''
+  const kind = getFilePreviewKind(props.file.name)
+  if (archiveExts.includes(ext)) {
+    return FileZipOutlined
+  }
+  if (kind === 'pdf') {
+    return FilePdfOutlined
+  }
+  if (['md', 'markdown'].includes(ext)) {
+    return FileMarkdownOutlined
+  }
+  if (kind === 'image') {
+    return FileImageOutlined
+  }
+  if (kind === 'text') {
+    return FileTextOutlined
+  }
+  return FileOutlined
+})
+
 // 处理文件点击事件
 const handleFileClick = (event: MouseEvent) => {
   // 检查magic switch是否开启且是图片文件（视频有自己的处理逻辑）
@@ -226,6 +265,13 @@ const handleFileClick = (event: MouseEvent) => {
     setTimeout(() => {
       closeImageFullscreenPreview()
     }, 500);
+  } else if (
+    previewable.value &&
+    !event.shiftKey && !event.ctrlKey && !event.metaKey &&
+    !(event.target as HTMLElement)?.closest?.('.float-btn-wrap, .close-icon')
+  ) {
+    // json/txt/pdf 等其它文件统一用预览 modal 打开
+    openFilePreviewModal(props.file)
   } else {
     // 正常触发文件点击事件
     emit('fileItemClick', event, props.file, props.idx)
@@ -275,7 +321,7 @@ const handleAudioClick = () => {
   <a-dropdown :trigger="['contextmenu']" :visible="!global.longPressOpenContextMenu ? undefined : typeof idx === 'number' && showMenuIdx === idx
     " @update:visible="(v: boolean) => typeof idx === 'number' && emit('update:showMenuIdx', v ? idx : -1)">
     <li class="file file-item-trigger grid" :class="{
-    clickable: file.type === 'dir',
+    clickable: file.type === 'dir' || previewable,
     selected
   }" :data-idx="idx" :key="file.name" draggable="true" @dragstart="emit('dragstart', $event, idx)"
       @dragend="emit('dragend', $event, idx)" @dragover="handleDragOver" @drop="handleDrop"
@@ -376,8 +422,9 @@ const handleAudioClick = () => {
             </a-tag>
           </div>
         </div>
-        <div v-else class="preview-icon-wrap">
-          <file-outlined class="icon center" v-if="file.type === 'file'" />
+        <div v-else class="preview-icon-wrap" :class="{ previewable }"
+          :title="previewable ? $t(previewHintKey) : undefined">
+          <component :is="fileTypeIcon" class="icon center" v-if="file.type === 'file'" />
           <div v-else-if="coverFiles?.length && cellWidth > 160" class="dir-cover-container">
             <img class="dir-cover-item" loading="lazy" decoding="async" fetchpriority="low"
               :src="item.media_type === 'image' ? toImageThumbnailUrl(item) : toVideoCoverUrl(item)"
@@ -385,6 +432,10 @@ const handleAudioClick = () => {
           </div>
 
           <folder-open-outlined class="icon center" v-else />
+          <span class="preview-hint" v-if="previewable">
+            <eye-outlined />
+            <template v-if="cellWidth > 120">{{ $t(previewHintKey) }}</template>
+          </span>
         </div>
         <div class="profile" v-if="cellWidth > minShowDetailWidth">
           <div class="name line-clamp-1" :title="file.name">
@@ -573,6 +624,34 @@ const handleAudioClick = () => {
 
   &:hover .more {
     opacity: 1;
+  }
+
+  &:hover .preview-hint {
+    opacity: 1;
+  }
+
+  .preview-icon-wrap {
+    position: relative;
+
+    .preview-hint {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 8px;
+      border-radius: 100vh;
+      font-size: 0.7em;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.6);
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 10;
+    }
   }
 
   .more {
