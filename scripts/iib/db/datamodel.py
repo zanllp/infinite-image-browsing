@@ -857,7 +857,7 @@ class Tag:
                 rows = cur.fetchall()
                 for row in rows:
                     tags.append(cls.from_row(row))
-
+                
                 # Get top 4096 pos tags ordered by count (descending)
                 cur.execute("SELECT * FROM tag WHERE type = 'pos' ORDER BY count DESC LIMIT 4096")
                 pos_rows = cur.fetchall()

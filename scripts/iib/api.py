@@ -1232,7 +1232,6 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
             "expired": len(expired_dirs) != 0,
             "expired_dirs": expired_dirs,
         }
-
     
     
     
