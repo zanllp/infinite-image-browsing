@@ -874,25 +874,21 @@ class Tag:
             return tags
 
     @classmethod
-    def search(
+    def get_options(
         cls,
         conn: Connection,
-        keyword: str = "",
         ids: List[int] = None,
         types: List[str] = None,
         exclude_types: List[str] = None,
-        limit: int = 200,
+        limit: int = 1000,
     ) -> List["Tag"]:
-        """按关键词/类型取标签，给前端的标签选择器用，避免每次拉全表。"""
+        """取标签给前端的标签选择器用，可以按类型排除，避免拉回整张标签表。"""
         where_clauses = []
         params = []
         if ids:
             where_clauses.append("id IN ({})".format(",".join("?" * len(ids))))
             params.extend(ids)
         else:
-            if keyword:
-                where_clauses.append("name LIKE ?")
-                params.append(f"%{keyword}%")
             if types:
                 where_clauses.append("type IN ({})".format(",".join("?" * len(types))))
                 params.extend(types)
@@ -903,7 +899,7 @@ class Tag:
         if where_clauses:
             sql += " WHERE " + " AND ".join(where_clauses)
         sql += " ORDER BY count DESC LIMIT ?"
-        params.append(max(1, min(limit or 200, 1000)))
+        params.append(max(1, min(limit or 1000, 1000)))
         with closing(conn.cursor()) as cur:
             rows = cur.execute(sql, params).fetchall()
         return [cls.from_row(row) for row in rows]

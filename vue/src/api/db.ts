@@ -107,8 +107,7 @@ export const getImagesBySubstr = async (req: SearchBySubstrReq) => {
   }
 }
 
-export interface SearchTagsReq {
-  keyword?: string
+export interface TagOptionsReq {
   ids?: TagId[]
   types?: string[]
   exclude_types?: string[]
@@ -116,8 +115,8 @@ export interface SearchTagsReq {
 }
 
 // 标签选择器用的轻量查询，避免为了一个下拉拉回整张标签表
-export const searchTags = async (req: SearchTagsReq) => {
-  const resp = await axiosInst.value.post('/db/search_tags', req)
+export const getTagOptions = async (req: TagOptionsReq) => {
+  const resp = await axiosInst.value.post('/db/tag_options', req)
   return resp.data as { tags: Tag[] }
 }
 

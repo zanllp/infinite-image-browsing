@@ -1,11 +1,11 @@
 <script lang="ts" setup>
-import { computed, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, h, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import fileItemCell from '@/components/FileItem.vue'
 import '@zanllp/vue-virtual-scroller/dist/vue-virtual-scroller.css'
 // @ts-ignore
 import { RecycleScroller } from '@zanllp/vue-virtual-scroller'
 import { toImageUrl } from '@/util/file'
-import { getDbBasicInfo, getExpiredDirs, getImagesBySubstr, searchTags, updateImageData, type DataBaseBasicInfo, type Tag, type TagId, SearchBySubstrReq } from '@/api/db'
+import { getDbBasicInfo, getExpiredDirs, getImagesBySubstr, getTagOptions, updateImageData, type DataBaseBasicInfo, type Tag, type TagId, SearchBySubstrReq } from '@/api/db'
 import { copy2clipboardI18n,  makeAsyncFunctionSingle, useGlobalEventListen } from '@/util'
 import fullScreenContextMenu from '@/page/fileTransfer/fullScreenContextMenu.vue'
 import { LeftCircleOutlined, RightCircleOutlined, regex, AimOutlined } from '@/icon'
@@ -95,12 +95,13 @@ const info = ref<DataBaseBasicInfo>()
 
 // 标签多选，选中多个时是 AND（同时含有）
 // label 跟标签搜索页保持一致：[类型] 显示名 : 原始名
-const TAG_SEARCH_LIMIT = 200
-// 没输关键词时先给"常用"标签；pos/size 动辄几十万条，等有关键词再搜
+const TAG_OPTION_LIMIT = 1000
+// pos/size 动辄几十万条，选择器里不放，搜索交给主输入框
 const DEFAULT_EXCLUDE_TAG_TYPES = ['pos', 'size']
 
 const tagLoading = ref(false)
-const tagResultIds = ref<TagId[]>([])
+const tagLoaded = ref(false)
+const tagOptionIds = ref<TagId[]>([])
 const tagCache = reactive(new Map<TagId, { label: string; value: TagId }>())
 
 const toTagLabel = (tag: Tag) =>
@@ -112,36 +113,33 @@ const rememberTags = (tags: Tag[]) => {
 
 // 已选中的必须一直在 options 里，否则 antd 只会显示 id
 const tagOptions = computed(() => {
-  const ids = Array.from(new Set([...andTags.value, ...tagResultIds.value]))
+  const ids = Array.from(new Set([...andTags.value, ...tagOptionIds.value]))
   return ids.map(id => tagCache.get(id)).filter((v): v is { label: string; value: TagId } => !!v)
 })
 
-const runTagSearch = async (keyword: string) => {
+const loadTagOptions = async () => {
+  if (tagLoaded.value) {
+    return
+  }
   tagLoading.value = true
   try {
-    const { tags } = await searchTags({
-      keyword,
-      exclude_types: keyword ? [] : DEFAULT_EXCLUDE_TAG_TYPES,
-      limit: TAG_SEARCH_LIMIT
+    const { tags } = await getTagOptions({
+      exclude_types: DEFAULT_EXCLUDE_TAG_TYPES,
+      limit: TAG_OPTION_LIMIT
     })
     rememberTags(tags)
-    tagResultIds.value = tags.map(tag => tag.id)
+    tagOptionIds.value = tags.map(tag => tag.id)
+    tagLoaded.value = true
   } catch (e) {
-    console.error('search tags failed', e)
+    console.error('load tag options failed', e)
   } finally {
     tagLoading.value = false
   }
 }
 
-let tagSearchTimer: number | undefined
-const onTagSearch = (keyword: string) => {
-  window.clearTimeout(tagSearchTimer)
-  tagSearchTimer = window.setTimeout(() => runTagSearch(keyword.trim()), 250)
-}
-
 const onTagDropdownVisibleChange = (open: boolean) => {
-  if (open && !tagResultIds.value.length) {
-    runTagSearch('')
+  if (open) {
+    loadTagOptions()
   }
 }
 
@@ -151,7 +149,7 @@ const loadTagsForIds = async (ids: TagId[]) => {
     return
   }
   try {
-    const { tags } = await searchTags({ ids: unknown, limit: unknown.length })
+    const { tags } = await getTagOptions({ ids: unknown, limit: unknown.length })
     rememberTags(tags)
   } catch (e) {
     console.error('load tags by ids failed', e)
@@ -160,8 +158,6 @@ const loadTagsForIds = async (ids: TagId[]) => {
 
 const tagNameOf = (id: TagId) => tagCache.get(id)?.label ?? String(id)
 const tagIdsToString = (ids?: TagId[]) => (ids ?? []).map(tagNameOf).join(', ')
-
-onBeforeUnmount(() => window.clearTimeout(tagSearchTimer))
 
 onMounted(async () => {
   info.value = await getDbBasicInfo()
@@ -353,8 +349,7 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
       <ASelect
         v-model:value="andTags"
         mode="multiple"
-        show-search
-        :filter-option="false"
+        :show-search="false"
         :options="tagOptions"
         :not-found-content="tagLoading ? h(Spin, { size: 'small' }) : undefined"
         :placeholder="$t('tagFilterAnd')"
@@ -362,7 +357,6 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
         :max-tag-count="2"
         allow-clear
         style="width: 300px; margin: 4px 4px 4px 0; flex-shrink: 0;"
-        @search="onTagSearch"
         @dropdown-visible-change="onTagDropdownVisibleChange"
       />
       <div class="form-name">{{ $t('searchScope') }}</div>
