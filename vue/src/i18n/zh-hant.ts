@@ -168,6 +168,7 @@ export const zhHant: Partial<IIBI18nMap> = {
   sourceText: '源文本',
   structuredData: '結構化數據',
   searchScope: '搜尋範圍',
+  tagFilterAnd: '標籤篩選（AND）',
   specifiedSearchFolder: '指定搜尋的資料夾，使用逗號或換行分割多個',
   batchAddTag: '批量添加Tag',
   batchRemoveTag: '批量移除Tag',

@@ -1,11 +1,11 @@
 <script lang="ts" setup>
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import fileItemCell from '@/components/FileItem.vue'
 import '@zanllp/vue-virtual-scroller/dist/vue-virtual-scroller.css'
 // @ts-ignore
 import { RecycleScroller } from '@zanllp/vue-virtual-scroller'
 import { toImageUrl } from '@/util/file'
-import { getDbBasicInfo, getExpiredDirs, getImagesBySubstr, updateImageData, type DataBaseBasicInfo, SearchBySubstrReq } from '@/api/db'
+import { getDbBasicInfo, getExpiredDirs, getImagesBySubstr, updateImageData, type DataBaseBasicInfo, type Tag, type TagId, SearchBySubstrReq } from '@/api/db'
 import { copy2clipboardI18n,  makeAsyncFunctionSingle, useGlobalEventListen } from '@/util'
 import fullScreenContextMenu from '@/page/fileTransfer/fullScreenContextMenu.vue'
 import { LeftCircleOutlined, RightCircleOutlined, regex, AimOutlined } from '@/icon'
@@ -45,6 +45,7 @@ const folder_paths_str = ref(props.searchScope ?? '')
 const showHistoryRecord = ref(false)
 const searchCount = ref(0)
 const mediaType = ref('all')
+const andTags = ref<TagId[]>([])
 const iter = createImageSearchIter(cursor => {
   const req: SearchBySubstrReq = {
     cursor,
@@ -52,7 +53,8 @@ const iter = createImageSearchIter(cursor => {
     surstr: !isRegex.value ? substr.value : '',
     path_only: pathOnly.value,
     folder_paths: (folder_paths_str.value ?? '').split(/,|\n/).map(v => v.trim()).filter(v => v),
-    media_type: mediaType.value
+    media_type: mediaType.value,
+    and_tags: andTags.value
   }
   return getImagesBySubstr(req)
 })
@@ -90,6 +92,23 @@ const {
 
 
 const info = ref<DataBaseBasicInfo>()
+
+// 标签多选，选中多个时是 AND（同时含有）
+const toTagLabel = (tag: Tag) => `${tag.display_name || tag.name}${tag.count ? ` (${tag.count})` : ''}`
+
+const tagOptions = computed(() =>
+  (info.value?.tags ?? [])
+    .slice()
+    .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
+    .map(tag => ({ label: toTagLabel(tag), value: tag.id }))
+)
+
+const tagNameOf = (id: TagId) => {
+  const tag = info.value?.tags?.find(v => v.id === id)
+  return tag ? tag.display_name || tag.name : String(id)
+}
+
+const tagIdsToString = (ids?: TagId[]) => (ids ?? []).map(tagNameOf).join(', ')
 
 onMounted(async () => {
   info.value = await getDbBasicInfo()
@@ -147,6 +166,7 @@ const reuse = (rec: FuzzySearchHistoryRecord & { id: string; time: string }) => 
   folder_paths_str.value = rec.folder_paths_str
   isRegex.value = rec.isRegex
   mediaType.value = rec.mediaType || 'all'
+  andTags.value = rec.and_tags ?? []
   showHistoryRecord.value = false
   query()
 }
@@ -157,7 +177,8 @@ const query = async () => {
     substr: substr.value,
     folder_paths_str: folder_paths_str.value,
     isRegex: isRegex.value,
-    mediaType: mediaType.value
+    mediaType: mediaType.value,
+    and_tags: andTags.value
   })
   await iter.reset({ refetch: true })
   await nextTick()
@@ -202,6 +223,10 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
           <a-row v-if="record.mediaType">
             <a-col :span="4">{{ $t('mediaType') }}:</a-col>
             <a-col :span="20">{{ record.mediaType }}</a-col>
+          </a-row>
+          <a-row v-if="record.and_tags?.length">
+            <a-col :span="4">{{ $t('tags') }}:</a-col>
+            <a-col :span="20">{{ tagIdsToString(record.and_tags) }} (AND)</a-col>
           </a-row>
           <a-row>
             <a-col :span="4">{{ $t('time') }}:</a-col>
@@ -265,6 +290,17 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
       </template>
     </div>
     <div class="search-bar">
+      <ASelect
+        v-model:value="andTags"
+        mode="multiple"
+        :options="tagOptions"
+        :placeholder="$t('tagFilterAnd')"
+        :disabled="!queue.isIdle"
+        :max-tag-count="2"
+        allow-clear
+        option-filter-prop="label"
+        style="width: 260px; margin: 4px 4px 4px 0; flex-shrink: 0;"
+      />
       <div class="form-name">{{ $t('searchScope') }}</div>
       <ATextarea :auto-size="{ maxRows: 8 }" v-model:value="folder_paths_str"
         :placeholder="$t('specifiedSearchFolder')" />
@@ -316,6 +352,10 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
               <a-row v-if="record.mediaType">
                 <a-col :span="4">{{ $t('mediaType') }}:</a-col>
                 <a-col :span="20">{{ record.mediaType }}</a-col>
+              </a-row>
+              <a-row v-if="record.and_tags?.length">
+                <a-col :span="4">{{ $t('tags') }}:</a-col>
+                <a-col :span="20">{{ tagIdsToString(record.and_tags) }} (AND)</a-col>
               </a-row>
               <a-row>
                 <a-col :span="4">{{ $t('time') }}:</a-col>

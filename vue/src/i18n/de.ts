@@ -162,6 +162,7 @@ export const de: Partial<IIBI18nMap> = {
   moveSelectedFilesTo: 'Ausgewählte Dateien verschieben nach',
   confirm: 'Bestätigen',
   download: 'Herunterladen',
+  tagFilterAnd: 'Tag-Filter (UND)',
   filePreviewEmpty: 'Die Datei ist leer',
   filePreviewHint: 'Vorschau',
   fileOpenHint: 'Öffnen',

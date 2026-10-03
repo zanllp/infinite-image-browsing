@@ -95,6 +95,7 @@ export interface SearchBySubstrReq {
   folder_paths?: string[];
   size?: number;
   media_type?: string;  // "all", "image", "video"
+  and_tags?: TagId[];  // 同时含有全部所选标签
 }
 
 

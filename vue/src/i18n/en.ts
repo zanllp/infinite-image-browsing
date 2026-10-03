@@ -166,6 +166,7 @@ You can specify which snapshot to restore to when starting IIB in the global set
   sourceText: 'Source Text',
   structuredData: 'Structured Data',
   searchScope: 'Search Scope',
+  tagFilterAnd: 'Tag filter (AND)',
   specifiedSearchFolder: 'Specify the folders to search, separate multiple folders with commas or line breaks',
   batchAddTag: 'Batch Add Tag',
   batchRemoveTag: 'Batch Remove Tag',
