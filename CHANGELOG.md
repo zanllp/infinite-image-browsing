@@ -1,6 +1,12 @@
 [跳到中文](#中文)
 # English
 
+## 2026-10-08
+### 🐛 Fix the spurious "发生了个错误" toast on the first desktop launch
+The desktop app fires its first API requests as soon as the webview is ready, which can be before the bundled api server (a self-extracting onefile binary) has bound its port. Such a request gets no HTTP response at all, so the frontend falls back to the generic "发生了个错误" toast. It was most visible on the first launch of a day, where the server also copies the whole SQLite database (several hundred MB) as a daily backup before it starts listening.
+- Startup requests now wait until the api server answers. The readiness probe retries every 500ms for up to 60s instead of failing, and no error toast is shown while waiting.
+- The daily database backup now runs in a background thread and uses SQLite's online backup API for a consistent snapshot, so it no longer delays the server from listening. The once-a-day check, file naming and retention are unchanged.
+
 ## 2026-10-04
 ### ✨ Unified preview modal for more file types
 Clicking a file that isn't an image, video, or audio no longer does nothing — it now opens a single preview modal. Text-based files (json, txt, md, yaml, csv, source code, ...) are read from the existing `/file` endpoint and rendered as text: JSON is pretty-printed, non-UTF-8 content (GBK / UTF-16) is decoded when possible, and only the first 512KB is read so huge files can't lock up the browser. PDFs open in an embedded viewer and SVG/ICO images render inline; anything unrecognized falls back to a dialog with download and open-with-default-app actions. File tiles also show a type-aware icon plus a hover "Preview" hint and pointer cursor, so it's obvious which files can be opened.
@@ -872,6 +878,12 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-10-08
+### 🐛 修复桌面版首次打开误报"发生了个错误"
+桌面版 webview 一就绪就会发启动请求，此时自带的后端（onefile 自解压程序）可能还没监听端口，请求拿不到任何 HTTP 响应，前端于是弹出通用的"发生了个错误"。当天第一次打开时最明显：后端还要先整库复制一份几百 MB 的数据库备份，才会开始监听。
+- 启动请求现在会先等后端能响应：探活每 500ms 重试一次、最多等 60 秒，等待期间不再弹错误提示。
+- 每日数据库备份改为后台线程执行，并使用 SQLite 在线备份接口做一致性快照，不再阻塞端口监听；每天一次、文件命名、保留份数等逻辑不变。
 
 ## 2026-10-04
 ### ✨ 更多文件类型支持统一预览
