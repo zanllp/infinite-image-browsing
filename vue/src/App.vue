@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, watch, ref } from 'vue'
-import { getGlobalSetting, setAppFeSetting } from './api'
+import { getGlobalSetting, setAppFeSetting, waitForServerReady } from './api'
 import { useGlobalStore, presistKeys } from './store/useGlobalStore'
 import { useWorkspeaceSnapshot } from './store/useWorkspeaceSnapshot'
 import { getQuickMovePaths } from '@/page/taskRecord/autoComplete'
@@ -148,6 +148,8 @@ const restoreWorkspaceSnapshot = once( async () => {
 useGlobalEventListen('updateGlobalSetting', async () => {
   await refreshTauriConf()
   console.log(tauriConf.value)
+  // 桌面版后端sidecar可能还没监听端口，先等它就绪再请求，避免首次打开弹"发生了个错误"
+  await waitForServerReady()
   const resp = await getGlobalSetting()
   globalStore.conf = resp
   const r = await getQuickMovePaths(resp)

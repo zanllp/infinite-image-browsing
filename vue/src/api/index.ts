@@ -8,7 +8,7 @@ import { delay } from 'vue3-ts-util'
 import { computed, h, ref } from 'vue'
 import 'ant-design-vue/es/input/style/index.css'
 import sjcl from 'sjcl'
-import { tauriConf } from '@/util/tauriAppConf'
+import { refreshTauriConf, tauriConf } from '@/util/tauriAppConf'
 import { Dict, isSync } from '@/util'
 import { FileNodeInfo } from './files'
 
@@ -17,6 +17,38 @@ export const apiBase = computed(() =>
     ? `http://127.0.0.1:${tauriConf.value.port}/infinite_image_browsing`
     : '/infinite_image_browsing'
 )
+
+// 桌面版(tauri)的后端是 sidecar 进程，webview 可能比它先就绪：这时发出去的启动请求
+// 会拿到连接错误(没有 response)，被拦截器统一弹成"发生了个错误"。
+// 所以启动阶段的请求先等端口能响应再发（任何 http 响应都算就绪）。
+let serverReadyPromise: Promise<void> | null = null
+export const waitForServerReady = (timeoutMs = 60_000): Promise<void> => {
+  if (serverReadyPromise) {
+    return serverReadyPromise
+  }
+  serverReadyPromise = (async () => {
+    await refreshTauriConf()
+    const startedAt = Date.now()
+    for (;;) {
+      try {
+        // 故意不用 axiosInst：探测阶段不弹错误提示，也不触发密钥弹窗
+        await axios.get(`${apiBase.value}/version`, { timeout: 3000 })
+        return
+      } catch (error) {
+        if (isAxiosError(error) && error.response) {
+          // 端口已经能响应了，401/403/500 交给正常请求链路处理
+          return
+        }
+        if (Date.now() - startedAt > timeoutMs) {
+          serverReadyPromise = null
+          throw error
+        }
+        await delay(500)
+      }
+    }
+  })()
+  return serverReadyPromise
+}
 
 const sha256 = (data: string) => {
   const hash = sjcl.hash.sha256.hash(data)
