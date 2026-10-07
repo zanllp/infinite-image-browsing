@@ -14,6 +14,7 @@ import piexif.helper
 import zipfile
 from PIL import Image
 import shutil
+import sqlite3
 import requests
 # import magic
 
@@ -80,6 +81,31 @@ except Exception as e:
 
 
 
+def snapshot_db_file(src_path, dst_path):
+    """用 sqlite 的在线备份接口做一致性快照，成功返回 True。
+
+    备份现在跑在后台线程里（服务已经可以读写数据库），直接复制文件在并发写入时
+    可能拿到损坏的备份，所以优先走 sqlite3 的 backup 接口；失败时由调用方回退到复制文件。
+    """
+    src_conn = None
+    dst_conn = None
+    try:
+        src_conn = sqlite3.connect(src_path)
+        dst_conn = sqlite3.connect(dst_path)
+        src_conn.backup(dst_conn)
+        return True
+    except Exception as e:
+        print(f"failed to snapshot db file: {e}")
+        return False
+    finally:
+        for conn in (dst_conn, src_conn):
+            try:
+                if conn is not None:
+                    conn.close()
+            except Exception:
+                pass
+
+
 def backup_db_file(db_file_path):
 
     if not os.path.exists(db_file_path):
@@ -107,7 +133,21 @@ def backup_db_file(db_file_path):
     timestamp = current_time.strftime('%Y-%m-%d %H-%M-%S')
     backup_filename = f"iib.db_{timestamp}"
     backup_filepath = os.path.join(backup_folder, backup_filename)
-    shutil.copy2(db_file_path, backup_filepath)
+    if not snapshot_db_file(db_file_path, backup_filepath):
+        # 回退：直接复制文件（sqlite 接口不可用时）
+        try:
+            if os.path.exists(backup_filepath):
+                os.remove(backup_filepath)
+            shutil.copy2(db_file_path, backup_filepath)
+        except Exception as e:
+            print(f"failed to backup db file: {e}")
+            # 别把半成品当成"今天已经备份过"留在这里
+            try:
+                if os.path.exists(backup_filepath):
+                    os.remove(backup_filepath)
+            except Exception:
+                pass
+            return
     backup_files = os.listdir(backup_folder)
     pattern = r"iib\.db_(\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})"
     backup_files_with_time = [(f, re.search(pattern, f).group(1)) for f in backup_files if re.search(pattern, f)]

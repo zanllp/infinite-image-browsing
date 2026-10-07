@@ -204,7 +204,15 @@ async def verify_secret(request: Request):
 
 DEFAULT_BASE = "/infinite_image_browsing"
 def infinite_image_browsing_api(app: FastAPI, **kwargs):
-    backup_db_file(DataBase.get_db_file_path())
+    # 每天首次启动要整库备份（几百 MB），同步执行会卡在 uvicorn 绑定端口之前：
+    # 桌面端 webview 不会等后端就绪就发请求，端口晚开就会弹出"发生了个错误"。
+    # 放到后台线程里执行，端口可以立即开始服务。
+    threading.Thread(
+        target=backup_db_file,
+        args=(DataBase.get_db_file_path(),),
+        name="iib-db-backup",
+        daemon=True,
+    ).start()
     api_base = kwargs.get("base") if isinstance(kwargs.get("base"), str) else DEFAULT_BASE
     fe_public_path = kwargs.get("fe_public_path") if isinstance(kwargs.get("fe_public_path"), str) else api_base
     cache_base_dir = get_cache_dir()
