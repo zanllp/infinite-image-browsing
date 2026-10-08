@@ -8,8 +8,8 @@
 - Added a startup timeline: `[TIMELINE]` lines with millisecond timestamps in `iib_api_server.log`, covering the tauri shell, the sidecar process and the frontend (`fe_event`), so cold-start phases can be measured.
 
 ## 2026-10-08
-### 🐛 Fix the spurious "发生了个错误" toast on the first desktop launch
-The desktop app fires its first API requests as soon as the webview is ready, which can be before the bundled api server (a self-extracting onefile binary) has bound its port. Such a request gets no HTTP response at all, so the frontend falls back to the generic "发生了个错误" toast. It was most visible on the first launch of a day, where the server also copies the whole SQLite database (several hundred MB) as a daily backup before it starts listening.
+### 🐛 Fix the spurious "An error occurred" toast on the first desktop launch
+The desktop app fires its first API requests as soon as the webview is ready, which can be before the bundled api server (a self-extracting onefile binary) has bound its port. Such a request gets no HTTP response at all, so the frontend falls back to the generic "An error occurred" toast. It was most visible on the first launch of a day, where the server also copies the whole SQLite database (several hundred MB) as a daily backup before it starts listening.
 - Startup requests now wait until the api server answers. The readiness probe retries every 500ms for up to 60s instead of failing, and no error toast is shown while waiting.
 - The daily database backup now runs in a background thread and uses SQLite's online backup API for a consistent snapshot, so it no longer delays the server from listening. The once-a-day check, file naming and retention are unchanged.
 
