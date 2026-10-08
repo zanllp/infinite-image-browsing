@@ -1,6 +1,12 @@
 [跳到中文](#中文)
 # English
 
+## 2026-10-09
+### 🐛 Startup: wait hint, delayed daily backup, timing logs
+- The desktop app now shows a "Starting the local service…" overlay with the elapsed seconds while it waits for the bundled api server, instead of a silent skeleton. The first launch has to unpack a ~50 MB self-extracting binary, which commonly takes 5–10 seconds.
+- The daily database backup is delayed by `IIB_DB_FILE_BACKUP_DELAY` seconds (default 30) so it no longer competes with the cold start. It still runs in a background thread and still takes a consistent SQLite snapshot.
+- Added a startup timeline: `[TIMELINE]` lines with millisecond timestamps in `iib_api_server.log`, covering the tauri shell, the sidecar process and the frontend (`fe_event`), so cold-start phases can be measured.
+
 ## 2026-10-08
 ### 🐛 Fix the spurious "发生了个错误" toast on the first desktop launch
 The desktop app fires its first API requests as soon as the webview is ready, which can be before the bundled api server (a self-extracting onefile binary) has bound its port. Such a request gets no HTTP response at all, so the frontend falls back to the generic "发生了个错误" toast. It was most visible on the first launch of a day, where the server also copies the whole SQLite database (several hundred MB) as a daily backup before it starts listening.
@@ -878,6 +884,12 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-10-09
+### 🐛 启动：等待提示、每日备份延后、耗时日志
+- 桌面版等待内置后端就绪时会显示「正在启动本地服务…」和已等待秒数，不再只是静默的骨架屏（首次启动要自解压一个约 50MB 的 onefile 程序，通常 5–10 秒）。
+- 每日数据库备份延后 `IIB_DB_FILE_BACKUP_DELAY` 秒（默认 30）执行，不再和冷启动抢磁盘 I/O；仍在后台线程里用 SQLite 在线备份接口取一致性快照。
+- 增加启动时间线日志：`iib_api_server.log` 里的 `[TIMELINE]` 行（毫秒时间戳，覆盖 tauri 壳 / sidecar / 前端 `fe_event` 三端），方便量化冷启动各阶段耗时。
 
 ## 2026-10-08
 ### 🐛 修复桌面版首次打开误报"发生了个错误"
