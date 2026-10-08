@@ -50,11 +50,33 @@ export const waitForServerReady = (timeoutMs = 60_000): Promise<void> => {
   return serverReadyPromise
 }
 
+// 启动时间线：前端各阶段（页面开始加载 / 后端就绪 / 数据加载完成）的耗时，
+// 后端没起来时先攒在队列里，就绪后一次性发过去写进后端日志，方便分析冷启动。
+const pageStartMs = typeof performance !== 'undefined' ? performance.now() : Date.now()
+const timelineQueue: { event: string, ms: number }[] = []
+const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
+
+export const timeline = (event: string) => {
+  timelineQueue.push({ event, ms: Math.round(nowMs() - pageStartMs) })
+}
+
+export const flushTimeline = async () => {
+  if (!timelineQueue.length) {
+    return
+  }
+  const events = timelineQueue.splice(0, timelineQueue.length)
+  try {
+    // 裸 axios：失败不影响正常流程，也不弹错误提示
+    await axios.post(`${apiBase.value}/timeline`, { events }, { timeout: 3000 })
+  } catch (error) {
+    console.debug('flushTimeline failed', error)
+  }
+}
+
 const sha256 = (data: string) => {
   const hash = sjcl.hash.sha256.hash(data)
   return sjcl.codec.hex.fromBits(hash)
 }
-
 // Prevent multiple stacked auth prompts when several requests return 401 at the same time
 let pendingServerKeyPrompt: Promise<string> | null = null
 let isReloadingAfterAuth = false

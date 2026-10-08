@@ -1,6 +1,9 @@
 import type { IIBI18nMap } from '.'
 
 export const zhHant: Partial<IIBI18nMap> = {
+  startingLocalService: '正在啟動本地服務…',
+  startingLocalServiceHint: '首次啟動需要解壓內置後端，通常 5–10 秒，請稍候',
+  startingLocalServiceElapsed: '已等待 {n} 秒',
   tryMyLuck: '隨便看看',
   randomImage: '隨機圖片',
   randomImageSettings: '隨機圖片設定',

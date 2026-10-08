@@ -1,6 +1,9 @@
 import type { IIBI18nMap } from '.'
 
 export const en: IIBI18nMap = {
+  startingLocalService: 'Starting the local service…',
+  startingLocalServiceHint: 'The first launch unpacks the bundled backend, which usually takes 5–10 seconds.',
+  startingLocalServiceElapsed: 'Waited {n}s',
   tryMyLuck: 'Try My Luck',
   randomImage: 'Random Image',
   randomImageSettings: 'Random Image Settings',
