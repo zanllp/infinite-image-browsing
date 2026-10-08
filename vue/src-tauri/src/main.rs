@@ -8,6 +8,7 @@ use std::io::prelude::*;
 use std::io::Error;
 use std::io::Write;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::api::process::Command;
 use tauri::api::process::CommandEvent;
@@ -85,7 +86,28 @@ fn shutdown_api_server_command(state: tauri::State<'_, AppState>) {
     shutdown_api_server(state.port, state.child_pid);
 }
 
+/// 统一写日志：带毫秒时间戳，同时打到 stdout 和 iib_api_server.log
+fn log_line(log_file: &File, level: &str, message: &str) {
+    let timestamp: DelayedFormat<StrftimeItems<'_>> =
+        Local::now().format("[%Y-%m-%d %H:%M:%S%.3f]");
+    let line = format!("{} {} {}", level, timestamp, message);
+    println!("{}", line);
+    let mut file: &File = log_file;
+    let _ = writeln!(file, "{}", line);
+}
+
 fn main() {
+    let log_file = Arc::new(
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(true)
+            .open("iib_api_server.log")
+            .expect("Failed to open log file"),
+    );
+    // 启动时间线基准点：应用进程启动。后面 sidecar 的每一行都能对着它算相对耗时。
+    log_line(&log_file, "INFO", "[TIMELINE] event=app_start");
+
     let listener = std::net::TcpListener::bind("localhost:0").expect("无法绑定到任何可用端口");
     let port = listener.local_addr().unwrap().port();
     drop(listener);
@@ -105,29 +127,22 @@ fn main() {
     let child_pid = child.pid();
     // child handle is intentionally dropped here; we use the PID to kill the process on shutdown
     drop(child);
-    let log_file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .append(true)
-        .open("iib_api_server.log")
-        .expect("Failed to open log file");
+    log_line(
+        &log_file,
+        "INFO",
+        &format!("[TIMELINE] event=sidecar_spawned pid={}", child_pid),
+    );
+
+    let log_file_for_sidecar = log_file.clone();
     tauri::async_runtime::spawn(async move {
         // read events such as stdout
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line) => {
-                    let timestamp: DelayedFormat<StrftimeItems<'_>> =
-                        Local::now().format("[%Y-%m-%d %H:%M:%S]");
-                    let log_line = format!("INFO {} {}", timestamp, line);
-                    println!("{}", log_line);
-                    writeln!(&log_file, "{}", log_line).expect("Failed to write to log file");
+                    log_line(&log_file_for_sidecar, "INFO", &line);
                 },
                 CommandEvent::Stderr(line) => {
-                    let timestamp: DelayedFormat<StrftimeItems<'_>> =
-                        Local::now().format("[%Y-%m-%d %H:%M:%S]");
-                    let log_line = format!("ERR {} {}", timestamp, line);
-                    println!("{}", log_line);
-                    writeln!(&log_file, "{}", log_line).expect("Failed to write to log file");
+                    log_line(&log_file_for_sidecar, "ERR", &line);
                 }
                 _ => (),
             };
@@ -141,7 +156,10 @@ fn main() {
             shutdown_api_server_command
         ])
         .on_window_event(move |event| match event.event() {
-            WindowEvent::CloseRequested { .. } => shutdown_api_server(port, child_pid),
+            WindowEvent::CloseRequested { .. } => {
+                log_line(&log_file, "INFO", "[TIMELINE] event=window_close_requested");
+                shutdown_api_server(port, child_pid)
+            }
             _ => (),
         })
         .run(tauri::generate_context!())

@@ -40,6 +40,7 @@ from scripts.iib.tool import (
     get_file_info_by_path,
     get_data_file_path
 )
+from scripts.iib.timeline import tlog
 from fastapi import FastAPI, HTTPException, Header, Response
 from fastapi.staticfiles import StaticFiles
 import asyncio
@@ -203,16 +204,31 @@ async def verify_secret(request: Request):
         raise HTTPException(status_code=401, detail={"type": "secret_verification_failed"})
 
 DEFAULT_BASE = "/infinite_image_browsing"
+_timeline_mem = {"first_request_logged": False}
+
+
 def infinite_image_browsing_api(app: FastAPI, **kwargs):
-    # 每天首次启动要整库备份（几百 MB），同步执行会卡在 uvicorn 绑定端口之前：
-    # 桌面端 webview 不会等后端就绪就发请求，端口晚开就会弹出"发生了个错误"。
-    # 放到后台线程里执行，端口可以立即开始服务。
-    threading.Thread(
-        target=backup_db_file,
-        args=(DataBase.get_db_file_path(),),
-        name="iib-db-backup",
-        daemon=True,
-    ).start()
+    tlog("api_build_start")
+    # 每天首次启动要整库备份（几百 MB）。同步执行会卡在 uvicorn 绑定端口之前，而桌面端
+    # webview 不会等后端就绪就发请求；即使放到后台线程，冷启动时也会和解压抢磁盘 I/O。
+    # 所以默认再延后 IIB_DB_FILE_BACKUP_DELAY 秒（默认 30s）执行，让启动阶段只做启动的事。
+    try:
+        backup_delay = float(os.environ.get("IIB_DB_FILE_BACKUP_DELAY", "30"))
+    except ValueError:
+        backup_delay = 30.0
+    db_file_path = DataBase.get_db_file_path()
+    if backup_delay > 0:
+        backup_timer = threading.Timer(backup_delay, backup_db_file, args=(db_file_path,))
+        backup_timer.daemon = True
+        backup_timer.start()
+    else:
+        threading.Thread(
+            target=backup_db_file,
+            args=(db_file_path,),
+            name="iib-db-backup",
+            daemon=True,
+        ).start()
+    tlog("backup_scheduled", delay=backup_delay, db=os.path.basename(db_file_path))
     api_base = kwargs.get("base") if isinstance(kwargs.get("base"), str) else DEFAULT_BASE
     fe_public_path = kwargs.get("fe_public_path") if isinstance(kwargs.get("fe_public_path"), str) else api_base
     cache_base_dir = get_cache_dir()
@@ -236,6 +252,9 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
                 and path.find("infinite_image_browsing/fe-static") == -1
             ):
                 logger.info(f"Received request: {request.method} {request.url}")
+                if not _timeline_mem["first_request_logged"]:
+                    _timeline_mem["first_request_logged"] = True
+                    tlog("first_request", method=request.method, path=path)
                 if request.query_params:
                     logger.debug(f"Query Params: {request.query_params}")
                 if request.path_params:
@@ -422,6 +441,16 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         conn = DataBase.get_conn()
         GlobalSetting.remove_setting(conn, req.name)
     
+    class TimelineReq(BaseModel):
+        events: List[dict] = []
+
+    @app.post(f"{api_base}/timeline", dependencies=[Depends(verify_secret)])
+    async def report_timeline(req: TimelineReq):
+        """前端启动时间线（页面开始加载 / 后端就绪 / 数据加载完成），写进日志便于分析冷启动。"""
+        for e in req.events:
+            tlog("fe_event", name=e.get("event"), ms=e.get("ms"))
+        return {"ok": True}
+
     @app.get(f"{api_base}/version", dependencies=[Depends(verify_secret)])
     async def get_version():
         import sys

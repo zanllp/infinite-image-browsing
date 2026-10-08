@@ -1,3 +1,7 @@
+from scripts.iib.timeline import tlog
+
+tlog("python_start")
+
 import codecs
 from typing import List
 from fastapi import FastAPI, Response
@@ -296,4 +300,5 @@ if __name__ == "__main__":
         )
         exit(0)
 
+    tlog("launch_app", port=args.port, host=args.host)
     launch_app(**vars(args))

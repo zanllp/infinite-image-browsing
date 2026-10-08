@@ -5,6 +5,7 @@ import os
 import platform
 import re
 import struct
+import time
 import tempfile
 import subprocess
 from typing import Dict, List, Optional, Any
@@ -16,6 +17,8 @@ from PIL import Image
 import shutil
 import sqlite3
 import requests
+
+from scripts.iib.timeline import tlog
 # import magic
 
 sd_img_dirs = [
@@ -127,12 +130,15 @@ def backup_db_file(db_file_path):
             backup_date = datetime.strptime(match.group(1), '%Y-%m-%d').date()
             if backup_date == current_date:
                 print(f"\033[93mIIB Database backup already exists for today ({current_date}). Skipping backup.\033[0m")
+                tlog("backup_skip", reason="already_exists_today")
                 return
 
     current_time = datetime.now()
     timestamp = current_time.strftime('%Y-%m-%d %H-%M-%S')
     backup_filename = f"iib.db_{timestamp}"
     backup_filepath = os.path.join(backup_folder, backup_filename)
+    backup_started_at = time.time()
+    tlog("backup_begin", size_mb=round(os.path.getsize(db_file_path) / 1024 / 1024, 1))
     if not snapshot_db_file(db_file_path, backup_filepath):
         # 回退：直接复制文件（sqlite 接口不可用时）
         try:
@@ -159,6 +165,7 @@ def backup_db_file(db_file_path):
             file_to_remove = os.path.join(backup_folder, sorted_backup_files[i][0])
             os.remove(file_to_remove)
 
+    tlog("backup_end", seconds=round(time.time() - backup_started_at, 2), file=backup_filename)
     print(f"\033[92mIIB Database file has been successfully backed up to the backup folder.\033[0m")
 
 def get_sd_webui_conf(**kwargs):
