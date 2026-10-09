@@ -2,6 +2,12 @@
 # English
 
 ## 2026-10-09
+### 🔒 Sidecar lifecycle: no more orphans, graceful shutdown, auto restart
+- The api server is assigned to a Windows Job Object with kill-on-close, so if the app process dies for any reason (crash, Task Manager, power loss) the server is killed together with it. The server also watches the app process (`--parent_pid`) and exits on its own as soon as the app is gone.
+- Closing the window now asks the server to shut down and waits up to 3 seconds for it to exit before force-killing it. Previously it was killed unconditionally, which skipped its cleanup and left a ~200 MB unpack directory behind on every launch.
+- If the api server exits unexpectedly while the app is running, it is restarted automatically (1s/2s/4s backoff, up to 3 attempts).
+- The desktop sidecar unpacks into a fixed cache directory (`{CACHE_DIR}/iib_api_server`) instead of a fresh `%TEMP%/onefile_{PID}_{TIME}_{RANDOM}` on every launch, so the ~200 MB self-extraction is paid once and reused afterwards. The startup timeline logs cover all of it.
+
 ### 🐛 Startup: wait hint, delayed daily backup, timing logs
 - The desktop app now shows a "Starting the local service…" overlay with the elapsed seconds while it waits for the bundled api server, instead of a silent skeleton. The first launch has to unpack a ~50 MB self-extracting binary, which commonly takes 5–10 seconds.
 - The daily database backup is delayed by `IIB_DB_FILE_BACKUP_DELAY` seconds (default 30) so it no longer competes with the cold start. It still runs in a background thread and still takes a consistent SQLite snapshot.
@@ -886,6 +892,12 @@ Triggered under the same circumstances as above, there will be a button to updat
 # 中文
 
 ## 2026-10-09
+### 🔒 后端进程生命周期：不再有孤儿、优雅退出、崩溃自动重启
+- 后端进程被放进一个「关闭即杀」的 Windows Job Object：app 进程无论是崩溃、被任务管理器强杀还是断电，后端都会跟着一起结束；后端同时会盯着 app 进程（`--parent_pid`），app 一消失就自己退出。
+- 关窗时会先请求后端优雅退出，最多等 3 秒，实在不退才强杀。以前是无条件强杀，后端来不及收尾，而且每次启动都会在 `%TEMP%` 留下一个约 200MB 的解压目录。
+- app 运行期间后端意外退出会自动重启（1s/2s/4s 退避，最多 3 次）。
+- 桌面版后端的解压目录改为固定缓存路径（`{CACHE_DIR}/iib_api_server`），不再每次启动都解压到新的 `%TEMP%/onefile_{PID}_{TIME}_{RANDOM}`：约 200MB 的自解压只付一次，之后直接复用。以上都会写进启动时间线日志。
+
 ### 🐛 启动：等待提示、每日备份延后、耗时日志
 - 桌面版等待内置后端就绪时会显示「正在启动本地服务…」和已等待秒数，不再只是静默的骨架屏（首次启动要自解压一个约 50MB 的 onefile 程序，通常 5–10 秒）。
 - 每日数据库备份延后 `IIB_DB_FILE_BACKUP_DELAY` 秒（默认 30）执行，不再和冷启动抢磁盘 I/O；仍在后台线程里用 SQLite 在线备份接口取一致性快照。
