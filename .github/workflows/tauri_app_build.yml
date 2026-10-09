@@ -50,6 +50,10 @@ jobs:
           include-module: imageio.plugins.pyav
           include-data-dir: |
             vue/dist=vue/dist
+          # 固定解压目录：第一次运行解压，之后每次启动直接复用已解压的内容。
+          # 默认是 {TEMP}/onefile_{PID}_{TIME}_{RANDOM}，每次启动都要重新解压 ~200MB（冷启动 4-7 秒），
+          # 而且被强杀时临时目录不会回收（每启动一次留一个 ~200MB 的 onefile_* 目录）。
+          onefile-tempdir-spec: '{CACHE_DIR}/iib_api_server'
       
       - run: cp out/iib_api_server out/iib_app_cli-${{ env.VERSION }}-${{ runner.os }}
         if: matrix.os == 'ubuntu-22.04'
