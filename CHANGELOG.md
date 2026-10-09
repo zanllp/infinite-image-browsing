@@ -1,6 +1,24 @@
 [跳到中文](#中文)
 # English
 
+## 2026-10-09
+### 🔒 Sidecar lifecycle: no more orphans, graceful shutdown, auto restart
+- The api server is assigned to a Windows Job Object with kill-on-close, so if the app process dies for any reason (crash, Task Manager, power loss) the server is killed together with it. The server also watches the app process (`--parent_pid`) and exits on its own as soon as the app is gone.
+- Closing the window now asks the server to shut down and waits up to 3 seconds for it to exit before force-killing it. Previously it was killed unconditionally, which skipped its cleanup and left a ~200 MB unpack directory behind on every launch.
+- If the api server exits unexpectedly while the app is running, it is restarted automatically (1s/2s/4s backoff, up to 3 attempts).
+- The desktop sidecar unpacks into a fixed cache directory (`{CACHE_DIR}/iib_api_server`) instead of a fresh `%TEMP%/onefile_{PID}_{TIME}_{RANDOM}` on every launch, so the ~200 MB self-extraction is paid once and reused afterwards. The startup timeline logs cover all of it.
+
+### 🐛 Startup: wait hint, delayed daily backup, timing logs
+- The desktop app now shows a "Starting the local service…" overlay with the elapsed seconds while it waits for the bundled api server, instead of a silent skeleton. The first launch has to unpack a ~50 MB self-extracting binary, which commonly takes 5–10 seconds.
+- The daily database backup is delayed by `IIB_DB_FILE_BACKUP_DELAY` seconds (default 30) so it no longer competes with the cold start. It still runs in a background thread and still takes a consistent SQLite snapshot.
+- Added a startup timeline: `[TIMELINE]` lines with millisecond timestamps in `iib_api_server.log`, covering the tauri shell, the sidecar process and the frontend (`fe_event`), so cold-start phases can be measured.
+
+## 2026-10-08
+### 🐛 Fix the spurious "An error occurred" toast on the first desktop launch
+The desktop app fires its first API requests as soon as the webview is ready, which can be before the bundled api server (a self-extracting onefile binary) has bound its port. Such a request gets no HTTP response at all, so the frontend falls back to the generic "An error occurred" toast. It was most visible on the first launch of a day, where the server also copies the whole SQLite database (several hundred MB) as a daily backup before it starts listening.
+- Startup requests now wait until the api server answers. The readiness probe retries every 500ms for up to 60s instead of failing, and no error toast is shown while waiting.
+- The daily database backup now runs in a background thread and uses SQLite's online backup API for a consistent snapshot, so it no longer delays the server from listening. The once-a-day check, file naming and retention are unchanged.
+
 ## 2026-10-04
 ### ✨ Unified preview modal for more file types
 Clicking a file that isn't an image, video, or audio no longer does nothing — it now opens a single preview modal. Text-based files (json, txt, md, yaml, csv, source code, ...) are read from the existing `/file` endpoint and rendered as text: JSON is pretty-printed, non-UTF-8 content (GBK / UTF-16) is decoded when possible, and only the first 512KB is read so huge files can't lock up the browser. PDFs open in an embedded viewer and SVG/ICO images render inline; anything unrecognized falls back to a dialog with download and open-with-default-app actions. File tiles also show a type-aware icon plus a hover "Preview" hint and pointer cursor, so it's obvious which files can be opened.
@@ -872,6 +890,24 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-10-09
+### 🔒 后端进程生命周期：不再有孤儿、优雅退出、崩溃自动重启
+- 后端进程被放进一个「关闭即杀」的 Windows Job Object：app 进程无论是崩溃、被任务管理器强杀还是断电，后端都会跟着一起结束；后端同时会盯着 app 进程（`--parent_pid`），app 一消失就自己退出。
+- 关窗时会先请求后端优雅退出，最多等 3 秒，实在不退才强杀。以前是无条件强杀，后端来不及收尾，而且每次启动都会在 `%TEMP%` 留下一个约 200MB 的解压目录。
+- app 运行期间后端意外退出会自动重启（1s/2s/4s 退避，最多 3 次）。
+- 桌面版后端的解压目录改为固定缓存路径（`{CACHE_DIR}/iib_api_server`），不再每次启动都解压到新的 `%TEMP%/onefile_{PID}_{TIME}_{RANDOM}`：约 200MB 的自解压只付一次，之后直接复用。以上都会写进启动时间线日志。
+
+### 🐛 启动：等待提示、每日备份延后、耗时日志
+- 桌面版等待内置后端就绪时会显示「正在启动本地服务…」和已等待秒数，不再只是静默的骨架屏（首次启动要自解压一个约 50MB 的 onefile 程序，通常 5–10 秒）。
+- 每日数据库备份延后 `IIB_DB_FILE_BACKUP_DELAY` 秒（默认 30）执行，不再和冷启动抢磁盘 I/O；仍在后台线程里用 SQLite 在线备份接口取一致性快照。
+- 增加启动时间线日志：`iib_api_server.log` 里的 `[TIMELINE]` 行（毫秒时间戳，覆盖 tauri 壳 / sidecar / 前端 `fe_event` 三端），方便量化冷启动各阶段耗时。
+
+## 2026-10-08
+### 🐛 修复桌面版首次打开误报"发生了个错误"
+桌面版 webview 一就绪就会发启动请求，此时自带的后端（onefile 自解压程序）可能还没监听端口，请求拿不到任何 HTTP 响应，前端于是弹出通用的"发生了个错误"。当天第一次打开时最明显：后端还要先整库复制一份几百 MB 的数据库备份，才会开始监听。
+- 启动请求现在会先等后端能响应：探活每 500ms 重试一次、最多等 60 秒，等待期间不再弹错误提示。
+- 每日数据库备份改为后台线程执行，并使用 SQLite 在线备份接口做一致性快照，不再阻塞端口监听；每天一次、文件命名、保留份数等逻辑不变。
 
 ## 2026-10-04
 ### ✨ 更多文件类型支持统一预览

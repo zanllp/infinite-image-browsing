@@ -2,7 +2,7 @@ import { Octokit } from '@octokit/rest';
 import confJson from '../../src-tauri/tauri.conf.json'
 import { computed, ref } from 'vue'
 import { delay } from 'vue3-ts-util'
-import { getVersion } from '@/api'
+import { getVersion, waitForServerReady } from '@/api'
 import { ReturnTypeAsync } from '.'
 
 
@@ -60,10 +60,16 @@ const owner = 'zanllp';
 const repo = 'sd-webui-infinite-image-browsing';
 
 delay(500 + 500 * Math.random()).then(async () => {
-  getVersion().then((resp) => {
-    localBeTag.value = resp.tag ?? ''
-    localBeHash.value = resp.hash ?? ''
-  })
+  // 同样要等后端就绪，否则桌面版首次打开时这个探活请求也会被弹成"发生了个错误"
+  waitForServerReady()
+    .then(() => getVersion())
+    .then((resp) => {
+      localBeTag.value = resp.tag ?? ''
+      localBeHash.value = resp.hash ?? ''
+    })
+    .catch((error) => {
+      console.error(error)
+    })
   latestCommit.value = await getLatestCommit(owner, repo);
   const release =  await getLatestRelease(owner, repo);
   latestTag.value = release?.tag_name ?? ''

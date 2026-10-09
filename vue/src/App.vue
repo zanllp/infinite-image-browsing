@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, watch, ref } from 'vue'
-import { getGlobalSetting, setAppFeSetting } from './api'
+import { getGlobalSetting, setAppFeSetting, waitForServerReady, timeline, flushTimeline } from './api'
 import { useGlobalStore, presistKeys } from './store/useGlobalStore'
 import { useWorkspeaceSnapshot } from './store/useWorkspeaceSnapshot'
 import { getQuickMovePaths } from '@/page/taskRecord/autoComplete'
@@ -25,6 +25,23 @@ import { getOrganizeFilesStatus } from '@/api/organize'
 const globalStore = useGlobalStore()
 const wsStore = useWorkspeaceSnapshot()
 const queue = createReactiveQueue()
+
+// 桌面版启动时后端 sidecar 要自解压，冷启动可能要等好几秒。
+// 这段时间给个明确的提示（而不是让用户对着骨架屏猜是不是卡死了）。
+const booting = ref(false)
+const bootWaited = ref(0)
+const bootDone = ref(false)
+let bootTimer: ReturnType<typeof setInterval> | undefined
+const bootFinish = once(() => {
+  booting.value = false
+  bootDone.value = true
+  if (bootTimer) {
+    clearInterval(bootTimer)
+    bootTimer = undefined
+  }
+  timeline('fe_loaded')
+  flushTimeline()
+})
 
 // Organize preview modal state
 const showOrganizePreview = ref(false)
@@ -148,8 +165,28 @@ const restoreWorkspaceSnapshot = once( async () => {
 useGlobalEventListen('updateGlobalSetting', async () => {
   await refreshTauriConf()
   console.log(tauriConf.value)
-  const resp = await getGlobalSetting()
+  timeline('fe_update_global_setting')
+  // 首次启动显示等待提示；后续手动刷新 global setting 不再显示
+  if (isTauri && !bootDone.value) {
+    booting.value = true
+    bootWaited.value = 0
+    if (bootTimer) {
+      clearInterval(bootTimer)
+    }
+    bootTimer = setInterval(() => {
+      bootWaited.value += 1
+    }, 1000)
+  }
+  // 桌面版后端sidecar可能还没监听端口，先等它就绪再请求，避免首次打开弹"发生了个错误"
+  await waitForServerReady()
+  timeline('fe_server_ready')
+  await flushTimeline()
+  const resp = await getGlobalSetting().catch((error) => {
+    bootFinish()
+    throw error
+  })
   globalStore.conf = resp
+  bootFinish()
   const r = await getQuickMovePaths(resp)
   globalStore.quickMovePaths = r.filter((v) => v?.dir?.trim?.())
 
@@ -226,6 +263,13 @@ onMounted(async () => {
 </script>
 
 <template>
+  <!-- 桌面版首次启动：后端 sidecar 要自解压，可能要等几秒，给个明确的等待提示 -->
+  <div v-if="booting" class="iib-booting">
+    <a-spin size="large" />
+    <div class="iib-booting-title">{{ t('startingLocalService') }}</div>
+    <div class="iib-booting-desc">{{ t('startingLocalServiceHint') }}</div>
+    <div v-if="bootWaited >= 2" class="iib-booting-desc">{{ t('startingLocalServiceElapsed', { n: bootWaited }) }}</div>
+  </div>
   <a-skeleton :loading="!queue.isIdle">
     <SplitViewTab />
   </a-skeleton>
@@ -269,6 +313,35 @@ onMounted(async () => {
 </template>
 
 <style>
+.iib-booting {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  text-align: center;
+  padding: 0 16px;
+}
+
+.iib-booting-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.iib-booting-desc {
+  font-size: 13px;
+  opacity: 0.85;
+  max-width: 72vw;
+}
+
 .moving-files-overlay {
   position: fixed;
   top: 0;

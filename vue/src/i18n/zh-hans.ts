@@ -1,4 +1,7 @@
 export const zhHans = {
+  startingLocalService: '正在启动本地服务…',
+  startingLocalServiceHint: '首次启动需要解压内置后端，通常 5–10 秒，请稍等',
+  startingLocalServiceElapsed: '已等待 {n} 秒',
   tryMyLuck: '试试手气',
   randomImage: '随机图像',
   randomImageSettings: '随机图像设置',

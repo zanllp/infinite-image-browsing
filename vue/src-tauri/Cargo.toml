@@ -20,6 +20,17 @@ serde_json = "1.0"
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 chrono = "0.4"
 
+[target.'cfg(windows)'.dependencies]
+# Job Object：把 sidecar 的生命周期跟本进程强绑定（本进程消失就一起杀）
+winapi = { version = "0.3", features = [
+    "handleapi",
+    "jobapi2",
+    "minwindef",
+    "ntdef",
+    "processthreadsapi",
+    "winnt",
+] }
+
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!

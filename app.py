@@ -1,3 +1,7 @@
+from scripts.iib.timeline import tlog
+
+tlog("python_start")
+
 import codecs
 from typing import List
 from fastapi import FastAPI, Response
@@ -180,6 +184,12 @@ def setup_parser() -> argparse.ArgumentParser:
         "--port", type=int, help="The port to use", default=default_port
     )
     parser.add_argument(
+        "--parent_pid",
+        type=int,
+        default=None,
+        help="PID of the desktop shell that started this process. The server exits as soon as that process is gone, so it can never be left behind as an orphan.",
+    )
+    parser.add_argument(
         "--sd_webui_config", type=str, default=None, help="The path to the config file"
     )
     parser.add_argument(
@@ -296,4 +306,9 @@ if __name__ == "__main__":
         )
         exit(0)
 
+    tlog("launch_app", port=args.port, host=args.host)
+    if args_dict.get("parent_pid"):
+        from scripts.iib.parent_watchdog import watch_parent
+
+        watch_parent(args_dict["parent_pid"])
     launch_app(**vars(args))
