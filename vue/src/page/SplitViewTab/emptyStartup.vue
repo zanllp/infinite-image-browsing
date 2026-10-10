@@ -629,7 +629,7 @@ const modes = computed(() => {
 
   ul {
     list-style: none;
-    padding: 4px;
+    padding: 6px;
     max-height: 70vh;
     overflow-y: auto;
   }
@@ -648,8 +648,8 @@ const modes = computed(() => {
   }
 
   .item {
-    margin-bottom: 10px;
-    padding: 4px 8px;
+    margin-bottom: 8px;
+    padding: 6px 8px;
     display: flex;
     align-items: center;
     position: relative;
@@ -667,13 +667,18 @@ const modes = computed(() => {
       cursor: pointer;
     }
 
+    /* 类型提示：低标识度，描边小标签，不再是一块实心红 */
     .fixed {
-      background: var(--primary-color);
-      color: white;
-      font-size: .8em;
-      padding: 2px 4px;
-      border-radius: 8px;
-      margin-right: 4px;
+      display: inline-block;
+      flex: none;
+      font-size: 10px;
+      line-height: 16px;
+      padding: 0 5px;
+      border-radius: 4px;
+      border: 1px solid var(--zp-secondary);
+      color: var(--zp-secondary);
+      margin-right: 6px;
+      vertical-align: 1px;
     }
   }
 
