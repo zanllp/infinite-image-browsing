@@ -7,7 +7,7 @@ import { useGlobalStore } from '@/store/useGlobalStore'
 export type StartupBlockId = 'walkMode' | 'normalFixed' | 'launch'
 
 export interface StartupListLayout {
-  /** 被隐藏的条目 id（主要是内置预设） */
+  /** 被隐藏的条目 id（主要是内置预设）：普通模式下不显示，编辑模式下半透明显示 */
   hidden: string[]
   /** 自定义顺序，没列出来的按默认顺序排在其后 */
   order: string[]
@@ -46,15 +46,14 @@ const markDirty = () => {
   save?.()
 }
 
-/** 把某个列表按保存的顺序/隐藏状态整理好 */
-export const applyStartupLayout = <T>(block: StartupBlockId, items: T[], getId: (item: T) => string): T[] => {
+/** 按保存的顺序排好（不过滤隐藏项，隐藏只影响显示方式） */
+export const orderStartupItems = <T>(block: StartupBlockId, items: T[], getId: (item: T) => string): T[] => {
   const conf = layout.value[block]
-  const visible = items.filter((item) => !conf.hidden.includes(getId(item)))
   if (!conf.order.length) {
-    return visible
+    return items
   }
   const rank = new Map(conf.order.map((id, idx) => [id, idx]))
-  return visible
+  return items
     .map((item, idx) => ({ item, idx, rank: rank.get(getId(item)) ?? Number.MAX_SAFE_INTEGER }))
     .sort((a, b) => (a.rank === b.rank ? a.idx - b.idx : a.rank - b.rank))
     .map((v) => v.item)
@@ -85,8 +84,6 @@ export const useStartupLayout = () => {
 
   const isHidden = (block: StartupBlockId, id: string) => layout.value[block].hidden.includes(id)
 
-  const hiddenIds = (block: StartupBlockId) => layout.value[block].hidden
-
   const toggleHidden = (block: StartupBlockId, id: string) => {
     const conf = layout.value[block]
     conf.hidden = isHidden(block, id) ? conf.hidden.filter((v) => v !== id) : [...conf.hidden, id]
@@ -102,16 +99,12 @@ export const useStartupLayout = () => {
     markDirty()
   }
 
-  /** visibleIds 是当前列表里实际显示出来的顺序 */
-  const moveItem = (block: StartupBlockId, visibleIds: string[], id: string, delta: number) => {
-    const ids = [...visibleIds]
-    const from = ids.indexOf(id)
-    const to = from + delta
-    if (from < 0 || to < 0 || to >= ids.length) {
+  /** 拖拽结束后把当前 DOM 顺序写进去 */
+  const setOrder = (block: StartupBlockId, ids: string[]) => {
+    if (!ids.length) {
       return
     }
-    ;[ids[from], ids[to]] = [ids[to], ids[from]]
-    layout.value[block].order = [...ids, ...layout.value[block].hidden]
+    layout.value[block].order = ids
     markDirty()
   }
 
@@ -123,10 +116,9 @@ export const useStartupLayout = () => {
   return {
     layout,
     isHidden,
-    hiddenIds,
     toggleHidden,
     setHidden,
-    moveItem,
+    setOrder,
     resetBlock
   }
 }

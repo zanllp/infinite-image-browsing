@@ -2,21 +2,22 @@
 import { useGlobalStore, type TabPane } from '@/store/useGlobalStore'
 import { Snapshot, useWorkspeaceSnapshot } from '@/store/useWorkspeaceSnapshot'
 import { uniqueId } from 'lodash-es'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ok } from 'vue3-ts-util'
-import { FileDoneOutlined, BarChartOutlined, GithubOutlined, LockOutlined, MailOutlined, PlusOutlined, QuestionCircleOutlined, SettingOutlined, ArrowUpOutlined, ArrowDownOutlined, EyeOutlined, EyeInvisibleOutlined, CheckOutlined, UndoOutlined } from '@/icon'
+import { FileDoneOutlined, BarChartOutlined, GithubOutlined, LockOutlined, MailOutlined, PlusOutlined, QuestionCircleOutlined, SettingOutlined, HolderOutlined, EditOutlined, DeleteOutlined, EyeOutlined, EyeInvisibleOutlined, CheckOutlined, UndoOutlined } from '@/icon'
 import { t } from '@/i18n'
 import { cloneDeep } from 'lodash-es'
 import { useImgSliStore } from '@/store/useImgSli'
 import { addToExtraPath, onAliasExtraPathClick, onRemoveExtraPathClick } from './extraPathControlFunc'
 import actionContextMenu from './actionContextMenu.vue'
 import { ExtraPathType } from '@/api/db'
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { hasNewRelease, version, latestCommit } from '@/util/versionManager'
 import { isTauri } from '@/util/env'
 import { message } from 'ant-design-vue'
 import { useSettingSync } from '@/util'
-import { applyStartupLayout, useStartupLayout, type StartupBlockId } from '@/util/startupLayout'
+import { orderStartupItems, startupBlockIds, useStartupLayout, type StartupBlockId } from '@/util/startupLayout'
+import Sortable from 'sortablejs'
 
 const global = useGlobalStore()
 const imgsli = useImgSliStore()
@@ -135,7 +136,7 @@ const walkModeSupportedDir = computed(() =>
   )
 )
 
-// ---- 启动页列表的自定义：隐藏预设 + 预设/自定义一起排序（存在后端 KV）----
+// ---- 启动页列表的自定义：隐藏预设 + 拖拽排序（存在后端 KV）----
 const startupLayout = useStartupLayout()
 const editingBlock = ref<StartupBlockId | null>(null)
 const toggleEdit = (block: StartupBlockId) => {
@@ -144,9 +145,8 @@ const toggleEdit = (block: StartupBlockId) => {
 /** 内置预设项（用户自己加的路径 types 里没有 preset） */
 const isPresetDir = (dir: any) => ((dir?.types ?? []) as string[]).includes('preset')
 
-const walkItems = computed(() => applyStartupLayout('walkMode', walkModeSupportedDir.value, (d: any) => d.key))
+const walkItems = computed(() => orderStartupItems('walkMode', walkModeSupportedDir.value, (d: any) => d.key))
 const walkPresetIds = computed(() => walkModeSupportedDir.value.filter(isPresetDir).map((d: any) => d.key))
-const walkHiddenItems = computed(() => walkModeSupportedDir.value.filter((d: any) => startupLayout.isHidden('walkMode', d.key)))
 
 // 「Normal / Fixed」列表：一行 = 一个目录 × 一种类型（同一目录可能同时出现在 walk/scanned/scanned-fixed 里）
 const normalFixedRows = computed(() => {
@@ -160,31 +160,51 @@ const normalFixedRows = computed(() => {
     })
   return rows
 })
-const normalFixedItems = computed(() => applyStartupLayout('normalFixed', normalFixedRows.value, (r) => r.id))
+const normalFixedItems = computed(() => orderStartupItems('normalFixed', normalFixedRows.value, (r) => r.id))
 const normalFixedPresetIds = computed(() => normalFixedRows.value.filter((r) => isPresetDir(r.dir)).map((r) => r.id))
-const normalFixedHiddenItems = computed(() => normalFixedRows.value.filter((r) => startupLayout.isHidden('normalFixed', r.id)))
 
 // 「启动」列表里的内置入口
 const launchComps = computed(() =>
   (Object.keys(compCnMap) as TabPane['type'][]).map((k) => ({ id: k, label: compCnMap[k]! }))
 )
-const launchItems = computed(() => applyStartupLayout('launch', launchComps.value, (v) => v.id))
-const launchHiddenItems = computed(() => launchComps.value.filter((v) => startupLayout.isHidden('launch', v.id)))
+const launchItems = computed(() => orderStartupItems('launch', launchComps.value, (v) => v.id))
 const launchAllIds = computed(() => launchComps.value.map((v) => v.id))
 
-const visibleIds = (block: StartupBlockId) => {
-  if (block === 'walkMode') {
-    return walkItems.value.map((d: any) => d.key)
-  }
-  if (block === 'normalFixed') {
-    return normalFixedItems.value.map((r) => r.id)
-  }
-  return launchItems.value.map((v) => v.id)
-}
-const moveItem = (block: StartupBlockId, id: string, delta: number) =>
-  startupLayout.moveItem(block, visibleIds(block), id, delta)
 const hideAllPresets = (block: StartupBlockId, ids: string[]) => startupLayout.setHidden(block, ids, true)
 const showAllPresets = (block: StartupBlockId, ids: string[]) => startupLayout.setHidden(block, ids, false)
+
+// ---- 拖拽排序：sortablejs，只有编辑模式下的拖拽把手能拖 ----
+const walkUl = ref<HTMLElement>()
+const normalUl = ref<HTMLElement>()
+const launchUl = ref<HTMLElement>()
+const listRefs = { walkMode: walkUl, normalFixed: normalUl, launch: launchUl }
+const sortables: Partial<Record<StartupBlockId, Sortable>> = {}
+
+const initSortable = (block: StartupBlockId) => {
+  const el = listRefs[block].value
+  if (!el || sortables[block]) {
+    return
+  }
+  sortables[block] = Sortable.create(el, {
+    animation: 150,
+    handle: '.drag-handle',
+    draggable: '.item[data-item-id]',
+    ghostClass: 'drag-ghost',
+    disabled: editingBlock.value !== block,
+    onEnd: () => {
+      const ids = [...el.querySelectorAll('.item[data-item-id]')].map((li) => (li as HTMLElement).dataset.itemId!)
+      startupLayout.setOrder(block, ids)
+    }
+  })
+}
+
+watch([walkUl, normalUl, launchUl], () => startupBlockIds.forEach(initSortable), { immediate: true })
+watch(editingBlock, (block) => {
+  startupBlockIds.forEach((id) => sortables[id]?.option('disabled', id !== block))
+})
+onUnmounted(() => {
+  startupBlockIds.forEach((id) => sortables[id]?.destroy())
+})
 const canpreviewInNewWindow = window.parent !== window
 const previewInNewWindow = () => window.parent.open('/infinite_image_browsing' + (window.parent.location.href.includes('theme=dark') ? '?__theme=dark' : ''))
 
@@ -369,7 +389,7 @@ const modes = computed(() => {
           <AButton size="small" :title="$t('startupListReset')" @click="startupLayout.resetBlock('walkMode')"><UndoOutlined /></AButton>
           <span class="list-edit-hint">{{ $t('startupListEditHint') }}</span>
         </div>
-        <ul>
+        <ul ref="walkUl">
           <li @click="addToExtraPath('walk')" class="item">
             <span class="text line-clamp-1">
               <PlusOutlined /> {{ $t('add') }}
@@ -377,31 +397,34 @@ const modes = computed(() => {
           </li>
             
           <a-button v-if="global.showRandomImageInStartup" @click="openInCurrentTab('random-image')" type="primary" style="border-radius:100vw;margin-bottom: 8px;" ghost><span style="margin:0 6px;"><span style="margin-right: 8px;">🎲</span>{{ $t('tryMyLuck') }}</span></a-button>
-          <actionContextMenu v-for="(dir, idx) in walkItems" :key="dir.key"
+          <actionContextMenu v-for="dir in walkItems" :key="dir.key"
             @open-in-new-tab="openInNewTab('local', dir.dir, 'walk')"
             @open-on-the-right="openOnTheRight('local', dir.dir, 'walk')">
-            <li class="item rem" @click.prevent="editingBlock !== 'walkMode' && openInCurrentTab('local', dir.dir, 'walk')">
+            <li v-show="editingBlock === 'walkMode' || !startupLayout.isHidden('walkMode', dir.key)"
+              class="item rem" :data-item-id="dir.key"
+              :class="{ 'is-hidden': startupLayout.isHidden('walkMode', dir.key) }"
+              @click.prevent="editingBlock !== 'walkMode' && openInCurrentTab('local', dir.dir, 'walk')">
+              <HolderOutlined v-if="editingBlock === 'walkMode'" class="drag-handle" />
               <span class="text line-clamp-2">{{ dir.zh }}</span>
               <template v-if="editingBlock === 'walkMode'">
-                <AButton type="link" :disabled="idx === 0" @click.stop="moveItem('walkMode', dir.key, -1)"><ArrowUpOutlined /></AButton>
-                <AButton type="link" :disabled="idx === walkItems.length - 1" @click.stop="moveItem('walkMode', dir.key, 1)"><ArrowDownOutlined /></AButton>
-                <AButton v-if="isPresetDir(dir)" type="link" @click.stop="startupLayout.toggleHidden('walkMode', dir.key)"><EyeInvisibleOutlined /></AButton>
-              </template>
-              <template v-else-if="dir.can_delete">
-                <AButton type="link" @click.stop="onAliasExtraPathClick(dir.dir)">{{ $t('alias') }}
+                <AButton v-if="isPresetDir(dir)" type="link"
+                  :title="startupLayout.isHidden('walkMode', dir.key) ? $t('startupListShowItem') : $t('startupListHideItem')"
+                  @click.stop="startupLayout.toggleHidden('walkMode', dir.key)">
+                  <EyeOutlined v-if="startupLayout.isHidden('walkMode', dir.key)" />
+                  <EyeInvisibleOutlined v-else />
                 </AButton>
-                <AButton type="link" @click.stop="onRemoveExtraPathClick(dir.dir, 'walk')">{{
-        $t('remove') }}
-                </AButton>
+                <template v-else-if="dir.can_delete">
+                  <AButton type="link" :title="$t('alias')" @click.stop="onAliasExtraPathClick(dir.dir)">
+                    <EditOutlined />
+                  </AButton>
+                  <AButton type="link" :title="$t('remove')" @click.stop="onRemoveExtraPathClick(dir.dir, 'walk')">
+                    <DeleteOutlined />
+                  </AButton>
+                </template>
               </template>
             </li>
           </actionContextMenu>
         </ul>
-        <div class="list-hidden" v-if="editingBlock === 'walkMode' && walkHiddenItems.length">
-          <span class="list-hidden-title">{{ $t('startupListHidden') }}</span>
-          <AButton v-for="dir in walkHiddenItems" :key="'hidden-' + dir.key" size="small"
-            @click="startupLayout.toggleHidden('walkMode', dir.key)"><EyeOutlined />{{ dir.zh }}</AButton>
-        </div>
       </div>
       <div class="feature-item" v-if="global.quickMovePaths.length">
         <div class="feature-head">
@@ -421,40 +444,42 @@ const modes = computed(() => {
           <AButton size="small" :title="$t('startupListReset')" @click="startupLayout.resetBlock('normalFixed')"><UndoOutlined /></AButton>
           <span class="list-edit-hint">{{ $t('startupListEditHint') }}</span>
         </div>
-        <ul>
+        <ul ref="normalUl">
           <li @click="addToExtraPath('scanned-fixed')" class="item">
             <span class="text line-clamp-1">
               <PlusOutlined /> {{ $t('add') }}
             </span>
           </li>
-          <actionContextMenu v-for="(row, idx) in normalFixedItems" :key="row.id"
+          <actionContextMenu v-for="row in normalFixedItems" :key="row.id"
             @open-in-new-tab="openInNewTab('local', row.dir.dir, row.type)"
             @open-on-the-right="openOnTheRight('local', row.dir.dir, row.type)">
 
-            <li class="item rem"
+            <li v-show="editingBlock === 'normalFixed' || !startupLayout.isHidden('normalFixed', row.id)"
+              class="item rem" :data-item-id="row.id"
+              :class="{ 'is-hidden': startupLayout.isHidden('normalFixed', row.id) }"
               @click.prevent="editingBlock !== 'normalFixed' && openInCurrentTab('local', row.dir.dir, row.type)">
+              <HolderOutlined v-if="editingBlock === 'normalFixed'" class="drag-handle" />
               <span class="text line-clamp-2"><span v-if="row.type == 'scanned-fixed'" class="fixed">Fixed</span>{{
                 row.dir.zh }}</span>
               <template v-if="editingBlock === 'normalFixed'">
-                <AButton type="link" :disabled="idx === 0" @click.stop="moveItem('normalFixed', row.id, -1)"><ArrowUpOutlined /></AButton>
-                <AButton type="link" :disabled="idx === normalFixedItems.length - 1" @click.stop="moveItem('normalFixed', row.id, 1)"><ArrowDownOutlined /></AButton>
-                <AButton v-if="isPresetDir(row.dir)" type="link" @click.stop="startupLayout.toggleHidden('normalFixed', row.id)"><EyeInvisibleOutlined /></AButton>
-              </template>
-              <template v-else-if="row.dir.can_delete && (row.type === 'scanned-fixed' || row.type === 'scanned')">
-                <AButton type="link" @click.stop="onAliasExtraPathClick(row.dir.dir)">{{ $t('alias') }}
+                <AButton v-if="isPresetDir(row.dir)" type="link"
+                  :title="startupLayout.isHidden('normalFixed', row.id) ? $t('startupListShowItem') : $t('startupListHideItem')"
+                  @click.stop="startupLayout.toggleHidden('normalFixed', row.id)">
+                  <EyeOutlined v-if="startupLayout.isHidden('normalFixed', row.id)" />
+                  <EyeInvisibleOutlined v-else />
                 </AButton>
-                <AButton type="link" @click.stop="onRemoveExtraPathClick(row.dir.dir, row.type)">{{ $t('remove') }}
-                </AButton>
+                <template v-else-if="row.dir.can_delete">
+                  <AButton type="link" :title="$t('alias')" @click.stop="onAliasExtraPathClick(row.dir.dir)">
+                    <EditOutlined />
+                  </AButton>
+                  <AButton type="link" :title="$t('remove')" @click.stop="onRemoveExtraPathClick(row.dir.dir, row.type as ExtraPathType)">
+                    <DeleteOutlined />
+                  </AButton>
+                </template>
               </template>
             </li>
           </actionContextMenu>
         </ul>
-        <div class="list-hidden" v-if="editingBlock === 'normalFixed' && normalFixedHiddenItems.length">
-          <span class="list-hidden-title">{{ $t('startupListHidden') }}</span>
-          <AButton v-for="row in normalFixedHiddenItems" :key="'hidden-' + row.id" size="small"
-            @click="startupLayout.toggleHidden('normalFixed', row.id)"><EyeOutlined />{{ row.dir.zh }}<span
-              v-if="row.type == 'scanned-fixed'" class="fixed">Fixed</span></AButton>
-        </div>
       </div>
       <div class="feature-item">
         <div class="feature-head">
@@ -472,14 +497,20 @@ const modes = computed(() => {
           <AButton size="small" :title="$t('startupListReset')" @click="startupLayout.resetBlock('launch')"><UndoOutlined /></AButton>
           <span class="list-edit-hint">{{ $t('startupListEditHint') }}</span>
         </div>
-        <ul>
-          <li v-for="(comp, idx) in launchItems" :key="comp.id" class="item"
+        <ul ref="launchUl">
+          <li v-for="comp in launchItems" :key="comp.id" class="item rem" :data-item-id="comp.id"
+            v-show="editingBlock === 'launch' || !startupLayout.isHidden('launch', comp.id)"
+            :class="{ 'is-hidden': startupLayout.isHidden('launch', comp.id) }"
             @click.prevent="editingBlock !== 'launch' && openInCurrentTab(comp.id)">
+            <HolderOutlined v-if="editingBlock === 'launch'" class="drag-handle" />
             <span class="text line-clamp-1">{{ comp.label }}</span>
             <template v-if="editingBlock === 'launch'">
-              <AButton type="link" :disabled="idx === 0" @click.stop="moveItem('launch', comp.id, -1)"><ArrowUpOutlined /></AButton>
-              <AButton type="link" :disabled="idx === launchItems.length - 1" @click.stop="moveItem('launch', comp.id, 1)"><ArrowDownOutlined /></AButton>
-              <AButton type="link" @click.stop="startupLayout.toggleHidden('launch', comp.id)"><EyeInvisibleOutlined /></AButton>
+              <AButton type="link"
+                :title="startupLayout.isHidden('launch', comp.id) ? $t('startupListShowItem') : $t('startupListHideItem')"
+                @click.stop="startupLayout.toggleHidden('launch', comp.id)">
+                <EyeOutlined v-if="startupLayout.isHidden('launch', comp.id)" />
+                <EyeInvisibleOutlined v-else />
+              </AButton>
             </template>
           </li>
           <li class="item" @click="imgsli.opened = true">
@@ -495,11 +526,6 @@ const modes = computed(() => {
             <span class="text line-clamp-1">{{ $t('restoreWorkspaceSnapshot', [item.name]) }}</span>
           </li>
         </ul>
-        <div class="list-hidden" v-if="editingBlock === 'launch' && launchHiddenItems.length">
-          <span class="list-hidden-title">{{ $t('startupListHidden') }}</span>
-          <AButton v-for="comp in launchHiddenItems" :key="'hidden-' + comp.id" size="small"
-            @click="startupLayout.toggleHidden('launch', comp.id)"><EyeOutlined />{{ comp.label }}</AButton>
-        </div>
       </div>
       <div class="feature-item recent" v-if="global.showRecentInStartup && global.recent.length">
         <div class="title">
@@ -691,19 +717,25 @@ const modes = computed(() => {
   }
 }
 
-.list-hidden {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--zp-secondary-background);
+/* 编辑模式下：拖拽把手 + 被隐藏的条目半透明留在原位 */
+.drag-handle {
+  margin-right: 8px;
+  color: var(--zp-secondary);
+  cursor: grab;
 
-  .list-hidden-title {
-    font-size: 12px;
-    opacity: .7;
+  &:active {
+    cursor: grabbing;
   }
+}
+
+.item.is-hidden {
+  opacity: .45;
+}
+
+.drag-ghost {
+  opacity: .4;
+  background: var(--zp-secondary-background);
+  border-radius: 4px;
 }
 
 
