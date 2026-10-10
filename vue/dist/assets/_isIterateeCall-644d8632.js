@@ -1,0 +1,1 @@
+import{ba as i,aW as t,e2 as f,a_ as n}from"./index-bab02847.js";function u(e,a,r){if(!i(r))return!1;var s=typeof a;return(s=="number"?t(r)&&f(a,r.length):s=="string"&&a in r)?n(r[a],e):!1}export{u as i};

@@ -843,6 +843,11 @@
   resolved "https://registry.npmjs.org/@types/sjcl/-/sjcl-1.0.30.tgz"
   integrity sha512-4ebBtj1rx3Kh3To5RnPua+U4JzVwH2MxUmHQvAlxWpzmfmupBRyyXAIEQceon+e5tW9aBeOApTYA6EXfBysRyQ==
 
+"@types/sortablejs@^1.15.9":
+  version "1.15.9"
+  resolved "https://registry.yarnpkg.com/@types/sortablejs/-/sortablejs-1.15.9.tgz#82d2337f54d4db827914d80dee5cf65539ae3c8b"
+  integrity sha512-7HP+rZGE2p886PKV9c9OJzLBI6BBJu1O7lJGYnPyG3fS4/duUCcngkNCjsLwIMV+WMqANe3tt4irrXHSIe68OQ==
+
 "@types/web-bluetooth@^0.0.14":
   version "0.0.14"
   resolved "https://registry.npmjs.org/@types/web-bluetooth/-/web-bluetooth-0.0.14.tgz"
@@ -2566,6 +2571,11 @@ slash@^3.0.0:
   version "3.0.0"
   resolved "https://registry.npmjs.org/slash/-/slash-3.0.0.tgz"
   integrity sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==
+
+sortablejs@^1.15.7:
+  version "1.15.7"
+  resolved "https://registry.yarnpkg.com/sortablejs/-/sortablejs-1.15.7.tgz#83a0bddc472117ee328dea20b2e6f490fed20f86"
+  integrity sha512-Kk8wLQPlS+yi1ZEf48a4+fzHa4yxjC30M/Sr2AnQu+f/MPwvvX9XjZ6OWejiz8crBsLwSq8GHqaxaET7u6ux0A==
 
 "source-map-js@>=0.6.2 <2.0.0", source-map-js@^1.0.2:
   version "1.0.2"
