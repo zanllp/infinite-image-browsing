@@ -127,6 +127,41 @@ export function usePreview (spec?: { loadNext?: () => void }) {
     return isImageFile(files.value[next]?.name)
   }
 
+  // 移动端左右滑动切换图片，与键盘左右方向键等价（向左滑=下一张）
+  const SWIPE_THRESHOLD = 48
+  let swipeStart: { x: number, y: number } | null = null
+  useWatchDocument('touchstart', (e) => {
+    if (!previewing.value) {
+      return
+    }
+    const t = e.changedTouches[0]
+    if (t) {
+      swipeStart = { x: t.clientX, y: t.clientY }
+    }
+  })
+  useWatchDocument('touchend', (e) => {
+    if (!previewing.value || !swipeStart) {
+      swipeStart = null
+      return
+    }
+    const start = swipeStart
+    swipeStart = null
+    const t = e.changedTouches[0]
+    if (!t) {
+      return
+    }
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    // 只有明显偏水平且超过阈值的滑动才生效，避免误伤纵向滚动
+    if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) <= Math.abs(dy)) {
+      return
+    }
+    const dir = dx < 0 ? 'next' : 'prev'
+    if (canPreview(dir)) {
+      previewImgMove(dir)
+    }
+  })
+
   useEventListen('removeFiles', async () => {
     if (previewing.value && !state.sortedFiles[previewIdx.value]) {
       closeImageFullscreenPreview()
