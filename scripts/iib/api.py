@@ -52,6 +52,8 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from PIL import Image
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import hashlib
 from contextlib import closing
 from scripts.iib.db.datamodel import (
@@ -207,18 +209,34 @@ DEFAULT_BASE = "/infinite_image_browsing"
 _timeline_mem = {"first_request_logged": False}
 
 
+def _register_middleware(app: FastAPI, middleware_class, **options):
+    """Support WebUI's app_started callback as well as standalone startup."""
+    if app.middleware_stack is None:
+        app.add_middleware(middleware_class, **options)
+        return
+
+    # Gradio is already serving by the time WebUI calls us. Wrap its live stack
+    # rather than clearing/rebuilding it, which would recreate host middleware.
+    # Keep the declaration too, in case the host later rebuilds the stack.
+    middleware = Middleware(middleware_class, **options)
+    stack = middleware_class(app.middleware_stack, **options)
+    app.user_middleware.insert(0, middleware)
+    app.middleware_stack = stack
+
+
 def infinite_image_browsing_api(app: FastAPI, **kwargs):
     tlog("api_build_start")
 
     # 极轻量的全量请求追踪中间件（始终启用）：只维护最近请求时间与 inflight 计数，
     # 供后台 worker 的 Governor 在前台有操作时让路。不加日志、不做 IO。
-    @app.middleware("http")
     async def track_requests(request: Request, call_next):
         request_tracker.begin()
         try:
             return await call_next(request)
         finally:
             request_tracker.end()
+
+    _register_middleware(app, BaseHTTPMiddleware, dispatch=track_requests)
 
     # 每天首次启动要整库备份（几百 MB）。同步执行会卡在 uvicorn 绑定端口之前，而桌面端
     # webview 不会等后端就绪就发请求；即使放到后台线程，冷启动时也会和解压抢磁盘 I/O。
@@ -254,7 +272,6 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
             return JSONResponse(
                 status_code=500, content={"message": "Internal Server Error"}
             )
-        @app.middleware("http")
         async def log_requests(request: Request, call_next):
             path = request.url.path
             if (
@@ -283,9 +300,11 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
                     f"An exception occurred while processing {request.method} {request.url}: {exc}"
                 )
 
+        _register_middleware(app, BaseHTTPMiddleware, dispatch=log_requests)
     
     if kwargs.get("allow_cors"):
-        app.add_middleware(
+        _register_middleware(
+            app,
             CORSMiddleware,
             allow_origin_regex=r"^[\w./:-]+$",
             allow_methods=["*"],
