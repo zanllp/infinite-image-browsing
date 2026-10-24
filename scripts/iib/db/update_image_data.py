@@ -28,6 +28,7 @@ from scripts.iib.logger import logger
 from scripts.iib.parsers.index import parse_image_info
 from scripts.iib.plugin import plugin_inst_map
 from scripts.iib.auto_tag import AutoTagMatcher
+from scripts.iib.userdata import apply_pending_user_tags
 
 
 # 定义一个函数来获取图片文件的EXIF数据
@@ -358,6 +359,9 @@ def _scan_folder(
         except Exception as e:
             logger.error("Failed to update folder watermark for %s: %s", folder_path, e)
 
+    # 导入用户数据时路径还没被索引的标签，等文件出现在 image 表后自动补上
+    apply_pending_user_tags(conn)
+
     return stats
 
 
@@ -428,6 +432,7 @@ def update_image_data(search_dirs: List[str], is_rebuild = False):
     for dir_path in search_dirs:
         _update_folder_recursive(conn, dir_path, is_rebuild)
     commit_with_retry(conn)
+    apply_pending_user_tags(conn)
 
 
 def add_image_data_single(file_path):
@@ -451,6 +456,7 @@ def add_image_data_single(file_path):
     finally:
         _flush_tag_counts(conn, tag_incr_count_rec)
         commit_with_retry(conn)
+        apply_pending_user_tags(conn)
 
 
 def rebuild_image_index(search_dirs: List[str]):

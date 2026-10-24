@@ -120,6 +120,7 @@ class DataBase:
             ImageEmbeddingFail.create_table(conn)
             TopicTitleCache.create_table(conn)
             TopicClusterCache.create_table(conn)
+            UserTagPending.create_table(conn)
         finally:
             conn.commit()
         clz.num += 1
@@ -823,6 +824,38 @@ class TopicClusterCache:
                     updated_at,
                 ),
             )
+
+class UserTagPending:
+    """Tag assignments imported before their image was indexed.
+
+    User data exports are keyed by file path, so importing right after deleting
+    `iib.db` (before the index has been rebuilt) cannot resolve images yet.
+    Those assignments are parked here and applied automatically once the file
+    shows up in the `image` table (see scripts/iib/userdata.py apply_pending).
+    """
+
+    @classmethod
+    def create_table(cls, conn: Connection):
+        with closing(conn.cursor()) as cur:
+            cur.execute(
+                """CREATE TABLE IF NOT EXISTS user_tag_pending (
+                    image_path TEXT NOT NULL,
+                    tag_name TEXT NOT NULL,
+                    tag_type TEXT NOT NULL,
+                    created_at TEXT,
+                    PRIMARY KEY (image_path, tag_name, tag_type)
+                )"""
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS user_tag_pending_idx_path ON user_tag_pending(image_path)"
+            )
+
+    @classmethod
+    def count(cls, conn: Connection) -> int:
+        with closing(conn.cursor()) as cur:
+            cur.execute("SELECT COUNT(*) FROM user_tag_pending")
+            return int(cur.fetchone()[0] or 0)
+
 
 class Tag:
     def __init__(self, name: str, score: int, type: str, count=0, color = ""):

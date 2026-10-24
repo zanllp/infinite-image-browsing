@@ -463,3 +463,55 @@ export const getTrendStats = async () => {
   const resp = await axiosInst.value.get('/db/stats/trend')
   return resp.data as TrendStats
 }
+
+// ===== Portable user-data export / import (issue #982) =====
+export interface UserDataExportSummary {
+  tags: number
+  tagged_images: number
+  tag_assignments: number
+  settings: number
+  extra_paths: number
+  prompt_edits: number
+  pending_tags: number
+}
+
+export interface UserDataExportDoc {
+  format: string
+  format_version: number
+  created_at: string
+  source?: { db_file?: string; image_count?: number }
+  summary?: UserDataExportSummary
+  [key: string]: unknown
+}
+
+export interface UserDataImportStats {
+  mode: 'merge' | 'overwrite'
+  dry_run: boolean
+  export_created_at?: string | null
+  source_image_count?: number | null
+  tags: { created: number; existing: number; color_updated: number; invalid: number }
+  tag_assignments: { added: number; existing: number }
+  images: { matched: number; unmatched: number }
+  pending_tags: number
+  pending_queued: number
+  pending_applied: number
+  pending_total: number
+  settings: { added: number; updated: number; skipped: number }
+  extra_paths: { added: number; updated: number; skipped: number; invalid: number }
+  prompt_edits: { applied: number; skipped: number; unmatched: number }
+  unmatched_paths_sample: string[]
+}
+
+export const exportUserData = async () => {
+  const resp = await axiosInst.value.get('/db/export_user_data', { timeout: 120000 })
+  return resp.data as UserDataExportDoc
+}
+
+export const importUserData = async (req: {
+  data: UserDataExportDoc
+  mode: 'merge' | 'overwrite'
+  dry_run?: boolean
+}) => {
+  const resp = await axiosInst.value.post('/db/import_user_data', req, { timeout: 300000 })
+  return resp.data as UserDataImportStats
+}
