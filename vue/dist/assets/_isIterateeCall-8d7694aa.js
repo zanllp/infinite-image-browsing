@@ -1,0 +1,1 @@
+import{be as i,a_ as t,e6 as f,b2 as n}from"./index-b080f08a.js";function u(s,a,r){if(!i(r))return!1;var e=typeof a;return(e=="number"?t(r)&&f(a,r.length):e=="string"&&a in r)?n(r[a],s):!1}export{u as i};
