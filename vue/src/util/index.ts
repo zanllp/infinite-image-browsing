@@ -111,6 +111,8 @@ export const { useEventListen: useGlobalEventListen, eventEmitter: globalEvents 
     promptEditorUpdated(): void
     /** 后台静默维护完成一轮索引更新（status.version 变化） */
     backgroundMaintenanceUpdated(): void
+    /** 标签缓存已被清空/失效：各网格应立即补拉当前可视区标签，而不是等滚动 */
+    tagsInvalidated(): void
   }>()
 
 type AsyncFunction<T> = (...args: any[]) => Promise<T>
