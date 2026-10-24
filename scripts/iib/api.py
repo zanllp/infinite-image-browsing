@@ -1309,6 +1309,46 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
 
     db_api_base = api_base + "/db"
 
+    class ImportUserDataReq(BaseModel):
+        data: dict
+        mode: str = "merge"
+        dry_run: bool = False
+
+    @app.get(db_api_base + "/export_user_data", dependencies=[Depends(verify_secret)])
+    async def export_user_data():
+        """导出用户数据（收藏/标签/扫描路径/设置/手改 prompt），不含图片索引与 AI 向量。"""
+        from starlette.concurrency import run_in_threadpool
+        from scripts.iib.userdata import export_user_data as _export
+
+        try:
+            return await run_in_threadpool(lambda: _export(DataBase.get_conn()))
+        except Exception as e:
+            logger.error("export_user_data failed: %s", e, stack_info=True)
+            raise HTTPException(status_code=500, detail=f"export failed: {e}")
+
+    @app.post(
+        db_api_base + "/import_user_data",
+        dependencies=[Depends(verify_secret), Depends(write_permission_required)],
+    )
+    async def import_user_data(req: ImportUserDataReq):
+        """合并导入用户数据；dry_run=true 时只回传统计、不写库。"""
+        from starlette.concurrency import run_in_threadpool
+        from scripts.iib.userdata import import_user_data as _import
+        from scripts.iib.userdata import UserDataError
+
+        def _run():
+            return _import(
+                DataBase.get_conn(), req.data, mode=req.mode, dry_run=req.dry_run
+            )
+
+        try:
+            return await run_in_threadpool(_run)
+        except UserDataError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            logger.error("import_user_data failed: %s", e, stack_info=True)
+            raise HTTPException(status_code=500, detail=f"import failed: {e}")
+
     def get_expired_dirs_cached() -> List[str]:
         """过期目录：优先用 worker 的 15s 缓存（避免每次 1w+ 目录全量 stat）。"""
         worker = get_worker()

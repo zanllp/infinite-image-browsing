@@ -12,6 +12,7 @@ import { getShortcutStrFromEvent } from '@/util/shortcut'
 import { isTauri } from '@/util/env'
 import ImageSetting from './ImageSetting.vue'
 import AutoTagSettings from './AutoTagSettings.vue'
+import DataBackupSettings from './DataBackupSettings.vue'
 import { openRebuildImageIndexModal } from '@/components/functionalCallableComp'
 import { Dict } from '@/util'
 import { message } from 'ant-design-vue'
@@ -203,6 +204,9 @@ const presetShortcutGroups = computed(() => ([
           {{ backgroundMaintenanceSettings.index ? $t('backgroundMaintenanceEnabled') : $t('backgroundMaintenanceDisabled') }}
         </span>
       </a-form-item>
+
+      <h2>{{ t('dataBackupTitle') }}</h2>
+      <DataBackupSettings />
 
       <h2>{{ t('autoRefresh') }}</h2>
       <a-form-item :label="$t('autoRefreshWalkMode')">
