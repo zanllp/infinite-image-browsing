@@ -7,7 +7,7 @@ import { sortMethodConv } from '../fileSort'
 import { debounce } from 'lodash-es'
 import { isMediaFile } from '@/util/file'
 import { useHookShareState, global, tagStore } from '.'
-import { makeAsyncFunctionSingle } from '@/util'
+import { makeAsyncFunctionSingle, useGlobalEventListen } from '@/util'
 
 export function useFilesDisplay ({ fetchNext }: {fetchNext?: () => Promise<any>} = {  }) {
   const {
@@ -31,6 +31,20 @@ export function useFilesDisplay ({ fetchNext }: {fetchNext?: () => Promise<any>}
   const { width } = useElementSize(stackViewEl)
   const gridItems = computed(() => ~~(width.value / gridSize.value))
   const dirCoverCache = reactive(new Map<string, Top4MediaInfo[]>())
+
+  /**
+   * 只补拉当前可视区的图片标签。
+   * 标签是跟着可视区懒加载的，缓存被清空（后台静默维护完成一轮 / 手动更新索引）后
+   * 如果只等滚动来触发补拉，用户看到的就是「标签丢了，滚一下才回来」。
+   */
+  const fetchViewableAreaTags = () => {
+    const paths = getViewableAreaFiles.value()
+      .filter((v) => v.is_under_scanned_path && isMediaFile(v.name))
+      .map((v) => v.fullpath)
+    if (paths.length) {
+      tagStore.fetchImageTags(paths)
+    }
+  }
 
   const itemSize = computed(() => {
     const second = gridSize.value
@@ -88,11 +102,8 @@ export function useFilesDisplay ({ fetchNext }: {fetchNext?: () => Promise<any>}
   }))
 
   state.useEventListen('viewableAreaFilesChange', () => {
+    fetchViewableAreaTags()
     const files = getViewableAreaFiles.value()
-    const fetchTagPaths = files
-      .filter(v => v.is_under_scanned_path && isMediaFile(v.name))
-      .map(v => v.fullpath)
-    tagStore.fetchImageTags(fetchTagPaths)
     const fetchDirTop4MediaPaths = files
       .filter(v => v.is_under_scanned_path && v.type === 'dir' && !dirCoverCache.has(v.fullpath))
       .map(v => v.fullpath)
@@ -107,6 +118,11 @@ export function useFilesDisplay ({ fetchNext }: {fetchNext?: () => Promise<any>}
       })
     }
   })
+
+  // 切回 IIB 页（标签缓存可能在离开期间被后台维护清空）或缓存刚被清空时，
+  // 立即补拉一次可视区标签，避免要等用户滚动才恢复
+  useGlobalEventListen('returnToIIB', fetchViewableAreaTags)
+  useGlobalEventListen('tagsInvalidated', fetchViewableAreaTags)
 
   state.useEventListen('refresh', async () => {
     state.eventEmitter.emit('viewableAreaFilesChange')
