@@ -1,6 +1,14 @@
 [跳到中文](#中文)
 # English
 
+## 2026-10-30
+### ⚡ Grid: upstream vue-virtual-scroller 3.x, thumbnail size levels, correct column math
+- Migrated off the `@zanllp/vue-virtual-scroller` fork (2.0.0-beta.7 plus one patch) to upstream `vue-virtual-scroller@^3.0.5`. The fork had been frozen since 2023-01, so it missed the upstream fixes for fast-scroll gaps (#890, fixes #863 / #882), hidden views overlapping the visible ones (#837) and the view re-assignment rewrite (#743) — the first of those is the "blank cell in the middle of the grid" bug that showed up when scrolling quickly.
+- Adapted to the rewritten composition-API scroller: the internal `$_startIndex` / `$_endIndex` fields are no longer exposed, so the render window is derived from the exposed `visiblePool` instead.
+- Fixed the grid being one column too wide. The column count now comes from the scroller's own content box (padding and vertical scrollbar excluded) instead of the outer container. v3 sizes the item wrapper to `columns × stride`, so the old math surfaced as the rightmost column being pushed out of view plus a horizontal scrollbar. `gridView` and `batchDownload` also never bound the shared `scroller` ref, which the new measurement depends on.
+- Thumbnail size is picked with an 8-step slider (geometrically spaced 64–1024, roughly 16/12/8/6/4/3/2/1 columns) instead of a pixel input. The slider only chooses a target width; the actual cell width auto-fits the row (integer stride, leftover smaller than the column count in px). It applies on release, so dragging does not re-lay-out the visible window on every tick.
+- Existing `defaultGridCellWidth` values snap to the nearest level, so no migration is needed and the persisted key is unchanged.
+
 ## 2026-10-18
 ### ✨ Experimental: silent background maintenance (index + thumbnail warm-up)
 - New experimental feature, **off by default**. A banner on the start page opens a modal with two database-persisted switches: silent index update and silent thumbnail warm-up (the latter requires the former). The config lives in the `global_setting` table, so it is shared between the desktop app and the WebUI extension.
@@ -899,6 +907,14 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-10-30
+### ⚡ 网格：切回上游 vue-virtual-scroller 3.x、缩略图档位、列数计算修正
+- 从 `@zanllp/vue-virtual-scroller`（2.0.0-beta.7 + 一个补丁）迁回上游 `vue-virtual-scroller@^3.0.5`。该 fork 停更于 2023-01，缺少上游对快速滚动空洞（#890，修复 #863 / #882）、隐藏 view 遮挡可见内容（#837）以及 view 分配重写（#743）的修复——其中第一条正是快速滚动时「网格中间空一格」那个 bug。
+- 适配重写后的组合式实现：内部字段 `$_startIndex` / `$_endIndex` 不再暴露，渲染窗口改由 expose 出来的 `visiblePool` 推算。
+- 修正「网格多算一列」：列数改为按 scroller 自身内容盒宽度计算（扣掉 padding 与竖向滚动条），不再使用外层容器宽度。v3 会把包装层撑到「列数 × 步长」，旧算法表现为最右一列被挤出可视区并出现横向滚动条。顺带补上 `gridView` / `batchDownload` 未绑定共享 `scroller` ref 的遗漏（新的测量依赖它）。
+- 缩略图尺寸从像素输入改成 8 档滑块（64~1024 几何分布，约合 16/12/8/6/4/3/2/1 列）：滑块只选目标宽度，实际格宽按整行 auto-fit（整数步长，右侧余量小于列数 px）。松手才应用，避免拖动过程中反复重排可见区域。
+- 旧的 `defaultGridCellWidth` 像素值会自动吸附到最近档位，无需迁移，持久化 key 不变。
 
 ## 2026-10-18
 ### ✨ 实验性功能：后台静默维护（索引 + 缩略图预热）
