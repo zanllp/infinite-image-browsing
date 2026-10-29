@@ -698,7 +698,9 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         return {"errors": errors}
 
     @app.get(api_base + "/files", dependencies=[Depends(verify_secret)])
-    async def get_target_folder_files(folder_path: str):
+    def get_target_folder_files(folder_path: str):
+        # 注意：这里刻意用同步 def（FastAPI 会放到线程池执行），避免大目录扫描
+        # 阻塞事件循环、拖慢同进程的缩略图等并发请求。
         files: List[FileInfoDict] = []
         try:
             if is_win and folder_path == "/":
@@ -711,43 +713,52 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
                     return {"files": []}
                 folder_path = to_abs_path(folder_path)
                 check_path_trust(folder_path)
-                folder_listing: List[os.DirEntry] = os.scandir(folder_path)
                 is_under_scanned_path = is_path_under_parents(folder_path)
-                for item in folder_listing:
-                    if not os.path.exists(item.path):
-                        continue
-                    fullpath = os.path.normpath(item.path)
-                    name = os.path.basename(item.path)
-                    stat = item.stat()
-                    date = get_formatted_date(stat.st_mtime)
-                    created_time = get_created_date_by_stat(stat)
-                    if item.is_file():
-                        bytes = stat.st_size
-                        size = human_readable_size(bytes)
-                        files.append(
-                            {
-                                "type": "file",
-                                "date": date,
-                                "size": size,
-                                "name": name,
-                                "bytes": bytes,
-                                "created_time": created_time,
-                                "fullpath": fullpath,
-                                "is_under_scanned_path": is_under_scanned_path,
-                            }
-                        )
-                    elif item.is_dir():
-                        files.append(
-                            {
-                                "type": "dir",
-                                "date": date,
-                                "created_time": created_time,
-                                "size": "-",
-                                "name": name,
-                                "is_under_scanned_path": is_under_scanned_path,
-                                "fullpath": fullpath,
-                            }
-                        )
+                # scandir 一次批量枚举就把每个条目的名字/大小/时间读回来了，
+                # DirEntry 的 stat()/is_file()/is_dir() 在 Windows 上直接复用这份数据，
+                # 不额外发系统调用。旧实现对每个文件调一次 os.path.exists()，等于把
+                # "1 次目录枚举" 退化成 "N 次完整 stat"（Windows 上单次 ~70us，
+                # 7000 个文件的目录白花 ~0.5s），这里改成复用 DirEntry + OSError 兜底。
+                with os.scandir(folder_path) as folder_listing:
+                    for item in folder_listing:
+                        try:
+                            stat = item.stat()
+                            is_file = item.is_file()
+                            is_dir = item.is_dir()
+                        except OSError:
+                            # 迭代期间被删除/不可访问：跳过，与原 os.path.exists() 判断等价
+                            continue
+                        fullpath = os.path.normpath(item.path)
+                        name = item.name
+                        date = get_formatted_date(stat.st_mtime)
+                        created_time = get_created_date_by_stat(stat)
+                        if is_file:
+                            bytes = stat.st_size
+                            size = human_readable_size(bytes)
+                            files.append(
+                                {
+                                    "type": "file",
+                                    "date": date,
+                                    "size": size,
+                                    "name": name,
+                                    "bytes": bytes,
+                                    "created_time": created_time,
+                                    "fullpath": fullpath,
+                                    "is_under_scanned_path": is_under_scanned_path,
+                                }
+                            )
+                        elif is_dir:
+                            files.append(
+                                {
+                                    "type": "dir",
+                                    "date": date,
+                                    "created_time": created_time,
+                                    "size": "-",
+                                    "name": name,
+                                    "is_under_scanned_path": is_under_scanned_path,
+                                    "fullpath": fullpath,
+                                }
+                            )
         except Exception as e:
             # logger.error(e)
             raise HTTPException(status_code=400, detail=str(e))
