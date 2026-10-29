@@ -1,8 +1,6 @@
 <script lang="ts" setup>
 import fileItemCell from '@/components/FileItem.vue'
-import '@zanllp/vue-virtual-scroller/dist/vue-virtual-scroller.css'
-// @ts-ignore
-import { RecycleScroller } from '@zanllp/vue-virtual-scroller'
+import { RecycleScroller } from '@/components/recycleScroller'
 import { toImageUrl } from '@/util/file'
 import { nextTick, watch, reactive } from 'vue'
 import { copy2clipboardI18n } from '@/util'

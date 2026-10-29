@@ -1,7 +1,5 @@
 <script lang="ts" setup>
-// @ts-ignore
-import { RecycleScroller } from '@zanllp/vue-virtual-scroller'
-import '@zanllp/vue-virtual-scroller/dist/vue-virtual-scroller.css'
+import { RecycleScroller } from '@/components/recycleScroller'
 import FileItem from '@/components/FileItem.vue'
 import { useBatchDownloadStore } from '@/store/useBatchDownloadStore'
 import { useGlobalStore } from '@/store/useGlobalStore'
@@ -12,7 +10,7 @@ import { axiosInst } from '@/api'
 import { createReactiveQueue } from '@/util'
 import { message } from 'ant-design-vue'
 import { t } from '@/i18n'
-const { stackViewEl } = useHookShareState().toRefs()
+const { stackViewEl, scroller } = useHookShareState().toRefs()
 const { itemSize, gridItems, cellWidth } = useFilesDisplay()
 const gs = useGlobalStore()
 const store = useBatchDownloadStore()

@@ -11,6 +11,7 @@ import { useHookShareState, stackCache, global } from '.'
 import NumInput from '@/components/numInput.vue'
 
 import * as Path from '@/util/path'
+import { getVisibleRange } from '@/util/scroller'
 import type Progress from 'nprogress'
 // @ts-ignore
 import NProgress from 'multi-nprogress'
@@ -245,7 +246,7 @@ export function useLocation () {
       return // fullscreen previewing时不刷新
     }
     if (props.value.mode === 'walk' && walker.value) {
-      const currpos = scroller.value?.$_endIndex ?? 64
+      const currpos = getVisibleRange(scroller.value).end || 64
       if (global.autoRefreshWalkMode &&
         currpos < global.autoRefreshWalkModePosLimit &&
         await walker.value.isExpired()) {

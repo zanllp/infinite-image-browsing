@@ -20,10 +20,9 @@ import { toImageUrl } from '@/util/file'
 import { openTiktokViewWithFiles } from '@/util/tiktokHelper'
 
 import 'multi-nprogress/nprogress.css'
-// @ts-ignore
-import { RecycleScroller } from '@zanllp/vue-virtual-scroller'
-import '@zanllp/vue-virtual-scroller/dist/vue-virtual-scroller.css'
+import { RecycleScroller } from '@/components/recycleScroller'
 import FileItem from '@/components/FileItem.vue'
+import GridCellLevelSlider from '@/components/gridCellLevelSlider.vue'
 import fullScreenContextMenu from './fullScreenContextMenu.vue'
 import BaseFileListInfo from '@/components/BaseFileListInfo.vue'
 import { copy2clipboardI18n } from '@/util'
@@ -80,6 +79,7 @@ const {
   canLoadNext,
   onScroll,
   cellWidth,
+  cellTarget,
   dirCoverCache
 } = useFilesDisplay()
 const { onDrop, onFileDragStart, onFileDragEnd, onFileDropToFolder } = useFileTransfer()
@@ -341,7 +341,7 @@ onMounted(() => {
                   wrapperCol: { span: 14 }
                 }">
                   <a-form-item :label="$t('gridCellWidth')">
-                    <numInput v-model="cellWidth" :max="1024" :min="64" :step="16" />
+                    <GridCellLevelSlider v-model:value="cellTarget" />
                   </a-form-item>
                   <a-form-item :label="$t('sortingMethod')">
                     <search-select v-model:value="sortMethod" @click.stop :conv="sortMethodConv"
