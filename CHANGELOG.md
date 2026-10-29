@@ -9,6 +9,12 @@
 - Thumbnail size is picked with an 8-step slider (geometrically spaced 64–1024, roughly 16/12/8/6/4/3/2/1 columns) instead of a pixel input. The slider only chooses a target width; the actual cell width auto-fits the row (integer stride, leftover smaller than the column count in px). It applies on release, so dragging does not re-lay-out the visible window on every tick.
 - Existing `defaultGridCellWidth` values snap to the nearest level, so no migration is needed and the persisted key is unchanged.
 
+### ⚡ Folder listing: stop stat-ing every file twice in `GET /files`
+- `GET /files` called `os.path.exists()` on every entry before reading its stat, i.e. a full extra `os.stat()` per file on top of the `scandir` enumeration that had already returned the metadata. On Windows a fresh `os.stat()` opens a file handle (~70 µs per call on a machine with a filesystem filter driver, versus ~0.03 µs for `DirEntry.stat()` which is served from the scandir buffer), so a 6.9k-image folder spent ~0.5 s of pure overhead. The guard is now a `try/except OSError` around the `DirEntry` stat, which keeps the "file deleted mid-iteration" behaviour without the extra syscall.
+- `is_file()` / `is_dir()` are evaluated from that same cached stat, and `os.scandir()` is used as a context manager so the directory handle is closed right away instead of whenever the GC gets to it.
+- The endpoint is now a plain `def`, so FastAPI runs it in the threadpool: scanning a large folder no longer blocks the event loop, and thumbnail / image requests keep flowing during the scan.
+- Measured on a 6,932-file folder: the listing loop dropped from 705 ms to 110 ms and the endpoint from ~1.2–1.6 s to ~0.4 s, with byte-identical JSON output. Linux/macOS still save one syscall per entry (`exists` + `stat` becomes a single `fstatat`); no behaviour change on any platform.
+
 ## 2026-10-18
 ### ✨ Experimental: silent background maintenance (index + thumbnail warm-up)
 - New experimental feature, **off by default**. A banner on the start page opens a modal with two database-persisted switches: silent index update and silent thumbnail warm-up (the latter requires the former). The config lives in the `global_setting` table, so it is shared between the desktop app and the WebUI extension.
@@ -915,6 +921,12 @@ Triggered under the same circumstances as above, there will be a button to updat
 - 修正「网格多算一列」：列数改为按 scroller 自身内容盒宽度计算（扣掉 padding 与竖向滚动条），不再使用外层容器宽度。v3 会把包装层撑到「列数 × 步长」，旧算法表现为最右一列被挤出可视区并出现横向滚动条。顺带补上 `gridView` / `batchDownload` 未绑定共享 `scroller` ref 的遗漏（新的测量依赖它）。
 - 缩略图尺寸从像素输入改成 8 档滑块（64~1024 几何分布，约合 16/12/8/6/4/3/2/1 列）：滑块只选目标宽度，实际格宽按整行 auto-fit（整数步长，右侧余量小于列数 px）。松手才应用，避免拖动过程中反复重排可见区域。
 - 旧的 `defaultGridCellWidth` 像素值会自动吸附到最近档位，无需迁移，持久化 key 不变。
+
+### ⚡ 目录列表：`GET /files` 不再对每个文件多 stat 一次
+- `GET /files` 在读取每个条目的 stat 之前还会调一次 `os.path.exists()`，等于在 `scandir` 已经批量返回元数据之后，又逐个补一次完整的 `os.stat()`。Windows 上一次 `os.stat()` 要打开文件句柄（装有文件系统过滤驱动时本机实测 ~70μs，而 `DirEntry.stat()` 直接复用 scandir 读回的数据，只要 ~0.03μs），6932 个文件的目录因此白花约 0.5s。现在改为直接复用 `DirEntry.stat()`，用 `try/except OSError` 保留「迭代期间文件被删就跳过」的语义，不再多发系统调用。
+- `is_file()` / `is_dir()` 同样复用这份已缓存的 stat；`os.scandir()` 改用 `with` 上下文管理器，目录句柄及时关闭，不再依赖 GC。
+- 端点改成同步 `def`，由 FastAPI 放到线程池执行：大目录扫描期间不再阻塞事件循环，缩略图/图片请求不会被卡住。
+- 6932 个文件的目录实测：列表循环 705ms → 110ms，端点整体约 1.2~1.6s → 约 0.4s，返回 JSON 逐字节一致。Linux/macOS 上收益较小（每个条目由 `exists` + `stat` 两次调用降为一次 `fstatat`），行为无差异。
 
 ## 2026-10-18
 ### ✨ 实验性功能：后台静默维护（索引 + 缩略图预热）
