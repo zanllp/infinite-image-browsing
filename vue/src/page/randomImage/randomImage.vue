@@ -1,7 +1,5 @@
 <script lang="ts" setup>
-// @ts-ignore
-import { RecycleScroller } from '@zanllp/vue-virtual-scroller'
-import '@zanllp/vue-virtual-scroller/dist/vue-virtual-scroller.css'
+import { RecycleScroller } from '@/components/recycleScroller'
 import FileItem from '@/components/FileItem.vue'
 import { useFileItemActions, useFilesDisplay, useFileTransfer, useHookShareState, useKeepMultiSelect, usePreview } from '@/page/fileTransfer/hook'
 import { toImageUrl } from '@/util/file'

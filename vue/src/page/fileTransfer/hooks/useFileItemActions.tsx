@@ -22,6 +22,7 @@ import { MultiSelectTips, openAddNewTagModal, openRenameFileModal } from '@/comp
 import { batchDownload, events, imgTransferBus, stackCache, tagStore, useEventListen, useHookShareState, global } from '.'
 import { closeImageFullscreenPreview, openImageFullscreenPreview } from '@/util/imagePreviewOperation'
 import { openTiktokViewWithFiles } from '@/util/tiktokHelper'
+import { getVisibleRange } from '@/util/scroller'
 
 
 export function useFileItemActions (
@@ -432,15 +433,15 @@ export function useFileItemActions (
           case 'PageUp': {
             e.preventDefault()
             e.stopPropagation()
-            const step = s ? Math.max(s.$_endIndex - s.$_startIndex, 1) : 1
-            const curr = s?.$_startIndex ?? 0
+            const step = Math.max(getVisibleRange(s).end - getVisibleRange(s).start, 1)
+            const curr = getVisibleRange(s).start
             return scrollToIndex(curr - step)
           }
           case 'PageDown': {
             e.preventDefault()
             e.stopPropagation()
-            const step = s ? Math.max(s.$_endIndex - s.$_startIndex, 1) : 1
-            const curr = s?.$_startIndex ?? 0
+            const step = Math.max(getVisibleRange(s).end - getVisibleRange(s).start, 1)
+            const curr = getVisibleRange(s).start
             return scrollToIndex(curr + step)
           }
           case 'Home': {

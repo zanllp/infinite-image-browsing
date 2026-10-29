@@ -59,6 +59,7 @@ declare module '@vue/runtime-core' {
     DraggableImage: typeof import('./src/components/DraggableImage.vue')['default']
     ExifBrowser: typeof import('./src/components/ExifBrowser.vue')['default']
     FileItem: typeof import('./src/components/FileItem.vue')['default']
+    GridCellLevelSlider: typeof import('./src/components/gridCellLevelSlider.vue')['default']
     HistoryRecord: typeof import('./src/components/HistoryRecord.vue')['default']
     IndexStatusIndicator: typeof import('./src/components/IndexStatusIndicator.vue')['default']
     KvPairEditor: typeof import('./src/components/KvPairEditor.vue')['default']

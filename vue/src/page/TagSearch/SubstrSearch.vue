@@ -1,9 +1,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import fileItemCell from '@/components/FileItem.vue'
-import '@zanllp/vue-virtual-scroller/dist/vue-virtual-scroller.css'
-// @ts-ignore
-import { RecycleScroller } from '@zanllp/vue-virtual-scroller'
+import { RecycleScroller } from '@/components/recycleScroller'
 import { toImageUrl } from '@/util/file'
 import { getDbBasicInfo, getExpiredDirs, getImagesBySubstr, updateImageData, type DataBaseBasicInfo, type Tag, type TagId, SearchBySubstrReq } from '@/api/db'
 import { copy2clipboardI18n,  makeAsyncFunctionSingle, useGlobalEventListen, globalEvents } from '@/util'

@@ -1173,15 +1173,6 @@
   dependencies:
     vue-demi "*"
 
-"@zanllp/vue-virtual-scroller@^2.0.0-beta.7":
-  version "2.0.0-beta.7"
-  resolved "https://registry.npmjs.org/@zanllp/vue-virtual-scroller/-/vue-virtual-scroller-2.0.0-beta.7.tgz"
-  integrity sha512-CPi29NC6v/pvQQ03jadnQgJ3vXrmtR3hBQ9oAZ6fnmxzxD8zdMDrOKb0ioZe5B3zKL/f8hiPAapnypMTWMXm7g==
-  dependencies:
-    mitt "^2.1.0"
-    vue-observe-visibility "^2.0.0-alpha.1"
-    vue-resize "^2.0.0-alpha.1"
-
 acorn-jsx@^5.3.2:
   version "5.3.2"
   resolved "https://registry.npmjs.org/acorn-jsx/-/acorn-jsx-5.3.2.tgz"
@@ -2229,11 +2220,6 @@ minimatch@^9.0.0, minimatch@^9.0.1:
   dependencies:
     brace-expansion "^2.0.1"
 
-mitt@^2.1.0:
-  version "2.1.0"
-  resolved "https://registry.npmjs.org/mitt/-/mitt-2.1.0.tgz"
-  integrity sha512-ILj2TpLiysu2wkBbWjAmww7TkZb65aiQO+DkVdUTBpBXq+MHYiETENkKFMtsJZX1Lf4pe4QOrTSjIfUwN5lRdg==
-
 ms@2.1.2:
   version "2.1.2"
   resolved "https://registry.npmjs.org/ms/-/ms-2.1.2.tgz"
@@ -2812,16 +2798,6 @@ vue-i18n@^9.3.0-beta.19:
     "@intlify/vue-devtools" "9.3.0-beta.19"
     "@vue/devtools-api" "^6.5.0"
 
-vue-observe-visibility@^2.0.0-alpha.1:
-  version "2.0.0-alpha.1"
-  resolved "https://registry.npmjs.org/vue-observe-visibility/-/vue-observe-visibility-2.0.0-alpha.1.tgz"
-  integrity sha512-flFbp/gs9pZniXR6fans8smv1kDScJ8RS7rEpMjhVabiKeq7Qz3D9+eGsypncjfIyyU84saU88XZ0zjbD6Gq/g==
-
-vue-resize@^2.0.0-alpha.1:
-  version "2.0.0-alpha.1"
-  resolved "https://registry.npmjs.org/vue-resize/-/vue-resize-2.0.0-alpha.1.tgz"
-  integrity sha512-7+iqOueLU7uc9NrMfrzbG8hwMqchfVfSzpVlCMeJQe4pyibqyoifDNbKTZvwxZKDvGkB+PdFeKvnGZMoEb8esg==
-
 vue-router@^4.2.2:
   version "4.2.2"
   resolved "https://registry.npmjs.org/vue-router/-/vue-router-4.2.2.tgz"
@@ -2859,6 +2835,11 @@ vue-types@^4.1.0:
   integrity sha512-DNQZmJuOvovLUIp0BENRkdnZHbI0V4e2mNvjAZOAXKD56YGvRchtUYOXA/XqTxdv7Ng5SJLZqRKRpAhm5NLaPQ==
   dependencies:
     is-plain-object "5.0.0"
+
+vue-virtual-scroller@^3.0.5:
+  version "3.0.5"
+  resolved "https://registry.yarnpkg.com/vue-virtual-scroller/-/vue-virtual-scroller-3.0.5.tgz#80fe45e1b01ac3728d1a4e3f0babfe273b26ee61"
+  integrity sha512-5YXD+5DiLOGsngaubXmeNKLYsAnokSMKITT8BqlNIGJ7Pggy8udTg00vKVHZDE5ElPXPdxhTXnJBQqpGnzKAgw==
 
 vue3-colorpicker@^2.3.0:
   version "2.3.0"

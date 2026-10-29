@@ -2,8 +2,10 @@
 import { t } from '@/i18n'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import NumInput from '@/components/numInput.vue'
+import GridCellLevelSlider from '@/components/gridCellLevelSlider.vue'
+import { nearestGridCellLevel } from '@/util/gridCellLevel'
 import sampleImg from './sample.webp'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { watch } from 'vue'
 import { debounce } from 'lodash-es'
 
@@ -23,6 +25,8 @@ function reduceImageResolution (imagePath: string, scaleFactor: number) {
 }
 
 const g = useGlobalStore()
+/** 档位对应的目标像素宽，仅用于设置页的预览图 */
+const previewWidth = computed(() => nearestGridCellLevel(g.defaultGridCellWidth))
 const thuImg = ref('')
 watch(() => [g.enableThumbnail, g.gridThumbnailResolution], debounce(async () => {
   if (g.enableThumbnail) {
@@ -34,7 +38,7 @@ watch(() => [g.enableThumbnail, g.gridThumbnailResolution], debounce(async () =>
 </script>
 <template>
   <a-form-item :label="t('defaultGridCellWidth')">
-    <NumInput :min="64" :max="1024" :step="16" v-model="g.defaultGridCellWidth" />
+    <GridCellLevelSlider v-model:value="g.defaultGridCellWidth" />
   </a-form-item>
   <a-form-item :label="t('useThumbnailPreview')">
     <a-switch v-model:checked="g.enableThumbnail" />
@@ -44,7 +48,7 @@ watch(() => [g.enableThumbnail, g.gridThumbnailResolution], debounce(async () =>
   </a-form-item>
   <a-form-item :label="t('livePreview')">
     <div>
-      <img :width="g.defaultGridCellWidth" :height="g.defaultGridCellWidth" :src="g.enableThumbnail ? thuImg : sampleImg">
+      <img :width="previewWidth" :height="previewWidth" :src="g.enableThumbnail ? thuImg : sampleImg">
     </div>
   </a-form-item>
   <a-form-item :label="t('defaultShowChangeIndicators')">
