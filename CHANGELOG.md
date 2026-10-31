@@ -1,6 +1,14 @@
 [跳到中文](#中文)
 # English
 
+## 2026-10-31
+### 🐛 Desktop cold start: no more requests before the bundled api server is up
+- The startup page's background-maintenance banner loaded its settings in `onMounted` without waiting for the sidecar, so every cold start fired a `GET /global_setting` while the server was still unpacking. It failed with `ERR_CONNECTION_REFUSED`, the axios error interceptor then tried to `JSON.parse` a response body that does not exist (`"undefined" is not valid JSON`), and the user saw the "An error occurred" toast again.
+- `loadSettings()` now awaits `waitForServerReady()` first, which covers all three callers (banner mount, the settings modal and the global init): the request goes out only after the port answers.
+- The error interceptor parses a body only when a response actually exists, so connection errors no longer produce a misleading syntax error in the console.
+- `SplitViewTab` skips the parent-tab handshake when there is no parent (`window.parent === window`, i.e. the desktop app and the standalone page) instead of waiting 30 s and logging `watch tab change failed`.
+- Verified with a cold-start A/B against the v1.10.0 build (a local server that refuses API requests for the first 2 s): the released build sends the early `/global_setting`, the fixed build sends none and only asks after `/version` answers.
+
 ## 2026-10-30
 ### ⚡ Grid: upstream vue-virtual-scroller 3.x, thumbnail size levels, correct column math
 - Migrated off the `@zanllp/vue-virtual-scroller` fork (2.0.0-beta.7 plus one patch) to upstream `vue-virtual-scroller@^3.0.5`. The fork had been frozen since 2023-01, so it missed the upstream fixes for fast-scroll gaps (#890, fixes #863 / #882), hidden views overlapping the visible ones (#837) and the view re-assignment rewrite (#743) — the first of those is the "blank cell in the middle of the grid" bug that showed up when scrolling quickly.
@@ -913,6 +921,14 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-10-31
+### 🐛 桌面版冷启动：后端还没起来时不再提前发请求
+- 启动页的「后台静默维护」banner 在 `onMounted` 里直接读配置，没有等 sidecar 就绪，于是每次冷启动都会在服务端还在自解压时发出一个 `GET /global_setting`：连接被拒（`ERR_CONNECTION_REFUSED`），axios 错误拦截器再去 `JSON.parse` 一个不存在的响应体（控制台报 `"undefined" is not valid JSON`），最后又弹出「发生了个错误」。
+- `loadSettings()` 现在先 `await waitForServerReady()` 再发请求，banner 挂载、设置弹窗、全局初始化三个入口都覆盖：端口能响应之后才会真正请求。
+- 错误拦截器只在确实有响应体时才解析，连接失败不会再附带一条误导性的语法错误日志。
+- `SplitViewTab` 在没有父级页面时（`window.parent === window`，即桌面版/独立页）跳过 WebUI 的父级 tab 握手，不再空等 30 秒再打 `watch tab change failed`。
+- 用 v1.10.0 做了冷启动 A/B（本地假服务器前 2 秒拒绝对 API 的请求）：旧构建会发出提前的 `/global_setting`，修复后完全没有，只在 `/version` 响应之后才请求。
 
 ## 2026-10-30
 ### ⚡ 网格：切回上游 vue-virtual-scroller 3.x、缩略图档位、列数计算修正
