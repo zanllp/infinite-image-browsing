@@ -207,6 +207,8 @@ export interface GlobalConf {
   export_fe_fn: boolean
   app_fe_setting: Record<'global' | 'fullscreen_layout' | 'auto_tag_rules' | 'startup_page_layout' | 'background_maintenance' | `workspace_snapshot_${string}`, any>
   is_readonly: boolean
+  /** 当前平台是否支持系统回收站（目前仅 Windows） */
+  recycle_bin_supported?: boolean
 }
 
 export const getGlobalSetting = async () => {

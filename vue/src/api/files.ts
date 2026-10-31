@@ -28,8 +28,14 @@ export const getTargetFolderFiles = async (folder_path: string) => {
 }
 
 
-export const deleteFiles = async (file_paths: string[]) => {
-  const resp = await axiosInst.value.post('/delete_files', { file_paths })
+export const deleteFiles = async (file_paths: string[], permanent = false) => {
+  const resp = await axiosInst.value.post('/delete_files', { file_paths, permanent })
+  return resp.data as { ok: true; trashed?: boolean }
+}
+
+/** 打开系统回收站窗口（仅 Windows，需后端支持） */
+export const openRecycleBin = async () => {
+  const resp = await axiosInst.value.post('/open_recycle_bin')
   return resp.data as { ok: true }
 }
 

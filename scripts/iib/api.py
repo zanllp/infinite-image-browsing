@@ -77,6 +77,11 @@ from scripts.iib.index_worker import default_status, get_worker, init_worker
 from scripts.iib.logger import logger
 from scripts.iib.seq import seq
 from scripts.iib.thumb_cache import cache_path_for, ensure_thumbnail
+from scripts.iib.recycle_bin import (
+    is_supported as is_recycle_bin_supported,
+    open_recycle_bin,
+    send_to_recycle_bin,
+)
 
 import urllib.parse
 from scripts.iib.fastapi_video import range_requests_response, close_video_file_reader
@@ -447,6 +452,8 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
             "export_fe_fn": bool(kwargs.get("export_fe_fn")),
             "app_fe_setting": app_fe_setting,
             "is_readonly": not is_api_writeable,
+            # 前端据此决定是否展示"移入系统回收站"开关（非 Windows 只能永久删除）
+            "recycle_bin_supported": is_recycle_bin_supported(),
         }
     
     
@@ -545,6 +552,8 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
 
     class DeleteFilesReq(BaseModel):
         file_paths: List[str]
+        # True = 跳过回收站直接永久删除；默认在 Windows 上把文件送进系统回收站。
+        permanent: Optional[bool] = False
 
     @app.post(
         api_base + "/delete_files",
@@ -552,6 +561,10 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
     )
     async def delete_files(req: DeleteFilesReq):
         conn = DataBase.get_conn()
+        # Windows 默认使用系统回收站（可用前端"永久删除"勾选绕过，便于立即腾出空间）；
+        # 其它平台保持原有永久删除行为，不引入额外存储。
+        use_recycle_bin = (not req.permanent) and is_recycle_bin_supported()
+        trashed = False
 
         for path in req.file_paths:
             check_path_trust(path)
@@ -564,23 +577,37 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
                             else "文件夹不为空时不允许删除。"
                         )
                         raise HTTPException(400, detail=error_msg)
-                    shutil.rmtree(path)
+                    if use_recycle_bin:
+                        send_to_recycle_bin([path])
+                        trashed = True
+                    else:
+                        shutil.rmtree(path)
                 else:
+                    # 视频读取器持有文件句柄时无法删除/移动，先关闭
                     close_video_file_reader(path)
                     txt_path = get_img_geninfo_txt_path(path)
 
-                    os.remove(path)
-                    if txt_path:
-                        os.remove(txt_path)
+                    if use_recycle_bin:
+                        # 图片与其 geninfo(.txt) 一并进回收站，还原时保持配对
+                        send_to_recycle_bin(
+                            [path, *([txt_path] if txt_path else [])]
+                        )
+                        trashed = True
+                    else:
+                        os.remove(path)
+                        if txt_path:
+                            os.remove(txt_path)
 
                     img = DbImg.get(conn, os.path.normpath(path))
                     if img:
-                        logger.info("delete file: %s", path)
+                        logger.info(
+                            "delete file: %s (recycle_bin=%s)", path, use_recycle_bin
+                        )
                         ImageTag.remove(conn, img.id)
                         DbImg.remove(conn, img.id)
             except OSError as e:
                 # 处理删除失败的情况
-                logger.error("delete failed")
+                logger.error("delete failed: %s", e)
                 error_msg = (
                     f"Error deleting file {path}: {e}"
                     if locale == "en"
@@ -588,7 +615,25 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
                 )
                 raise HTTPException(400, detail=error_msg)
 
+        return {"ok": True, "trashed": trashed}
+
+    @app.post(
+        api_base + "/open_recycle_bin",
+        dependencies=[Depends(verify_secret), Depends(write_permission_required)],
+    )
+    async def open_system_recycle_bin():
+        """打开系统回收站窗口，方便用户查看/还原刚删除的文件。"""
+        try:
+            open_recycle_bin()
+        except OSError as e:
+            error_msg = (
+                f"Failed to open the system recycle bin: {e}"
+                if locale == "en"
+                else f"打开系统回收站失败：{e}"
+            )
+            raise HTTPException(400, detail=error_msg)
         return {"ok": True}
+
 
     class CreateFoldersReq(BaseModel):
         dest_folder: str

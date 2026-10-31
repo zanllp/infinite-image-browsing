@@ -892,8 +892,8 @@ const handleDeleteCurrent = async () => {
       content: getCurrentDisplayName(),
       async onOk () {
         const { events }  = await import('@/page/fileTransfer/hooks') 
-        await deleteFiles([fullpath])
-        message.success(t('deleteSuccess'))
+        const res = await deleteFiles([fullpath], !global.useSystemRecycleBin)
+        message.success(res?.trashed ? t('moveToTrashSuccess') : t('deleteSuccess'))
         events.emit('removeFiles', { paths: [fullpath], loc: getParentDirectory(fullpath) })
         removeCurrentItemFromList()
         showTags.value = false

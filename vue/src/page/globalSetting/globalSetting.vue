@@ -13,6 +13,7 @@ import { isTauri } from '@/util/env'
 import ImageSetting from './ImageSetting.vue'
 import AutoTagSettings from './AutoTagSettings.vue'
 import DataBackupSettings from './DataBackupSettings.vue'
+import { openRecycleBin } from '@/api/files'
 import { openRebuildImageIndexModal } from '@/components/functionalCallableComp'
 import { Dict } from '@/util'
 import { message } from 'ant-design-vue'
@@ -29,6 +30,14 @@ const {
   settings: backgroundMaintenanceSettings,
   openModal: openBackgroundMaintenanceModal
 } = useBackgroundMaintenance()
+
+const onOpenRecycleBin = async () => {
+  try {
+    await openRecycleBin()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail ?? String(e))
+  }
+}
 
 const langChanged = ref(false)
 const reload = async () => {
@@ -203,6 +212,18 @@ const presetShortcutGroups = computed(() => ([
         <span style="margin-left: 8px;color: #666;">
           {{ backgroundMaintenanceSettings.index ? $t('backgroundMaintenanceEnabled') : $t('backgroundMaintenanceDisabled') }}
         </span>
+      </a-form-item>
+
+      <h2>{{ t('recycleBin') }}</h2>
+      <a-form-item :label="t('useSystemRecycleBin')">
+        <a-switch v-model:checked="globalStore.useSystemRecycleBin"
+          :disabled="!globalStore.conf?.recycle_bin_supported" />
+        <span style="margin-left: 8px;color: #666;">
+          {{ globalStore.conf?.recycle_bin_supported ? t('useSystemRecycleBinDesc') : t('recycleBinUnsupported') }}
+        </span>
+      </a-form-item>
+      <a-form-item v-if="globalStore.conf?.recycle_bin_supported" :label="t('openRecycleBin')">
+        <a-button @click="onOpenRecycleBin">{{ t('openRecycleBin') }}</a-button>
       </a-form-item>
 
       <h2>{{ t('dataBackupTitle') }}</h2>
