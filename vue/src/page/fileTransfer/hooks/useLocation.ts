@@ -216,7 +216,33 @@ export function useLocation () {
     }
   }
 
+  let autoRefreshVersion = 0
+  let pendingAutoRefresh: (() => void) | undefined
+  const invalidateAutoRefresh = () => {
+    autoRefreshVersion++
+    pendingAutoRefresh = undefined
+  }
+  const applyOrDeferAutoRefresh = (version: number, update: () => void) => {
+    if (version !== autoRefreshVersion) return
+    if (previewing.value) {
+      pendingAutoRefresh = update
+    } else {
+      update()
+    }
+  }
+
+  watch(previewing, (visible) => {
+    if (visible) return
+    const update = pendingAutoRefresh
+    pendingAutoRefresh = undefined
+    update?.()
+  }, { flush: 'post' })
+  // 切换目录、模式或手动刷新后，旧请求和预取结果都不能再覆盖当前列表。
+  watch([currLocation, currPage, walker, () => props.value.mode], invalidateAutoRefresh, { flush: 'sync' })
+  onUnmounted(invalidateAutoRefresh)
+
   const refresh = makeAsyncFunctionSingle(async () => {
+    invalidateAutoRefresh()
     try {
       np.value?.start()
       if (walker.value) {
@@ -240,19 +266,19 @@ export function useLocation () {
   /**
    * 上面那个是Force
    */
-  const lazyRefresh = (async (isPollRefresh = false) => {
-    
-    if (isPollRefresh === true && previewing.value) {
-      return // fullscreen previewing时不刷新
-    }
+  const lazyRefresh = (async () => {
+    const version = ++autoRefreshVersion
+    pendingAutoRefresh = undefined
     if (props.value.mode === 'walk' && walker.value) {
+      const currentWalker = walker.value
       const currpos = getVisibleRange(scroller.value).end || 64
       if (global.autoRefreshWalkMode &&
         currpos < global.autoRefreshWalkModePosLimit &&
-        await walker.value.isExpired()) {
+        await currentWalker.isExpired() && version === autoRefreshVersion) {
         const taskCancelled = ref(false)
         const onDisable = () => {
           taskCancelled.value = true
+          invalidateAutoRefresh()
           global.autoRefreshWalkMode = false
           hide()
           message.success(t('walkModeAutoRefreshDisabled'))
@@ -262,15 +288,14 @@ export function useLocation () {
           h('span', { onClick: onDisable, style: { paddingLeft: '16px', cursor: 'pointer', color: 'var(--primary-color)' } }, t('disable'))
         ]), 0)
         try {
-          const updatePromsie = new Promise<void>(resolve => {
-            walker.value!.seamlessRefresh(currpos, taskCancelled).then((newWalker) => {
-              if (taskCancelled.value) return
+          const updatePromise = currentWalker.seamlessRefresh(currpos, taskCancelled).then((newWalker) => {
+            if (taskCancelled.value) return
+            applyOrDeferAutoRefresh(version, () => {
               walker.value = newWalker
               eventEmitter.value.emit('loadNextDir') // 确认铺满和更新tag，显示期间还能执行
-              resolve()
             })
           })
-          await Promise.all([updatePromsie, delay(1500)]) // 最少显示1.5s
+          await Promise.all([updatePromise, delay(1500)]) // 最少显示1.5s
         } finally {
           hide()
         }
@@ -283,11 +308,13 @@ export function useLocation () {
       }
       np.value?.start()
       const { files } = await getTargetFolderFiles(currLocation.value)
-      const currFiles = last(stack.value)!.files
-      if (currFiles.map((v) => v.date).join() !== files.map((v) => v.date).join()) {
-        last(stack.value)!.files = files
-        message.success(t('autoUpdate'))
-      }
+      applyOrDeferAutoRefresh(version, () => {
+        const currFiles = last(stack.value)!.files
+        if (currFiles.map((v) => v.date).join() !== files.map((v) => v.date).join()) {
+          last(stack.value)!.files = files
+          message.success(t('autoUpdate'))
+        }
+      })
     } finally {
       np.value?.done()
     }
@@ -429,7 +456,7 @@ export function useLocation () {
     showWalkButton,
     searchInCurrentDir,
     backToLastUseTo,
-    ...usePollRefresh(() => lazyRefresh(true))
+    ...usePollRefresh(lazyRefresh)
   }
 }
 
