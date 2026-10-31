@@ -1,6 +1,15 @@
 [跳到中文](#中文)
 # English
 
+## 2026-10-31
+### 🗑️ Deleting files now goes to the Windows system recycle bin
+- Deletion no longer unlinks the file. On Windows the image is sent to the real system recycle bin (`ctypes` → `shell32!SHFileOperationW` with `FO_DELETE | FOF_ALLOWUNDO`), so a mis-click can be undone from Explorer instead of being unrecoverable. No new dependency: `ctypes` is part of the standard library.
+- The image and its `.txt` geninfo sidecar are recycled together so the pair stays intact; the `image` row, its tags and its embedding are still cleaned from the database exactly as before, and index/search behaviour is unchanged.
+- New "Recycle Bin" section in global settings: a switch (on by default) plus an "Open system recycle bin" button, and the delete confirmation gained a per-batch "Delete permanently (skip recycle bin)" tick. The success toast now says "Moved to trash" instead of "Deleted successfully" when the file was recycled.
+- `GET /global_setting` reports `recycle_bin_supported`, so the switch is disabled with an explanation on platforms where the feature does not exist; non-Windows keeps the previous permanent-delete behaviour. A new `POST /open_recycle_bin` endpoint (guarded by the same secret/write-permission checks) opens Explorer.
+- Empty folders are recycled too (non-empty folders are still refused, as before). `SHFileOperationW` does not support paths over `MAX_PATH` (260 chars) or network shares — instead of silently falling back to a permanent delete, the API returns 400 with the reason, so files are never lost without the user asking for it.
+- Verified on Windows: recycled files appear under `C:\$RECYCLE.BIN`, read-only files and empty folders work, and `permanent: true` still bypasses the bin (no file left in it).
+
 ## 2026-10-30
 ### ⚡ Grid: upstream vue-virtual-scroller 3.x, thumbnail size levels, correct column math
 - Migrated off the `@zanllp/vue-virtual-scroller` fork (2.0.0-beta.7 plus one patch) to upstream `vue-virtual-scroller@^3.0.5`. The fork had been frozen since 2023-01, so it missed the upstream fixes for fast-scroll gaps (#890, fixes #863 / #882), hidden views overlapping the visible ones (#837) and the view re-assignment rewrite (#743) — the first of those is the "blank cell in the middle of the grid" bug that showed up when scrolling quickly.
@@ -913,6 +922,15 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-10-31
+### 🗑️ 删除文件改为进入 Windows 系统回收站
+- 删除不再直接 unlink 文件：Windows 上通过 `ctypes` 调 `shell32!SHFileOperationW`（`FO_DELETE | FOF_ALLOWUNDO`）把图片送进真实的系统回收站，误删可以在资源管理器里还原。零新依赖，`ctypes` 属于标准库。
+- 图片与同名 `.txt` geninfo 一起进回收站，保持配对；数据库里的 `image` 行、标签、embedding 仍按原逻辑清理，索引与搜索行为不变。
+- 全局设置新增「回收站」区块：开关（默认开启）+「打开系统回收站」按钮；删除确认框新增单次「永久删除（不进入回收站）」勾选；成功提示区分“已移动到回收站”和“删除成功”。
+- `GET /global_setting` 增加 `recycle_bin_supported` 字段：不支持的平台会自动禁用开关并给出说明，非 Windows 保持原有的永久删除行为。新增 `POST /open_recycle_bin` 端点（同样的密钥/写权限校验），用于打开资源管理器回收站。
+- 空文件夹也会进回收站（非空文件夹仍按原逻辑拒绝删除）。`SHFileOperationW` 不支持超过 `MAX_PATH`（260 字符）的路径和网络共享盘——此时返回 400 并说明原因，而不是静默降级成永久删除，避免用户不知情地丢文件。
+- Windows 实测：文件确实出现在 `C:\$RECYCLE.BIN`；只读文件、空目录可正常回收；`permanent: true` 不会在回收站里留下文件。
 
 ## 2026-10-30
 ### ⚡ 网格：切回上游 vue-virtual-scroller 3.x、缩略图档位、列数计算修正
