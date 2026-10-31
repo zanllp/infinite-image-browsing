@@ -166,12 +166,15 @@ const addInterceptor = (axiosInst: AxiosInstance) => {
             throw new Error(t('secretKeyRequiredWarnMsg'))
         }
         let errmsg = err.response?.data?.detail
-        try {
-          if (!errmsg) {
-            errmsg = JSON.parse(await err.response?.data.text()).detail
+        // 只有确实拿到响应体时才去解析：连接被拒/超时(req.response 为 undefined)时
+        // 原来的写法会把 undefined 丢给 JSON.parse，抛一个和真实错误无关的
+        // 「"undefined" is not valid JSON」。
+        if (!errmsg && err.response?.data && typeof (err.response.data as any)?.text === 'function') {
+          try {
+            errmsg = JSON.parse(await (err.response.data as any).text()).detail
+          } catch (e) {
+            console.error(err.response, e)
           }
-        } catch (e) {
-          console.error(err.response, e)
         }
         errmsg ??= t('errorOccurred')
         message.error(errmsg)

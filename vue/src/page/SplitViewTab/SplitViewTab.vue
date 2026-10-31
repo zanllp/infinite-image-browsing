@@ -91,6 +91,11 @@ watch(
 const emitReturnToIIB = debounce(() => globalEvents.emit('returnToIIB'), 100)
 
 tryOnMounted(async () => {
+  // 桌面版/独立页没有 WebUI 的父级 tab（window.parent === window），
+  // 不必空等 30s 再打一条 "watch tab change failed"。
+  if (window.parent === window) {
+    return
+  }
   const par = window.parent as Window & { get_uiCurrentTabContent (): undefined | HTMLButtonElement, onUiTabChange (cb: Fn): void }
   if (!await asyncCheck(() => par?.onUiTabChange, 200, 30_000)) {
     console.log('watch tab change failed')
