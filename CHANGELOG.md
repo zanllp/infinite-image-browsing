@@ -1,6 +1,15 @@
 [跳到中文](#中文)
 # English
 
+## 2026-11-01
+### 🐛 Fullscreen preview: the file list no longer changes while it is open
+- Automatic refresh (polling, returning to the tab, walk-mode expiry) still fetches in the background, but its result is no longer applied while the fullscreen preview is open: only the newest result is buffered and applied when the preview closes, so the list can no longer jump under the user mid-preview.
+- Buffered results are invalidated on directory/page change, mode or walker change, manual refresh, unmount, and when either automatic-refresh switch is turned off; only the newest request can supply the buffered result, so out-of-order responses are dropped.
+- While the preview is open, the first buffered update shows a one-off toast ("New content detected. It will be loaded after you close the fullscreen preview") so the list quietly waiting for the preview is not mistaken for a stale page; polls that find nothing new stay silent.
+- A new poll no longer drops the buffered result when it starts: the buffer is only replaced once a newer request actually returns changes, so a request that fails or finds nothing keeps the pre-fetched list.
+- A failed walk-mode refresh now goes through the normal cleanup path instead of leaving the loading indicator on screen forever (the old wrapper promise never settled); the background task also no longer turns into an unhandled rejection.
+- Added a regression suite (`vue/tests/useLocation.test.cjs`, 28 cases) covering the preview / deferred-apply / prefetch races; run it with `cd vue && yarn test`, and CI runs it on pull requests.
+
 ## 2026-10-31
 ### 🐛 Desktop cold start: no more requests before the bundled api server is up
 - The startup page's background-maintenance banner loaded its settings in `onMounted` without waiting for the sidecar, so every cold start fired a `GET /global_setting` while the server was still unpacking. It failed with `ERR_CONNECTION_REFUSED`, the axios error interceptor then tried to `JSON.parse` a response body that does not exist (`"undefined" is not valid JSON`), and the user saw the "An error occurred" toast again.
@@ -921,6 +930,15 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-11-01
+### 🐛 全屏预览期间文件列表不再变动
+- 自动刷新（轮询、切回标签页、walk 模式过期刷新）仍然在后台照常拉取，但全屏预览打开期间不再应用结果：只缓冲最新的一份，等预览关闭后再落到列表，预览过程中列表不会再自己跳变。
+- 目录/翻页、模式或 walker 变化、手动刷新、组件卸载，以及任意一个自动刷新开关被关闭时，已缓冲的结果都会失效；只有最新一次请求能提供缓冲结果，乱序返回的旧结果直接丢弃。
+- 预览打开期间，第一次缓冲到更新时会弹一条一次性提示（「检测到新内容，关闭全屏预览后会自动刷新」），避免用户以为列表卡住；没有变化的轮询保持静默。
+- 新一轮请求开始时不再清空已缓冲的结果：只有新请求真的拿到变化才替换缓冲，请求失败或没变化时，之前预取到的列表仍然有效。
+- walk 模式刷新失败时现在会走正常的收尾流程（旧写法里包裹的 Promise 永远不 settle，loading 提示会一直挂在屏幕上），后台任务也不会再变成 unhandled rejection。
+- 新增回归测试（`vue/tests/useLocation.test.cjs`，28 个用例）覆盖预览 / 延迟应用 / 预取的竞态，用 `cd vue && yarn test` 运行，CI 会在 PR 上跑。
 
 ## 2026-10-31
 ### 🐛 桌面版冷启动：后端还没起来时不再提前发请求

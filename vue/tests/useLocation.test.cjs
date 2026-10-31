@@ -7,6 +7,9 @@ const ts = require('typescript')
 const vue = require('vue')
 
 // Exercise the real hook without mounting the file browser or calling its APIs.
+// The hook source is transpiled to CJS and run inside a vm with the mocked module
+// graph in setup(); if useLocation.ts gains/changes an import, the `modules` table
+// below must be updated too (the require() assertion fails loudly otherwise).
 const source = ts.transpileModule(
   readFileSync(join(__dirname, '../src/page/fileTransfer/hooks/useLocation.ts'), 'utf8'),
   { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }
@@ -33,13 +36,18 @@ function setup({ mode = 'scanned', previewing = false, fetchFiles, walker } = {}
     props: vue.ref({ mode }),
     deletedFiles: vue.ref(new Set()),
     walker: vue.shallowRef(walker),
-    sortedFiles: vue.ref(oldFiles),
-    previewing: vue.ref(previewing)
+    previewing: vue.ref(previewing),
+    previewIdx: vue.ref(-1),
+    sortMethod: vue.ref('date-desc')
   }
   state.currPage = vue.computed(() => state.stack.value.at(-1))
+  // 真实实现里 sortedFiles 由 currPage.files 派生，这里同样保持派生关系，
+  // 这样「更新后预览项是否还在同一位置」的判断能拿到当前展示中的列表。
+  state.sortedFiles = vue.computed(() => state.stack.value.at(-1)?.files ?? [])
   const listeners = new Map()
   const events = []
   const messages = []
+  const notices = []
   let fetchCount = 0
   let hideCount = 0
   let poll
@@ -48,18 +56,19 @@ function setup({ mode = 'scanned', previewing = false, fetchFiles, walker } = {}
   const unmountCallbacks = []
   state.useEventListen = vue.ref(() => {})
   state.eventEmitter = vue.ref({ emit: event => events.push(event) })
-  const global = {
+  const global = vue.reactive({
     autoRefreshNormalFixedMode: true,
     autoRefreshWalkMode: true,
     autoRefreshWalkModePosLimit: 100,
     quickMovePaths: []
-  }
+  })
   const modules = {
     '@/api/files': { getTargetFolderFiles: async () => {
       fetchCount++
       return fetchFiles ? fetchFiles() : { files: newFiles }
     } },
     '@/components/functionalCallableComp': {},
+    '../sortedFiles': { computeSortedFiles: files => files.slice() },
     '@/i18n': { t: key => key },
     '@/icon': {},
     '@/util': {
@@ -69,6 +78,7 @@ function setup({ mode = 'scanned', previewing = false, fetchFiles, walker } = {}
     'ant-design-vue': {
       message: {
         success: text => messages.push(text),
+        info: text => notices.push(text),
         loading: content => { loadingContent = content; return () => { hideCount++ } }
       },
       Modal: { confirm: options => { confirm = options } }
@@ -104,7 +114,7 @@ function setup({ mode = 'scanned', previewing = false, fetchFiles, walker } = {}
   }
   cleanups.push(unmount)
   return {
-    state, global, events, messages, location, unmount,
+    state, global, events, messages, notices, location, unmount,
     fetchCount: () => fetchCount,
     hideCount: () => hideCount,
     disableWalkRefresh: () => loadingContent.children[1].props.onClick(),
@@ -371,4 +381,153 @@ test('explicit manual refresh remains available', async () => {
   assert.equal(c.fetchCount(), 1)
   assert.deepEqual(c.state.currPage.value.files, newFiles)
   assert.deepEqual(c.messages, ['refreshCompleted'])
+})
+
+for (const [label, turnOff] of [
+  ['normal/fixed', c => { c.global.autoRefreshNormalFixedMode = false }],
+  ['walk', c => { c.global.autoRefreshWalkMode = false }]
+]) {
+  test(`turning ${label} automatic refresh off discards a buffered result`, async () => {
+    const replacement = {}
+    const walker = { isExpired: async () => true, seamlessRefresh: async () => replacement }
+    const c = setup(label === 'walk' ? { mode: 'walk', previewing: true, walker } : { previewing: true, walker })
+    const files = c.state.currPage.value.files
+    await c.returnToIIB()
+    turnOff(c)
+    c.state.previewing.value = false
+    await vue.nextTick()
+    assert.equal(c.state.walker.value, walker)
+    assert.equal(c.state.currPage.value.files, files)
+    assert.deepEqual(c.events, [])
+    assert.deepEqual(c.messages, [])
+  })
+}
+
+test('a failed walk refresh hides the loading indicator and does not reject', async () => {
+  const walker = {
+    isExpired: async () => true,
+    seamlessRefresh: async () => { throw new Error('boom') }
+  }
+  const c = setup({ mode: 'walk', walker })
+  const originalError = console.error
+  console.error = () => {}
+  try {
+    await assert.doesNotReject(async () => { await c.returnToIIB() })
+  } finally {
+    console.error = originalError
+  }
+  assert.equal(c.hideCount(), 1)
+  assert.equal(c.state.walker.value, walker)
+  assert.deepEqual(c.events, [])
+})
+
+test('a buffered update reminds the user once while the preview is open', async () => {
+  const c = setup({ previewing: true })
+  await c.returnToIIB()
+  await c.returnToIIB()
+  assert.deepEqual(c.notices, ['autoUpdatePendingPreview'])
+  assert.deepEqual(c.messages, [])
+  c.state.previewing.value = false
+  await vue.nextTick()
+  assert.deepEqual(c.state.currPage.value.files, newFiles)
+  assert.deepEqual(c.messages, ['autoUpdate'])
+})
+
+test('an unchanged poll during the preview does not remind the user', async () => {
+  const c = setup({ previewing: true, fetchFiles: async () => ({ files: oldFiles }) })
+  await c.returnToIIB()
+  assert.deepEqual(c.notices, [])
+  c.state.previewing.value = false
+  await vue.nextTick()
+  assert.deepEqual(c.state.currPage.value.files, oldFiles)
+  assert.deepEqual(c.messages, [])
+})
+
+test('a newer request that finds nothing keeps the previously buffered result', async () => {
+  let calls = 0
+  const c = setup({ previewing: true, fetchFiles: async () => ({ files: ++calls === 1 ? newFiles : oldFiles }) })
+  const files = c.state.currPage.value.files
+  await c.returnToIIB() // buffers newFiles
+  await c.returnToIIB() // no change: must not clear the buffer
+  assert.equal(c.state.currPage.value.files, files)
+  c.state.previewing.value = false
+  await vue.nextTick()
+  assert.deepEqual(c.state.currPage.value.files, newFiles)
+})
+
+test('a failed newer request keeps the previously buffered result', async () => {
+  let calls = 0
+  const c = setup({ previewing: true, fetchFiles: async () => {
+    if (++calls === 1) {
+      return { files: newFiles }
+    }
+    throw new Error('boom')
+  } })
+  const originalError = console.error
+  console.error = () => {}
+  try {
+    await c.returnToIIB() // buffers newFiles
+    await c.returnToIIB() // fails: must not clear the buffer
+  } finally {
+    console.error = originalError
+  }
+  c.state.previewing.value = false
+  await vue.nextTick()
+  assert.deepEqual(c.state.currPage.value.files, newFiles)
+  assert.deepEqual(c.messages, ['autoUpdate'])
+})
+
+// ---- hybrid: 预览组件会存活就直接更新（legacy），会被卸载才推迟 ----
+
+test('previewing: updates immediately when the previewed item keeps its slot', async () => {
+  // 新列表在 previewIdx=0 处仍是同一个 fullpath，a-image 实例不会被卸载
+  const next = [oldFiles[0], newFiles[0]]
+  const c = setup({ previewing: true, fetchFiles: async () => ({ files: next }) })
+  c.state.previewIdx.value = 0
+  await c.returnToIIB()
+  assert.deepEqual(c.state.currPage.value.files, next)
+  assert.deepEqual(c.messages, ['autoUpdate'])
+  assert.deepEqual(c.notices, [])
+  assert.equal(c.state.previewing.value, true)
+})
+
+test('previewing: defers when the previewed item would move out of its slot', async () => {
+  const c = setup({ previewing: true })
+  c.state.previewIdx.value = 0
+  await c.returnToIIB()
+  // 预览项从 old.png 变成 new.png：推迟
+  assert.deepEqual(c.state.currPage.value.files, oldFiles)
+  assert.deepEqual(c.messages, [])
+  assert.deepEqual(c.notices, ['autoUpdatePendingPreview'])
+  c.state.previewing.value = false
+  await vue.nextTick()
+  assert.deepEqual(c.state.currPage.value.files, newFiles)
+  assert.deepEqual(c.messages, ['autoUpdate'])
+})
+
+test('previewing walk: updates immediately when the walker keeps the previewed slot', async () => {
+  const replacement = { images: [oldFiles[0], newFiles[0]] }
+  const walker = { isExpired: async () => true, seamlessRefresh: async () => replacement }
+  const c = setup({ mode: 'walk', previewing: true, walker })
+  c.state.previewIdx.value = 0
+  await c.returnToIIB()
+  assert.equal(c.state.walker.value, replacement)
+  assert.deepEqual(c.events, ['loadNextDir'])
+  assert.deepEqual(c.notices, [])
+  assert.equal(c.hideCount(), 1)
+})
+
+test('previewing walk: defers when the walker would replace the previewed slot', async () => {
+  const replacement = { images: [newFiles[0]] }
+  const walker = { isExpired: async () => true, seamlessRefresh: async () => replacement }
+  const c = setup({ mode: 'walk', previewing: true, walker })
+  c.state.previewIdx.value = 0
+  await c.returnToIIB()
+  assert.equal(c.state.walker.value, walker)
+  assert.deepEqual(c.events, [])
+  assert.deepEqual(c.notices, ['autoUpdatePendingPreview'])
+  c.state.previewing.value = false
+  await vue.nextTick()
+  assert.equal(c.state.walker.value, replacement)
+  assert.deepEqual(c.events, ['loadNextDir'])
 })
