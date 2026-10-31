@@ -224,6 +224,7 @@ export const presistKeys = [
   'fileTypeFilter',
   'shortcut',
   'ignoredConfirmActions',
+  'useSystemRecycleBin',
   'previewBgOpacity',
   'defaultInitinalPage',
   'autoRefreshWalkMode',
@@ -331,6 +332,9 @@ export const useGlobalStore = defineStore(
     watch(lang, (v) => (i18n.global.locale.value = v as any))
 
     const longPressOpenContextMenu = ref(false)
+
+    // 删除时是否把文件移入系统回收站（仅 Windows 后端支持；关闭=永久删除）
+    const useSystemRecycleBin = ref(true)
 
     const shortcut = ref<Shortcut>({
       delete: '',
@@ -476,6 +480,7 @@ export const useGlobalStore = defineStore(
       dontShowAgain: ref(false),
       dontShowAgainNewImgOpts: ref(false),
       ignoredConfirmActions,
+      useSystemRecycleBin,
       getShortPath,
       extraPathAliasMap,
       previewBgOpacity,

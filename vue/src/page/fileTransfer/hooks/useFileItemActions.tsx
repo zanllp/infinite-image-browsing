@@ -322,10 +322,14 @@ export function useFileItemActions (
       }
       case 'deleteFiles': {
         const selectedFiles = getSelectedImg()
-        const removeFile = async () => {
+        // 系统回收站不可用（非 Windows）或用户关闭了开关时，行为与旧版一致：永久删除
+        const recycleBinDisabled = !global.useSystemRecycleBin
+        // 单次删除可临时勾选"永久删除"（跳过回收站），默认走回收站
+        const permanentThisTime = ref(false)
+        const removeFile = async (permanent: boolean) => {
           const paths = selectedFiles.map((v) => v.fullpath)
-          await deleteFiles(paths)
-          message.success(t('deleteSuccess'))
+          const res = await deleteFiles(paths, permanent)
+          message.success(res?.trashed ? t('moveToTrashSuccess') : t('deleteSuccess'))
           if (previewing.value) {
             const isFullscreenFirst = toRawFileUrl(file) === global.fullscreenPreviewInitialUrl
             const isEnd = previewIdx.value === sortedFiles.value.length - 1
@@ -341,7 +345,7 @@ export function useFileItemActions (
           events.emit('removeFiles', { paths: paths, loc: currLocation.value })
         }
         if (selectedFiles.length === 1 && global.ignoredConfirmActions.deleteOneOnly) {
-          return removeFile()
+          return removeFile(recycleBinDisabled)
         }
         await new Promise<void>((resolve) => {
           Modal.confirm({
@@ -354,10 +358,11 @@ export function useFileItemActions (
                   {selectedFiles.map((v) => <li>{v.fullpath.split(/[/\\]/).pop()}</li>)}
                 </ol>
                 <MultiSelectTips />
+                {!recycleBinDisabled && <Checkbox v-model:checked={permanentThisTime.value}>{t('permanentDeleteSkipRecycleBin')}</Checkbox>}
                 <Checkbox v-model:checked={global.ignoredConfirmActions.deleteOneOnly}>{t('deleteOneOnlySkipConfirm')} ({t('resetOnGlobalSettingsPage')})</Checkbox>
               </div>,
             async onOk () {
-              await removeFile()
+              await removeFile(permanentThisTime.value || recycleBinDisabled)
               resolve()
             }
           })
