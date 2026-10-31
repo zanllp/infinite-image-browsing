@@ -110,6 +110,11 @@ const loadSettings = (force = false): Promise<void> => {
   }
   settingsLoadPromise = (async () => {
     try {
+      // 桌面版后端 sidecar 可能比 webview 晚就绪：启动页 banner 在 onMounted 里就会
+      // 调到这里，不先等端口能响应的话，冷启动必然发出一个 ECONNREFUSED 的
+      // /global_setting（拦截器再去 JSON.parse 一个不存在的响应体，控制台报
+      // "undefined" is not valid JSON，还会弹"发生了个错误"）。
+      await waitForServerReady()
       const conf = await getGlobalSettingRaw()
       const raw = (conf?.app_fe_setting as Record<string, unknown> | undefined)?.[
         BACKGROUND_MAINTENANCE_SETTING_KEY
