@@ -2,8 +2,7 @@ import { t } from '@/i18n'
 import { isImageFile } from '@/util'
 import { message } from 'ant-design-vue'
 import { useWatchDocument } from 'vue3-ts-util'
-import { useHookShareState, useEventListen } from '.'
-import { closeImageFullscreenPreview } from '@/util/imagePreviewOperation'
+import { useHookShareState } from '.'
 import { isIndexInVisibleRange } from '@/util/scroller'
 
 /**
@@ -21,7 +20,6 @@ export function usePreview (spec?: { loadNext?: () => void }) {
     scroller,
     props
   } = useHookShareState().toRefs()
-  const { state } = useHookShareState()
   let waitScrollTo = null as number | null
   const onPreviewVisibleChange = (v: boolean, lv: boolean) => {
     previewing.value = v
@@ -127,12 +125,6 @@ export function usePreview (spec?: { loadNext?: () => void }) {
     }
     return isImageFile(files.value[next]?.name)
   }
-
-  useEventListen('removeFiles', async () => {
-    if (previewing.value && !state.sortedFiles[previewIdx.value]) {
-      closeImageFullscreenPreview()
-    }
-  })
 
   return {
     previewIdx,

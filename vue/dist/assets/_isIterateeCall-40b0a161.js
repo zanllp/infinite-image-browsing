@@ -1,0 +1,1 @@
+import{bd as i,aZ as t,e6 as f,b1 as n}from"./index-67fcdaff.js";function u(e,a,r){if(!i(r))return!1;var s=typeof a;return(s=="number"?t(r)&&f(a,r.length):s=="string"&&a in r)?n(r[a],e):!1}export{u as i};

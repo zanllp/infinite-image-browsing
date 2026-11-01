@@ -1,0 +1,28 @@
+name: vue_tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check-out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install frontend dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: vue
+
+      - name: Run frontend tests
+        run: yarn test
+        working-directory: vue

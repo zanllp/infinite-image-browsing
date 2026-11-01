@@ -37,7 +37,14 @@ export const getTabIdxInSDWebui = () => {
 
 export const switch2IIB = () => {
   try {
-    gradioApp().querySelector('#tabs')!.querySelectorAll('button')[getTabIdxInSDWebui()].click()
+    // 独立运行时没有 gradio 的 #tabs，查不到就什么都不用做（以前这里会抛
+    // Cannot read properties of null (reading 'querySelectorAll')）
+    const tabs = gradioApp().querySelector('#tabs')
+    const buttons = tabs?.querySelectorAll('button')
+    const idx = getTabIdxInSDWebui()
+    if (buttons && idx >= 0) {
+      buttons[idx]?.click()
+    }
   } catch (error) {
     console.error(error)
   }

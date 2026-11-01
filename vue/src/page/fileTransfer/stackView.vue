@@ -16,9 +16,7 @@ import {
   useGenInfoDiff
 } from './hook'
 import { SearchSelect } from 'vue3-ts-util'
-import { toImageUrl } from '@/util/file'
 import { openTiktokViewWithFiles } from '@/util/tiktokHelper'
-
 import 'multi-nprogress/nprogress.css'
 import { RecycleScroller } from '@/components/recycleScroller'
 import FileItem from '@/components/FileItem.vue'
@@ -34,8 +32,8 @@ import { openSmartOrganizeConfig } from '@/util/smartOrganize'
 import { Modal, message } from 'ant-design-vue'
 import { t } from '@/i18n'
 import { h, ref, watch, onMounted, nextTick } from 'vue'
-import { openImageFullscreenPreview } from '@/util/imagePreviewOperation'
 import { normalize } from '@/util/path'
+import FullscreenPreview from './FullscreenPreview.vue'
 
 const global = useGlobalStore()
 const props = defineProps<{
@@ -225,10 +223,9 @@ onMounted(() => {
             nextTick(() => {
               console.log('Found target file in stack view:', targetFile, 'at index', targetIdx)
               scrollToIndex(targetIdx)
-              // Trigger preview by setting previewIdx and fullscreenPreviewInitialUrl
-              setTimeout(() => {
-                openImageFullscreenPreview(targetIdx,stackViewEl.value!)
-              }, 300)
+              // 应用级预览只依赖 previewIdx，不需要等 DOM 渲染完再模拟点击
+              previewIdx.value = targetIdx
+              previewing.value = true
             })
           }
         }
@@ -385,18 +382,17 @@ onMounted(() => {
           <template v-slot="{ item: file, index: idx }">
             <!-- idx 和file有可能丢失 -->
             <file-item :idx="parseInt(idx)" :file="file"
-              :full-screen-preview-image-url="sortedFiles[previewIdx] ? toImageUrl(sortedFiles[previewIdx]) : ''"
               v-model:show-menu-idx="showMenuIdx" :selected="multiSelectedIdxs.includes(idx)" :cell-width="cellWidth"
               @file-item-click="onFileItemClick" @dragstart="onFileDragStart" @dragend="onFileDragEnd"
-              @preview-visible-change="onPreviewVisibleChange" @context-menu-click="onContextMenuClick"
+              @context-menu-click="onContextMenuClick"
               @drop-to-folder="onDropToFolder"
               @tiktok-view="(_file, idx) => openTiktokViewWithFiles(sortedFiles, idx)"
               :is-selected-mutil-files="multiSelectedIdxs.length > 1"
+              :enable-builtin-preview="false"
               :enable-change-indicator="changeIndchecked"
               :seed-change-checked="seedChangeChecked"
               :get-gen-diff="getGenDiff"
               :get-gen-diff-watch-dep="getGenDiffWatchDep"
-              :previewing="previewing"
               :cover-files="dirCoverCache.get(file.fullpath)"/>
           </template>
           <template #after>
@@ -412,9 +408,11 @@ onMounted(() => {
           <LeftCircleOutlined @click="previewImgMove('prev')" :class="{ disable: !canPreview('prev') }" />
           <RightCircleOutlined @click="previewImgMove('next')" :class="{ disable: !canPreview('next') }" />
         </div>
+        <FullscreenPreview :files="sortedFiles" :preview-idx="previewIdx" :previewing="previewing"
+          @visible-change="onPreviewVisibleChange" />
       </div>
     </div>
-    <fullScreenContextMenu v-if="previewing" :file="sortedFiles[previewIdx]" :idx="previewIdx"
+    <fullScreenContextMenu v-if="previewing && sortedFiles[previewIdx]" :file="sortedFiles[previewIdx]" :idx="previewIdx"
       @context-menu-click="onContextMenuClick" />
     <BaseFileListInfo :file-num="sortedFiles.length" :selected-file-num="multiSelectedIdxs.length" />
   </ASpin>

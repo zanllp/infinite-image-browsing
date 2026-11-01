@@ -1,5 +1,6 @@
 import { getTargetFolderFiles, FileNodeInfo } from '@/api/files'
 import { openCreateFlodersModal } from '@/components/functionalCallableComp'
+import { computeSortedFiles } from '../sortedFiles'
 import { t } from '@/i18n'
 import { DatabaseOutlined } from '@/icon'
 import { TagSearchTabPane, FuzzySearchTabPane, FileTransferTabPane, EmptyStartTabPane } from '@/store/useGlobalStore'
@@ -39,7 +40,9 @@ export function useLocation () {
     deletedFiles,
     walker,
     sortedFiles,
-    previewing
+    previewing,
+    previewIdx,
+    sortMethod
   } = useHookShareState().toRefs()
 
   watch(
@@ -216,7 +219,55 @@ export function useLocation () {
     }
   }
 
+  // 自动刷新的版本令牌：只有最新一次请求的结果能落地（乱序返回的旧结果直接丢弃）
+  let autoRefreshVersion = 0
+  const invalidateAutoRefresh = () => {
+    autoRefreshVersion++
+  }
+  /**
+   * 更新列表后，正在全屏查看的那张图在列表里的新下标（不存在返回 -1）。
+   *
+   * 全屏预览已经是应用级组件（`FullscreenPreview`），列表更新不会再把它卸载，所以自动刷新
+   * 可以放心立即应用；只需要把 `previewIdx` 跟着改到那张图的新位置，预览才会继续停在同一张图。
+   * 图片真的从列表消失（删除/被过滤）时返回 -1，由调用方把预览关掉。
+   */
+  const nextPreviewIndexAfterListUpdate = (nextFiles: FileNodeInfo[]) => {
+    if (!previewing.value) return previewIdx.value
+    const current = sortedFiles.value[previewIdx.value]
+    if (!current) return -1
+    const next = computeSortedFiles(
+      nextFiles,
+      sortMethod.value,
+      global.fileTypeFilter,
+      deletedFiles.value
+    )
+    return next.findIndex((v) => v.fullpath === current.fullpath)
+  }
+  const nextPreviewIndexAfterWalkerUpdate = (nextWalker: { images: FileNodeInfo[] }) => {
+    if (!previewing.value) return previewIdx.value
+    const current = sortedFiles.value[previewIdx.value]
+    if (!current) return -1
+    // walk 模式下 sortedFiles 直接取 walker.images（过滤本地删除），不重新排序
+    const next = nextWalker.images.filter((v) => !deletedFiles.value.has(v.fullpath))
+    return next.findIndex((v) => v.fullpath === current.fullpath)
+  }
+  /** 应用自动刷新结果：更新列表，并让全屏预览继续停在同一张图上（图片没了就关掉预览） */
+  const applyAutoRefresh = (version: number, nextPreviewIdx: number, update: () => void) => {
+    if (version !== autoRefreshVersion) return
+    update()
+    if (!previewing.value) return
+    if (nextPreviewIdx >= 0) {
+      previewIdx.value = nextPreviewIdx
+    } else {
+      previewing.value = false
+    }
+  }
+  // 切换目录、翻页、模式切换后，丢弃还在路上的旧请求结果
+  watch([currLocation, currPage, walker, () => props.value.mode], invalidateAutoRefresh, { flush: 'sync' })
+  onUnmounted(invalidateAutoRefresh)
+
   const refresh = makeAsyncFunctionSingle(async () => {
+    invalidateAutoRefresh()
     try {
       np.value?.start()
       if (walker.value) {
@@ -240,19 +291,20 @@ export function useLocation () {
   /**
    * 上面那个是Force
    */
-  const lazyRefresh = (async (isPollRefresh = false) => {
-    
-    if (isPollRefresh === true && previewing.value) {
-      return // fullscreen previewing时不刷新
-    }
+  const lazyRefresh = (async () => {
+    // 预览期间也照常拉取：全屏预览已经是应用级组件，列表更新不会再销毁它，
+    // 所以每次轮询都可以直接应用（只需把 previewIdx 跟到同一张图的新下标）。
+    const version = ++autoRefreshVersion
     if (props.value.mode === 'walk' && walker.value) {
+      const currentWalker = walker.value
       const currpos = getVisibleRange(scroller.value).end || 64
       if (global.autoRefreshWalkMode &&
         currpos < global.autoRefreshWalkModePosLimit &&
-        await walker.value.isExpired()) {
+        await currentWalker.isExpired() && version === autoRefreshVersion) {
         const taskCancelled = ref(false)
         const onDisable = () => {
           taskCancelled.value = true
+          invalidateAutoRefresh()
           global.autoRefreshWalkMode = false
           hide()
           message.success(t('walkModeAutoRefreshDisabled'))
@@ -262,15 +314,16 @@ export function useLocation () {
           h('span', { onClick: onDisable, style: { paddingLeft: '16px', cursor: 'pointer', color: 'var(--primary-color)' } }, t('disable'))
         ]), 0)
         try {
-          const updatePromsie = new Promise<void>(resolve => {
-            walker.value!.seamlessRefresh(currpos, taskCancelled).then((newWalker) => {
-              if (taskCancelled.value) return
+          const updatePromise = currentWalker.seamlessRefresh(currpos, taskCancelled).then((newWalker) => {
+            if (taskCancelled.value) return
+            // 立即应用；预览按 fullpath 找回新下标，找不到就关掉预览
+            const nextPreviewIdx = nextPreviewIndexAfterWalkerUpdate(newWalker)
+            applyAutoRefresh(version, nextPreviewIdx, () => {
               walker.value = newWalker
               eventEmitter.value.emit('loadNextDir') // 确认铺满和更新tag，显示期间还能执行
-              resolve()
             })
           })
-          await Promise.all([updatePromsie, delay(1500)]) // 最少显示1.5s
+          await Promise.all([updatePromise, delay(1500)]) // 最少显示1.5s
         } finally {
           hide()
         }
@@ -283,17 +336,29 @@ export function useLocation () {
       }
       np.value?.start()
       const { files } = await getTargetFolderFiles(currLocation.value)
+      // 先比较有没有变化：没变化就什么都不做
       const currFiles = last(stack.value)!.files
-      if (currFiles.map((v) => v.date).join() !== files.map((v) => v.date).join()) {
+      if (currFiles.map((v) => v.date).join() === files.map((v) => v.date).join()) {
+        return
+      }
+      // 立即更新；预览的那张图按 fullpath 找回新下标，预览继续停在同一张图上（找不到就关掉）
+      const nextPreviewIdx = nextPreviewIndexAfterListUpdate(files)
+      applyAutoRefresh(version, nextPreviewIdx, () => {
         last(stack.value)!.files = files
         message.success(t('autoUpdate'))
-      }
+      })
     } finally {
       np.value?.done()
     }
   })
 
-  useGlobalEventListen('returnToIIB', lazyRefresh)
+  // 轮询和全局事件都没有调用方接收错误，这里兜底，避免自动刷新失败变成 unhandled rejection
+  const lazyRefreshSafely = () =>
+    lazyRefresh().catch((error) => {
+      console.error('auto refresh failed', error)
+    })
+
+  useGlobalEventListen('returnToIIB', lazyRefreshSafely)
 
   // Listen for refreshFileView event (e.g., after smart organize completes)
   useGlobalEventListen('refreshFileView', (data?: { paths?: string[] }) => {
@@ -429,7 +494,7 @@ export function useLocation () {
     showWalkButton,
     searchInCurrentDir,
     backToLastUseTo,
-    ...usePollRefresh(() => lazyRefresh(true))
+    ...usePollRefresh(lazyRefreshSafely)
   }
 }
 

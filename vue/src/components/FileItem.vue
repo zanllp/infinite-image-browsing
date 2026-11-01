@@ -39,6 +39,8 @@ const props = withDefaults(
     showMenuIdx?: number
     cellWidth: number
     fullScreenPreviewImageUrl?: string
+    /** 是否使用 a-image 自带的全屏预览；使用应用级 FullscreenPreview 的页面需要关掉 */
+    enableBuiltinPreview?: boolean
     enableRightClickMenu?: boolean,
     enableCloseIcon?: boolean,
     isSelectedMutilFiles?: boolean
@@ -50,7 +52,7 @@ const props = withDefaults(
     getGenDiffWatchDep?: (idx: number) => any
   }>(),
   {
-    selected: false, enableRightClickMenu: true, enableCloseIcon: false
+    selected: false, enableRightClickMenu: true, enableCloseIcon: false, enableBuiltinPreview: true
   }
 )
 
@@ -299,9 +301,12 @@ const handleFileClick = (event: MouseEvent) => {
     event.preventDefault()
     // 直接触发TikTok视图
     emit('tiktokView', props.file, props.idx)
-    setTimeout(() => {
-      closeImageFullscreenPreview()
-    }, 500);
+    if (props.enableBuiltinPreview) {
+      // 只有还在用 a-image 自带预览的页面（批量下载/网格视图）需要把预览关掉
+      setTimeout(() => {
+        closeImageFullscreenPreview()
+      }, 500)
+    }
   } else if (
     previewable.value &&
     !event.shiftKey && !event.ctrlKey && !event.metaKey &&
@@ -398,8 +403,8 @@ const handleAudioClick = () => {
             </div>
           </DraggableImage>
         </div>
-        <!-- :key="fullScreenPreviewImageUrl ? undefined : file.fullpath"
-          这么复杂是因为再全屏查看时可能因为直接删除导致fullpath变化，然后整个预览直接退出-->
+        <!-- 图片容器用 fullpath 做 key：普通列表页的全屏预览已由 FullscreenPreview 托管，
+             不再依赖这里的 key 来维持预览存活 -->
         <div ref="imageContainerRef" :key="file.fullpath" :class="`idx-${idx} item-content`" v-if="isImageFile(file.name)">
 
           <!-- change indicators -->
@@ -407,10 +412,14 @@ const handleAudioClick = () => {
             :gen-diff-to-next="genDiffToNext" :gen-diff-to-previous="genDiffToPrevious" />
           <!-- change indicators END -->
 
-          <a-image :src="lazyImageSrc" :fallback="fallbackImage" :alt="file.name" decoding="async" :preview="{
-    src: fullScreenPreviewImageUrl,
-    onVisibleChange: (v: boolean, lv: boolean) => emit('previewVisibleChange', v, lv)
-  }" />
+          <a-image :src="lazyImageSrc" :fallback="fallbackImage" :alt="file.name" decoding="async" :preview="
+            enableBuiltinPreview
+              ? {
+                src: fullScreenPreviewImageUrl,
+                onVisibleChange: (v: boolean, lv: boolean) => emit('previewVisibleChange', v, lv)
+              }
+              : false
+          " />
           <div class="tags-container" v-if="customTags && cellWidth > minShowDetailWidth">
             <a-tag v-for="tag in extraTags ?? customTags" :key="tag.id" :color="tagStore.getColor(tag)">
               {{ tag.name }}

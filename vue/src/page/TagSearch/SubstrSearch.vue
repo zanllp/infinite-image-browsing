@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import fileItemCell from '@/components/FileItem.vue'
 import { RecycleScroller } from '@/components/recycleScroller'
-import { toImageUrl } from '@/util/file'
+import FullscreenPreview from '@/page/fileTransfer/FullscreenPreview.vue'
 import { getDbBasicInfo, getExpiredDirs, getImagesBySubstr, updateImageData, type DataBaseBasicInfo, type Tag, type TagId, SearchBySubstrReq } from '@/api/db'
 import { copy2clipboardI18n,  makeAsyncFunctionSingle, useGlobalEventListen, globalEvents } from '@/util'
 import fullScreenContextMenu from '@/page/fileTransfer/fullScreenContextMenu.vue'
@@ -427,7 +427,7 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
         <template v-slot="{ item: file, index: idx }">
           <!-- idx 和file有可能丢失 -->
           <file-item-cell :idx="idx" :file="file" v-model:show-menu-idx="showMenuIdx" @file-item-click="onFileItemClick"
-            :full-screen-preview-image-url="images[previewIdx] ? toImageUrl(images[previewIdx]) : ''"
+            :enable-builtin-preview="false"
             :cell-width="cellWidth" :selected="multiSelectedIdxs.includes(idx)"
             @context-menu-click="onContextMenuClickU" @dragstart="onFileDragStart" @dragend="onFileDragEnd"
             @tiktok-view="(_file, idx) => openTiktokViewWithFiles(images, idx)"
@@ -435,7 +435,7 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
             :seed-change-checked="seedChangeChecked"
             :get-gen-diff="getGenDiff"
             :get-gen-diff-watch-dep="getGenDiffWatchDep"
-            :is-selected-mutil-files="multiSelectedIdxs.length > 1" @preview-visible-change="onPreviewVisibleChange" />
+            :is-selected-mutil-files="multiSelectedIdxs.length > 1" />
         </template>
       </RecycleScroller>
       <div v-if="previewing" class="preview-switch">
@@ -443,6 +443,8 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
         <RightCircleOutlined @click="previewImgMove('next')" :class="{ disable: !canPreview('next') }" />
       </div>
     </ASpin>
+    <FullscreenPreview :files="images" :preview-idx="previewIdx" :previewing="previewing"
+      @visible-change="onPreviewVisibleChange" />
     <fullScreenContextMenu v-if="previewing && images && images[previewIdx]" :file="images[previewIdx]"
       :idx="previewIdx" @context-menu-click="onContextMenuClickU" />
   </div>

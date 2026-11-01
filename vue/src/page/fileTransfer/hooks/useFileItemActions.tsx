@@ -1,10 +1,8 @@
 import { type FileTransferTabPane, type Shortcut  } from '@/store/useGlobalStore'
 import { useMouseInElement } from '@vueuse/core'
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { genInfoCompleted, getImageGenerationInfo, openFolder, openWithDefaultApp, setImgPath } from '@/api'
-import {
-  delay,
-  useWatchDocument} from 'vue3-ts-util'
+import { useWatchDocument } from 'vue3-ts-util'
 import {
   createReactiveQueue,
   isImageFile,
@@ -20,7 +18,6 @@ import { downloadFileInfoJSON, downloadFiles, toRawFileUrl } from '@/util/file'
 import { getShortcutStrFromEvent } from '@/util/shortcut'
 import { MultiSelectTips, openAddNewTagModal, openRenameFileModal } from '@/components/functionalCallableComp'
 import { batchDownload, events, imgTransferBus, stackCache, tagStore, useEventListen, useHookShareState, global } from '.'
-import { closeImageFullscreenPreview, openImageFullscreenPreview } from '@/util/imagePreviewOperation'
 import { openTiktokViewWithFiles } from '@/util/tiktokHelper'
 import { getVisibleRange } from '@/util/scroller'
 
@@ -72,7 +69,6 @@ export function useFileItemActions (
   const q = createReactiveQueue()
   const onFileItemClick = async (e: MouseEvent, file: FileNodeInfo, idx: number) => {
     previewIdx.value = idx
-    global.fullscreenPreviewInitialUrl = toRawFileUrl(file)
     const idxInSelected = multiSelectedIdxs.value.indexOf(idx)
     if (e.shiftKey) {
       if (idxInSelected !== -1) {
@@ -93,6 +89,10 @@ export function useFileItemActions (
       }
       e.stopPropagation()
     } else {
+      // 全屏预览现在由应用级 FullscreenPreview 托管：普通点击图片时在这里打开
+      if (file.type === 'file' && isImageFile(file.name)) {
+        previewing.value = true
+      }
       await openNext(file)
     }
   }
@@ -324,21 +324,25 @@ export function useFileItemActions (
         const selectedFiles = getSelectedImg()
         const removeFile = async () => {
           const paths = selectedFiles.map((v) => v.fullpath)
+          // 全屏预览现在是应用级组件，删除不会把它卸载：记下正在看的图，列表更新后按 fullpath 跟住
+          const previewedPath = previewing.value ? sortedFiles.value[previewIdx.value]?.fullpath : undefined
           await deleteFiles(paths)
           message.success(t('deleteSuccess'))
-          if (previewing.value) {
-            const isFullscreenFirst = toRawFileUrl(file) === global.fullscreenPreviewInitialUrl
-            const isEnd = previewIdx.value === sortedFiles.value.length - 1
-            if (isFullscreenFirst || isEnd) {
-              closeImageFullscreenPreview()
-              await delay(100)
-              if (isFullscreenFirst && sortedFiles.value.length > 1) {
-                const nextIdx = previewIdx.value
-                delay(0).then(() => openImageFullscreenPreview(nextIdx, stackViewEl.value!))
-              }
-            }
-          }
           events.emit('removeFiles', { paths: paths, loc: currLocation.value })
+          if (!previewing.value) {
+            return
+          }
+          await nextTick()
+          if (!sortedFiles.value.length) {
+            // 列表空了：没有可看的图，关掉预览
+            previewing.value = false
+            return
+          }
+          const idx = previewedPath
+            ? sortedFiles.value.findIndex((v) => v.fullpath === previewedPath)
+            : -1
+          // 当前图被删掉时停在原位置（列表已顺移，即下一张）；索引越界则收到最后一张
+          previewIdx.value = idx >= 0 ? idx : Math.min(previewIdx.value, sortedFiles.value.length - 1)
         }
         if (selectedFiles.length === 1 && global.ignoredConfirmActions.deleteOneOnly) {
           return removeFile()
@@ -382,7 +386,7 @@ export function useFileItemActions (
     const keysStr = getShortcutStrFromEvent(e)
     if (previewing.value) {
       if (keysStr === 'Esc') {
-        closeImageFullscreenPreview()
+        previewing.value = false
       }
       const action = Object.entries(global.shortcut).find(
         (v) => v[1] === keysStr && v[1]

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "preview": "vite preview",
+    "test": "node --test tests/useLocation.test.cjs",
     "type-check": "vue-tsc --noEmit",
     "build": "tsx build",
     "tauri": "tauri dev",

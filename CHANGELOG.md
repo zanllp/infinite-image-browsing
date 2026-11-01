@@ -1,13 +1,18 @@
 [跳到中文](#中文)
 # English
 
+## 2026-11-01
+### ✨ Fullscreen viewing is no longer interrupted by list refreshes
+While an image is open in full screen, a background list refresh (new images written to the folder, polling refresh, coming back to the page, walk mode loading the next batch) could close the preview or switch it to a different image; deleting the viewed image also made the preview flash and reopen.
+- The list keeps refreshing normally, the viewed image stays the same and the preview stays open; it only closes when that image is deleted.
+- Deleting the viewed image now moves the preview straight to the next one, and it only closes when the folder is empty.
+- Fixed while in there: in standalone mode, the "view this image" link logged an error in the console.
+
 ## 2026-10-31
-### 🐛 Desktop cold start: no more requests before the bundled api server is up
-- The startup page's background-maintenance banner loaded its settings in `onMounted` without waiting for the sidecar, so every cold start fired a `GET /global_setting` while the server was still unpacking. It failed with `ERR_CONNECTION_REFUSED`, the axios error interceptor then tried to `JSON.parse` a response body that does not exist (`"undefined" is not valid JSON`), and the user saw the "An error occurred" toast again.
-- `loadSettings()` now awaits `waitForServerReady()` first, which covers all three callers (banner mount, the settings modal and the global init): the request goes out only after the port answers.
-- The error interceptor parses a body only when a response actually exists, so connection errors no longer produce a misleading syntax error in the console.
-- `SplitViewTab` skips the parent-tab handshake when there is no parent (`window.parent === window`, i.e. the desktop app and the standalone page) instead of waiting 30 s and logging `watch tab change failed`.
-- Verified with a cold-start A/B against the v1.10.0 build (a local server that refuses API requests for the first 2 s): the released build sends the early `/global_setting`, the fixed build sends none and only asks after `/version` answers.
+### 🐛 No more "An error occurred" toast on the first desktop launch of the day
+The desktop app sends its first requests as soon as the page is ready, which can be before the local service has started: the console shows connection errors and the "An error occurred" toast occasionally appears.
+- Settings are now loaded after the local service is ready, so the cold start no longer shows that error.
+- The desktop app no longer waits for a WebUI tab that only exists inside WebUI.
 
 ## 2026-10-30
 ### ⚡ Grid: upstream vue-virtual-scroller 3.x, thumbnail size levels, correct column math
@@ -922,13 +927,18 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 # 中文
 
+## 2026-11-01
+### ✨ 全屏查看不再被列表刷新打断
+全屏看图时，列表在后台刷新（目录里写入了新图片、轮询刷新、切回页面、walk 模式加载下一批）会关闭预览或把它切到别的图；删除正在查看的图片时，预览也会闪一下再重新打开。
+- 现在列表照常刷新，正在查看的图片保持不变、预览也不会关闭；只有这张图被删掉时才关闭。
+- 删除正在查看的图片后，预览会直接顺到下一张，删到目录为空才关闭。
+- 顺带修复独立运行时通过「查看这张图」链接打开图片会在控制台报错的问题。
+
 ## 2026-10-31
-### 🐛 桌面版冷启动：后端还没起来时不再提前发请求
-- 启动页的「后台静默维护」banner 在 `onMounted` 里直接读配置，没有等 sidecar 就绪，于是每次冷启动都会在服务端还在自解压时发出一个 `GET /global_setting`：连接被拒（`ERR_CONNECTION_REFUSED`），axios 错误拦截器再去 `JSON.parse` 一个不存在的响应体（控制台报 `"undefined" is not valid JSON`），最后又弹出「发生了个错误」。
-- `loadSettings()` 现在先 `await waitForServerReady()` 再发请求，banner 挂载、设置弹窗、全局初始化三个入口都覆盖：端口能响应之后才会真正请求。
-- 错误拦截器只在确实有响应体时才解析，连接失败不会再附带一条误导性的语法错误日志。
-- `SplitViewTab` 在没有父级页面时（`window.parent === window`，即桌面版/独立页）跳过 WebUI 的父级 tab 握手，不再空等 30 秒再打 `watch tab change failed`。
-- 用 v1.10.0 做了冷启动 A/B（本地假服务器前 2 秒拒绝对 API 的请求）：旧构建会发出提前的 `/global_setting`，修复后完全没有，只在 `/version` 响应之后才请求。
+### 🐛 桌面版当天第一次打开不再弹「发生了个错误」
+桌面版当天第一次打开时，本地服务还在启动，界面却已经先发出了请求，控制台出现连接失败，偶尔还会弹出「发生了个错误」。
+- 现在界面会等本地服务就绪后再加载配置，冷启动不再出现该报错。
+- 桌面版不再等待 WebUI 里才有的标签页。
 
 ## 2026-10-30
 ### ⚡ 网格：切回上游 vue-virtual-scroller 3.x、缩略图档位、列数计算修正
