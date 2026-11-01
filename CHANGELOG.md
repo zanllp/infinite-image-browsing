@@ -2,21 +2,15 @@
 # English
 
 ## 2026-11-01
-### ✨ Fullscreen preview is now a single app-level component
-- The fullscreen preview used to live inside the `a-image` of the file item that opened it. Because the grid recycles item views by index (and the image container is keyed by `fullpath`), replacing the list — automatic refresh, deleting a file, navigation — could unmount the owning `a-image` and destroy the preview. That is also why auto-refresh had to be deferred while previewing, and why deleting the viewed file needed a "close → wait 100 ms → reopen the next image" dance.
-- The preview now lives outside the list (`FullscreenPreview.vue`, one instance per pane, driven by `files` / `previewIdx` / `previewing`), while list items only keep their thumbnail `a-image`. List updates can no longer touch the preview instance, so automatic refresh is applied immediately again and just re-maps `previewIdx` to the same image by `fullpath` (the preview closes only when that image is gone from the list).
-- Deletion no longer closes and re-opens the preview: it records the viewed `fullpath`, applies the removal, then points `previewIdx` at the same image (or the next one, clamped to the end); the preview only closes when the folder becomes empty.
-- The DOM workarounds are gone as well: `imagePreviewOperation` no longer simulates clicks on `.ant-image-preview-wrap` / `.ant-image-img` (it is just a closer registry now), the `setTimeout(300)` before opening a target file and the `setTimeout(500)` in the magic-switch (TikTok view) path are removed, and `global.fullscreenPreviewInitialUrl` plus the `removeFiles` close-listener in `usePreview` were dropped.
-- Fixed while in there: `switch2IIB()` crashed in standalone mode (`?action=view&path=...`) because it queried the missing gradio `#tabs`; it is null-safe now.
-- Added a regression suite (`vue/tests/useLocation.test.cjs`, 14 cases) covering the apply/remap/close behaviour of automatic refresh; run it with `cd vue && yarn test`, and CI runs it on pull requests.
+### ✨ 全屏查看时列表刷新不再打断预览
+- 全屏看图的体验稳定了：背景自动刷新（新增图片、轮询刷新、切回页面、walk 模式加载下一批）时，后面的列表可以正常更新，正在看的图片不会被关掉，也不会突然换成别的图。
+- 删掉正在全屏查看的图片时，预览不再「闪一下然后重新打开」，而是直接顺到下一张；删到目录空了才会关闭预览。
+- 顺带修了个小问题：独立运行时点击「查看这张图」的链接，控制台会报错，现在不会了。
 
 ## 2026-10-31
-### 🐛 Desktop cold start: no more requests before the bundled api server is up
-- The startup page's background-maintenance banner loaded its settings in `onMounted` without waiting for the sidecar, so every cold start fired a `GET /global_setting` while the server was still unpacking. It failed with `ERR_CONNECTION_REFUSED`, the axios error interceptor then tried to `JSON.parse` a response body that does not exist (`"undefined" is not valid JSON`), and the user saw the "An error occurred" toast again.
-- `loadSettings()` now awaits `waitForServerReady()` first, which covers all three callers (banner mount, the settings modal and the global init): the request goes out only after the port answers.
-- The error interceptor parses a body only when a response actually exists, so connection errors no longer produce a misleading syntax error in the console.
-- `SplitViewTab` skips the parent-tab handshake when there is no parent (`window.parent === window`, i.e. the desktop app and the standalone page) instead of waiting 30 s and logging `watch tab change failed`.
-- Verified with a cold-start A/B against the v1.10.0 build (a local server that refuses API requests for the first 2 s): the released build sends the early `/global_setting`, the fixed build sends none and only asks after `/version` answers.
+### 🐛 桌面版冷启动不再弹「发生了个错误」
+- 修掉了桌面版当天第一次打开时偶发的报错：本地服务还在启动、界面却已经先发了请求，控制台出现连接失败，有时还会弹出「发生了个错误」。
+- 现在界面会等本地服务就绪后再加载配置，冷启动安静了；桌面版也不会再空等一个 WebUI 里才有的标签页。
 
 ## 2026-10-30
 ### ⚡ Grid: upstream vue-virtual-scroller 3.x, thumbnail size levels, correct column math
@@ -932,21 +926,15 @@ Triggered under the same circumstances as above, there will be a button to updat
 # 中文
 
 ## 2026-11-01
-### ✨ 全屏预览改为应用级单一组件
-- 以前全屏预览挂在打开它的那个列表项的 `a-image` 里；列表项由虚拟滚动按索引复用、图片容器以 `fullpath` 为 key。所以只要替换列表（自动刷新、删除文件、导航），持有预览的 `a-image` 就可能被卸载、预览就地销毁——这也是之前「预览期间要推迟自动刷新」「删掉正在看的图要关掉再等 100ms 重新打开下一张」这些补丁的来源。
-- 现在预览挪到列表之外（`FullscreenPreview.vue`，每个 pane 一个实例，由 `files` / `previewIdx` / `previewing` 驱动），列表项只保留缩略图的 `a-image`。列表更新再也碰不到预览实例，所以自动刷新恢复为立即应用，只是按 `fullpath` 把 `previewIdx` 跟到同一张图（这张图从列表里消失时才关闭预览）。
-- 删除不再走「关闭 → 等 100ms → 重新打开」：先记下正在看的 `fullpath`，删除并更新列表后把 `previewIdx` 指回同一张图（被删了就顺位到下一张，越界收回最后一张），只有目录空了才关闭预览。
-- 同时清掉了这些 DOM 规避：`imagePreviewOperation` 不再模拟点击 `.ant-image-preview-wrap` / `.ant-image-img`（只剩一个关闭注册表）；打开目标文件前的 `setTimeout(300)`、magic switch（TikTok 视图）里的 `setTimeout(500)` 关闭预览都删了；`global.fullscreenPreviewInitialUrl` 字段和 `usePreview` 里监听 `removeFiles` 关预览的逻辑也移除。
-- 顺手修：独立运行时（`?action=view&path=...`）`switch2IIB()` 查询不存在的 gradio `#tabs` 会报错，已加空值保护。
-- 新增回归测试（`vue/tests/useLocation.test.cjs`，14 个用例）覆盖自动刷新的应用 / 重新定位 / 关闭行为，用 `cd vue && yarn test` 运行，CI 会在 PR 上跑。
+### ✨ 全屏查看时列表刷新不再打断预览
+- 全屏看图的体验稳定了：背景自动刷新（新增图片、轮询刷新、切回页面、walk 模式加载下一批）时，后面的列表可以正常更新，正在看的图片不会被关掉，也不会突然换成别的图。
+- 删掉正在全屏查看的图片时，预览不再「闪一下然后重新打开」，而是直接顺到下一张；删到目录空了才会关闭预览。
+- 顺带修了个小问题：独立运行时点击「查看这张图」的链接，控制台会报错，现在不会了。
 
 ## 2026-10-31
-### 🐛 桌面版冷启动：后端还没起来时不再提前发请求
-- 启动页的「后台静默维护」banner 在 `onMounted` 里直接读配置，没有等 sidecar 就绪，于是每次冷启动都会在服务端还在自解压时发出一个 `GET /global_setting`：连接被拒（`ERR_CONNECTION_REFUSED`），axios 错误拦截器再去 `JSON.parse` 一个不存在的响应体（控制台报 `"undefined" is not valid JSON`），最后又弹出「发生了个错误」。
-- `loadSettings()` 现在先 `await waitForServerReady()` 再发请求，banner 挂载、设置弹窗、全局初始化三个入口都覆盖：端口能响应之后才会真正请求。
-- 错误拦截器只在确实有响应体时才解析，连接失败不会再附带一条误导性的语法错误日志。
-- `SplitViewTab` 在没有父级页面时（`window.parent === window`，即桌面版/独立页）跳过 WebUI 的父级 tab 握手，不再空等 30 秒再打 `watch tab change failed`。
-- 用 v1.10.0 做了冷启动 A/B（本地假服务器前 2 秒拒绝对 API 的请求）：旧构建会发出提前的 `/global_setting`，修复后完全没有，只在 `/version` 响应之后才请求。
+### 🐛 桌面版冷启动不再弹「发生了个错误」
+- 修掉了桌面版当天第一次打开时偶发的报错：本地服务还在启动、界面却已经先发了请求，控制台出现连接失败，有时还会弹出「发生了个错误」。
+- 现在界面会等本地服务就绪后再加载配置，冷启动安静了；桌面版也不会再空等一个 WebUI 里才有的标签页。
 
 ## 2026-10-30
 ### ⚡ 网格：切回上游 vue-virtual-scroller 3.x、缩略图档位、列数计算修正
