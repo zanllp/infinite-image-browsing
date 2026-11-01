@@ -2,13 +2,13 @@
 # English
 
 ## 2026-11-01
-### 🐛 Fullscreen preview: automatic refresh no longer destroys the open preview
-- The fullscreen preview is not an app-level component: it lives inside the `a-image` of the item that opened it, and the item grid recycles views by index with the image container keyed by `fullpath`. Replacing the list during a preview could therefore unmount the owning `a-image` and destroy the preview (same mechanism as deleting a file while previewing).
-- Automatic refresh (polling, returning to the tab, walk-mode expiry) now decides per update: when the previewed item would keep its slot (same `fullpath` at the same index) after the update, the list is applied immediately as before; only when the previewed slot would change is the newest result buffered and applied once the preview closes.
-- Buffered results are invalidated on directory/page change, mode or walker change, manual refresh, unmount, and when either automatic-refresh switch is turned off; only the newest request can supply a buffered result, so out-of-order responses are dropped.
-- When an update does have to be deferred, the first one shows a one-off toast ("New content detected. It will be loaded after you close the fullscreen preview") so the list does not look stale; polls that find nothing new stay silent, and starting a new poll no longer drops an already buffered result unless that poll actually returns changes.
-- A failed walk-mode refresh now goes through the normal cleanup path instead of leaving the loading indicator on screen forever (the old wrapper promise never settled); the background task also no longer turns into an unhandled rejection.
-- Added a regression suite (`vue/tests/useLocation.test.cjs`, 32 cases) covering the preview / deferred-apply / prefetch races; run it with `cd vue && yarn test`, and CI runs it on pull requests.
+### ✨ Fullscreen preview is now a single app-level component
+- The fullscreen preview used to live inside the `a-image` of the file item that opened it. Because the grid recycles item views by index (and the image container is keyed by `fullpath`), replacing the list — automatic refresh, deleting a file, navigation — could unmount the owning `a-image` and destroy the preview. That is also why auto-refresh had to be deferred while previewing, and why deleting the viewed file needed a "close → wait 100 ms → reopen the next image" dance.
+- The preview now lives outside the list (`FullscreenPreview.vue`, one instance per pane, driven by `files` / `previewIdx` / `previewing`), while list items only keep their thumbnail `a-image`. List updates can no longer touch the preview instance, so automatic refresh is applied immediately again and just re-maps `previewIdx` to the same image by `fullpath` (the preview closes only when that image is gone from the list).
+- Deletion no longer closes and re-opens the preview: it records the viewed `fullpath`, applies the removal, then points `previewIdx` at the same image (or the next one, clamped to the end); the preview only closes when the folder becomes empty.
+- The DOM workarounds are gone as well: `imagePreviewOperation` no longer simulates clicks on `.ant-image-preview-wrap` / `.ant-image-img` (it is just a closer registry now), the `setTimeout(300)` before opening a target file and the `setTimeout(500)` in the magic-switch (TikTok view) path are removed, and `global.fullscreenPreviewInitialUrl` plus the `removeFiles` close-listener in `usePreview` were dropped.
+- Fixed while in there: `switch2IIB()` crashed in standalone mode (`?action=view&path=...`) because it queried the missing gradio `#tabs`; it is null-safe now.
+- Added a regression suite (`vue/tests/useLocation.test.cjs`, 14 cases) covering the apply/remap/close behaviour of automatic refresh; run it with `cd vue && yarn test`, and CI runs it on pull requests.
 
 ## 2026-10-31
 ### 🐛 Desktop cold start: no more requests before the bundled api server is up
@@ -932,13 +932,13 @@ Triggered under the same circumstances as above, there will be a button to updat
 # 中文
 
 ## 2026-11-01
-### 🐛 全屏预览：自动刷新不再把正在查看的预览销毁
-- 全屏预览不是独立组件，它挂在打开它的那个列表项的 `a-image` 里；列表项由虚拟滚动按索引复用、图片容器以 `fullpath` 为 key。所以预览期间替换列表有可能把持有预览的 `a-image` 卸载掉，预览就地销毁（和「预览中删文件导致退出」是同一条链路）。
-- 自动刷新（轮询、切回标签页、walk 模式过期刷新）现在逐次判断：更新后预览项如果还在同一个位置（同一 index 上仍是同一个 `fullpath`），就直接更新列表，保持原来的 legacy 行为；只有预览项的位置会变时，才把最新结果缓冲起来、等预览关闭后再应用。
-- 目录/翻页、模式或 walker 变化、手动刷新、组件卸载，以及任意一个自动刷新开关被关闭时，已缓冲的结果都会失效；只有最新一次请求能提供缓冲结果，乱序返回的旧结果直接丢弃。
-- 确实需要推迟时，第一次会弹一条一次性提示（「检测到新内容，关闭全屏预览后会自动刷新」），避免用户以为列表卡住；没有变化的轮询保持静默，新一轮请求也不会再清掉之前已缓冲的结果，除非它真的拿到了变化。
-- walk 模式刷新失败时现在会走正常的收尾流程（旧写法里包裹的 Promise 永远不 settle，loading 提示会一直挂在屏幕上），后台任务也不会再变成 unhandled rejection。
-- 新增回归测试（`vue/tests/useLocation.test.cjs`，32 个用例）覆盖预览 / 延迟应用 / 预取的竞态，用 `cd vue && yarn test` 运行，CI 会在 PR 上跑。
+### ✨ 全屏预览改为应用级单一组件
+- 以前全屏预览挂在打开它的那个列表项的 `a-image` 里；列表项由虚拟滚动按索引复用、图片容器以 `fullpath` 为 key。所以只要替换列表（自动刷新、删除文件、导航），持有预览的 `a-image` 就可能被卸载、预览就地销毁——这也是之前「预览期间要推迟自动刷新」「删掉正在看的图要关掉再等 100ms 重新打开下一张」这些补丁的来源。
+- 现在预览挪到列表之外（`FullscreenPreview.vue`，每个 pane 一个实例，由 `files` / `previewIdx` / `previewing` 驱动），列表项只保留缩略图的 `a-image`。列表更新再也碰不到预览实例，所以自动刷新恢复为立即应用，只是按 `fullpath` 把 `previewIdx` 跟到同一张图（这张图从列表里消失时才关闭预览）。
+- 删除不再走「关闭 → 等 100ms → 重新打开」：先记下正在看的 `fullpath`，删除并更新列表后把 `previewIdx` 指回同一张图（被删了就顺位到下一张，越界收回最后一张），只有目录空了才关闭预览。
+- 同时清掉了这些 DOM 规避：`imagePreviewOperation` 不再模拟点击 `.ant-image-preview-wrap` / `.ant-image-img`（只剩一个关闭注册表）；打开目标文件前的 `setTimeout(300)`、magic switch（TikTok 视图）里的 `setTimeout(500)` 关闭预览都删了；`global.fullscreenPreviewInitialUrl` 字段和 `usePreview` 里监听 `removeFiles` 关预览的逻辑也移除。
+- 顺手修：独立运行时（`?action=view&path=...`）`switch2IIB()` 查询不存在的 gradio `#tabs` 会报错，已加空值保护。
+- 新增回归测试（`vue/tests/useLocation.test.cjs`，14 个用例）覆盖自动刷新的应用 / 重新定位 / 关闭行为，用 `cd vue && yarn test` 运行，CI 会在 PR 上跑。
 
 ## 2026-10-31
 ### 🐛 桌面版冷启动：后端还没起来时不再提前发请求
