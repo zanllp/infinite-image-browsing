@@ -2,15 +2,15 @@
 # English
 
 ## 2026-11-01
-### ✨ 全屏查看时列表刷新不再打断预览
-- 全屏看图的体验稳定了：背景自动刷新（新增图片、轮询刷新、切回页面、walk 模式加载下一批）时，后面的列表可以正常更新，正在看的图片不会被关掉，也不会突然换成别的图。
-- 删掉正在全屏查看的图片时，预览不再「闪一下然后重新打开」，而是直接顺到下一张；删到目录空了才会关闭预览。
-- 顺带修了个小问题：独立运行时点击「查看这张图」的链接，控制台会报错，现在不会了。
+### ✨ Fullscreen viewing is no longer interrupted by list refreshes
+- Viewing an image in full screen is stable now: while the list behind it refreshes in the background (new images, polling, coming back to the page, walk mode loading the next batch), the image you are looking at stays open and stays the same.
+- Deleting the image you are looking at no longer makes the preview flash and reopen — it moves straight to the next image, and only closes when the folder becomes empty.
+- Also fixed: in standalone mode, clicking a "view this image" link could log an error in the console.
 
 ## 2026-10-31
-### 🐛 桌面版冷启动不再弹「发生了个错误」
-- 修掉了桌面版当天第一次打开时偶发的报错：本地服务还在启动、界面却已经先发了请求，控制台出现连接失败，有时还会弹出「发生了个错误」。
-- 现在界面会等本地服务就绪后再加载配置，冷启动安静了；桌面版也不会再空等一个 WebUI 里才有的标签页。
+### 🐛 No more "An error occurred" toast when the desktop app cold-starts
+- Fixed an occasional error when opening the desktop app for the first time in a while: the page sent requests while the local service was still starting, which showed connection errors in the console and sometimes an "An error occurred" toast.
+- The app now waits for the local service before loading its settings, so cold starts are quiet; the desktop app also no longer waits for a WebUI tab that only exists inside WebUI.
 
 ## 2026-10-30
 ### ⚡ Grid: upstream vue-virtual-scroller 3.x, thumbnail size levels, correct column math
