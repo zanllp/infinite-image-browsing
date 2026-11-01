@@ -3,14 +3,16 @@
 
 ## 2026-11-01
 ### ✨ Fullscreen viewing is no longer interrupted by list refreshes
-- Viewing an image in full screen is stable now: while the list behind it refreshes in the background (new images, polling, coming back to the page, walk mode loading the next batch), the image you are looking at stays open and stays the same.
-- Deleting the image you are looking at no longer makes the preview flash and reopen — it moves straight to the next image, and only closes when the folder becomes empty.
-- Also fixed: in standalone mode, clicking a "view this image" link could log an error in the console.
+While an image is open in full screen, a background list refresh (new images written to the folder, polling refresh, coming back to the page, walk mode loading the next batch) could close the preview or switch it to a different image; deleting the viewed image also made the preview flash and reopen.
+- The list keeps refreshing normally, the viewed image stays the same and the preview stays open; it only closes when that image is deleted.
+- Deleting the viewed image now moves the preview straight to the next one, and it only closes when the folder is empty.
+- Fixed while in there: in standalone mode, the "view this image" link logged an error in the console.
 
 ## 2026-10-31
-### 🐛 No more "An error occurred" toast when the desktop app cold-starts
-- Fixed an occasional error when opening the desktop app for the first time in a while: the page sent requests while the local service was still starting, which showed connection errors in the console and sometimes an "An error occurred" toast.
-- The app now waits for the local service before loading its settings, so cold starts are quiet; the desktop app also no longer waits for a WebUI tab that only exists inside WebUI.
+### 🐛 No more "An error occurred" toast on the first desktop launch of the day
+The desktop app sends its first requests as soon as the page is ready, which can be before the local service has started: the console shows connection errors and the "An error occurred" toast occasionally appears.
+- Settings are now loaded after the local service is ready, so the cold start no longer shows that error.
+- The desktop app no longer waits for a WebUI tab that only exists inside WebUI.
 
 ## 2026-10-30
 ### ⚡ Grid: upstream vue-virtual-scroller 3.x, thumbnail size levels, correct column math
@@ -926,15 +928,17 @@ Triggered under the same circumstances as above, there will be a button to updat
 # 中文
 
 ## 2026-11-01
-### ✨ 全屏查看时列表刷新不再打断预览
-- 全屏看图的体验稳定了：背景自动刷新（新增图片、轮询刷新、切回页面、walk 模式加载下一批）时，后面的列表可以正常更新，正在看的图片不会被关掉，也不会突然换成别的图。
-- 删掉正在全屏查看的图片时，预览不再「闪一下然后重新打开」，而是直接顺到下一张；删到目录空了才会关闭预览。
-- 顺带修了个小问题：独立运行时点击「查看这张图」的链接，控制台会报错，现在不会了。
+### ✨ 全屏查看不再被列表刷新打断
+全屏看图时，列表在后台刷新（目录里写入了新图片、轮询刷新、切回页面、walk 模式加载下一批）会关闭预览或把它切到别的图；删除正在查看的图片时，预览也会闪一下再重新打开。
+- 现在列表照常刷新，正在查看的图片保持不变、预览也不会关闭；只有这张图被删掉时才关闭。
+- 删除正在查看的图片后，预览会直接顺到下一张，删到目录为空才关闭。
+- 顺带修复独立运行时通过「查看这张图」链接打开图片会在控制台报错的问题。
 
 ## 2026-10-31
-### 🐛 桌面版冷启动不再弹「发生了个错误」
-- 修掉了桌面版当天第一次打开时偶发的报错：本地服务还在启动、界面却已经先发了请求，控制台出现连接失败，有时还会弹出「发生了个错误」。
-- 现在界面会等本地服务就绪后再加载配置，冷启动安静了；桌面版也不会再空等一个 WebUI 里才有的标签页。
+### 🐛 桌面版当天第一次打开不再弹「发生了个错误」
+桌面版当天第一次打开时，本地服务还在启动，界面却已经先发出了请求，控制台出现连接失败，偶尔还会弹出「发生了个错误」。
+- 现在界面会等本地服务就绪后再加载配置，冷启动不再出现该报错。
+- 桌面版不再等待 WebUI 里才有的标签页。
 
 ## 2026-10-30
 ### ⚡ 网格：切回上游 vue-virtual-scroller 3.x、缩略图档位、列数计算修正
