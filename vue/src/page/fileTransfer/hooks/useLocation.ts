@@ -219,84 +219,51 @@ export function useLocation () {
     }
   }
 
+  // 自动刷新的版本令牌：只有最新一次请求的结果能落地（乱序返回的旧结果直接丢弃）
   let autoRefreshVersion = 0
-  let pendingAutoRefresh: (() => void) | undefined
-  // 全屏预览期间发现更新时只提醒一次，避免每个轮询周期都弹一条提示
-  let previewUpdateNotified = false
   const invalidateAutoRefresh = () => {
     autoRefreshVersion++
-    pendingAutoRefresh = undefined
-  }
-  const notifyPreviewPendingUpdate = () => {
-    if (previewUpdateNotified) return
-    previewUpdateNotified = true
-    message.info(t('autoUpdatePendingPreview'))
   }
   /**
-   * 更新列表后，正在全屏查看的预览组件是否还会存在。
+   * 更新列表后，正在全屏查看的那张图在列表里的新下标（不存在返回 -1）。
    *
-   * 全屏预览不是独立组件：它挂在列表项自己的 a-image 上，而列表项由虚拟滚动按索引复用、
-   * 图片容器又以 fullpath 做 key。所以只有当「更新后的列表在 previewIdx 位置上还是同一个
-   * fullpath」时，那个 a-image 实例才不会被卸载、预览才不会被销毁。
+   * 全屏预览已经是应用级组件（`FullscreenPreview`），列表更新不会再把它卸载，所以自动刷新
+   * 可以放心立即应用；只需要把 `previewIdx` 跟着改到那张图的新位置，预览才会继续停在同一张图。
+   * 图片真的从列表消失（删除/被过滤）时返回 -1，由调用方把预览关掉。
    */
-  const previewSurvivesListUpdate = (nextFiles: FileNodeInfo[]) => {
-    if (!previewing.value) return true
-    const idx = previewIdx.value
-    if (idx < 0) return false
-    const current = sortedFiles.value[idx]
-    if (!current) return false
+  const nextPreviewIndexAfterListUpdate = (nextFiles: FileNodeInfo[]) => {
+    if (!previewing.value) return previewIdx.value
+    const current = sortedFiles.value[previewIdx.value]
+    if (!current) return -1
     const next = computeSortedFiles(
       nextFiles,
       sortMethod.value,
       global.fileTypeFilter,
       deletedFiles.value
     )
-    return next[idx]?.fullpath === current.fullpath
+    return next.findIndex((v) => v.fullpath === current.fullpath)
   }
-  const previewSurvivesWalkerUpdate = (nextWalker: { images: FileNodeInfo[] }) => {
-    if (!previewing.value) return true
-    const idx = previewIdx.value
-    if (idx < 0) return false
-    const current = sortedFiles.value[idx]
-    if (!current) return false
+  const nextPreviewIndexAfterWalkerUpdate = (nextWalker: { images: FileNodeInfo[] }) => {
+    if (!previewing.value) return previewIdx.value
+    const current = sortedFiles.value[previewIdx.value]
+    if (!current) return -1
     // walk 模式下 sortedFiles 直接取 walker.images（过滤本地删除），不重新排序
     const next = nextWalker.images.filter((v) => !deletedFiles.value.has(v.fullpath))
-    return next[idx]?.fullpath === current.fullpath
+    return next.findIndex((v) => v.fullpath === current.fullpath)
   }
-  /**
-   * @param defer 是否推迟到预览关闭后再应用。传 false = 走 legacy 行为，立即更新。
-   *              默认按“当前是否在预览”决定。
-   */
-  const applyOrDeferAutoRefresh = (version: number, update: () => void, defer = previewing.value) => {
+  /** 应用自动刷新结果：更新列表，并让全屏预览继续停在同一张图上（图片没了就关掉预览） */
+  const applyAutoRefresh = (version: number, nextPreviewIdx: number, update: () => void) => {
     if (version !== autoRefreshVersion) return
-    if (defer) {
-      pendingAutoRefresh = update
-      // 预览期间列表不会动，告诉用户"有新内容，关掉预览就会刷新"
-      notifyPreviewPendingUpdate()
+    update()
+    if (!previewing.value) return
+    if (nextPreviewIdx >= 0) {
+      previewIdx.value = nextPreviewIdx
     } else {
-      update()
+      previewing.value = false
     }
   }
-
-  watch(previewing, (visible) => {
-    // 每次预览会话允许提醒一次
-    previewUpdateNotified = false
-    if (visible) return
-    const update = pendingAutoRefresh
-    pendingAutoRefresh = undefined
-    update?.()
-  }, { flush: 'post' })
-  // 切换目录、模式或手动刷新后，旧请求和预取结果都不能再覆盖当前列表。
+  // 切换目录、翻页、模式切换后，丢弃还在路上的旧请求结果
   watch([currLocation, currPage, walker, () => props.value.mode], invalidateAutoRefresh, { flush: 'sync' })
-  // 关掉自动刷新开关之后，之前预取到、还没应用的结果也不能再落盘。
-  watch(
-    () => [global.autoRefreshNormalFixedMode, global.autoRefreshWalkMode],
-    ([normalFixed, walkMode]) => {
-      if (!normalFixed || !walkMode) {
-        invalidateAutoRefresh()
-      }
-    }
-  )
   onUnmounted(invalidateAutoRefresh)
 
   const refresh = makeAsyncFunctionSingle(async () => {
@@ -325,10 +292,8 @@ export function useLocation () {
    * 上面那个是Force
    */
   const lazyRefresh = (async () => {
-    // 预览期间也照常拉取（预览关闭时列表能立刻是新的），但结果只缓冲不应用；
-    // 长时间预览时每个轮询周期都会请求一次，这是有意为之的预取取舍。
-    // 注意：这里只递增版本号、不清空 pendingAutoRefresh —— 已有缓冲要留到新请求
-    // 真正拿到结果时再替换（新请求失败或没变化时，之前预取的结果仍然有效）。
+    // 预览期间也照常拉取：全屏预览已经是应用级组件，列表更新不会再销毁它，
+    // 所以每次轮询都可以直接应用（只需把 previewIdx 跟到同一张图的新下标）。
     const version = ++autoRefreshVersion
     if (props.value.mode === 'walk' && walker.value) {
       const currentWalker = walker.value
@@ -351,11 +316,12 @@ export function useLocation () {
         try {
           const updatePromise = currentWalker.seamlessRefresh(currpos, taskCancelled).then((newWalker) => {
             if (taskCancelled.value) return
-            // 新 walker 下预览项还在同一个位置 → 立即更新（legacy），否则推迟
-            applyOrDeferAutoRefresh(version, () => {
+            // 立即应用；预览按 fullpath 找回新下标，找不到就关掉预览
+            const nextPreviewIdx = nextPreviewIndexAfterWalkerUpdate(newWalker)
+            applyAutoRefresh(version, nextPreviewIdx, () => {
               walker.value = newWalker
               eventEmitter.value.emit('loadNextDir') // 确认铺满和更新tag，显示期间还能执行
-            }, !previewSurvivesWalkerUpdate(newWalker))
+            })
           })
           await Promise.all([updatePromise, delay(1500)]) // 最少显示1.5s
         } finally {
@@ -370,16 +336,17 @@ export function useLocation () {
       }
       np.value?.start()
       const { files } = await getTargetFolderFiles(currLocation.value)
-      // 先比较有没有变化：没变化就不缓冲、也不提醒
+      // 先比较有没有变化：没变化就什么都不做
       const currFiles = last(stack.value)!.files
       if (currFiles.map((v) => v.date).join() === files.map((v) => v.date).join()) {
         return
       }
-      // 更新后预览组件还能活下来 → 直接更新（legacy 行为）；会被卸载 → 推迟到预览关闭
-      applyOrDeferAutoRefresh(version, () => {
+      // 立即更新；预览的那张图按 fullpath 找回新下标，预览继续停在同一张图上（找不到就关掉）
+      const nextPreviewIdx = nextPreviewIndexAfterListUpdate(files)
+      applyAutoRefresh(version, nextPreviewIdx, () => {
         last(stack.value)!.files = files
         message.success(t('autoUpdate'))
-      }, !previewSurvivesListUpdate(files))
+      })
     } finally {
       np.value?.done()
     }

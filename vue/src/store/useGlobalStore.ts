@@ -470,7 +470,6 @@ export const useGlobalStore = defineStore(
       onlyFoldersAndImages: ref(true), // 保留用于向后兼容
       fileTypeFilter: ref<('image' | 'video' | 'audio' | 'all')[]>(['image', 'video', 'audio']), // 新的多选过滤
       keepMultiSelect: ref(false),
-      fullscreenPreviewInitialUrl: ref(''),
       shortcut,
       pageFuncExportMap,
       dontShowAgain: ref(false),

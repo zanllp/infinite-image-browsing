@@ -322,7 +322,6 @@ export const zhHans = {
   tagGraphFullscreenUnsupported: '当前环境不支持全屏',
   tagGraphFullscreenFailed: '全屏失败',
   autoUpdate: '检测到发生改变自动更新',
-  autoUpdatePendingPreview: '检测到新内容，关闭全屏预览后会自动刷新',
   'fuzzy-search': '模糊搜索',
   'fuzzy-search-placeholder': '输入图像信息或者文件名的一部分来进行搜索',
   'fuzzy-search-noResults': '什么都没找到',

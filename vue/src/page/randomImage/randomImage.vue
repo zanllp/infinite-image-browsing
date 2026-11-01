@@ -2,7 +2,7 @@
 import { RecycleScroller } from '@/components/recycleScroller'
 import FileItem from '@/components/FileItem.vue'
 import { useFileItemActions, useFilesDisplay, useFileTransfer, useHookShareState, useKeepMultiSelect, usePreview } from '@/page/fileTransfer/hook'
-import { toImageUrl } from '@/util/file'
+import FullscreenPreview from '@/page/fileTransfer/FullscreenPreview.vue'
 import { ref, onMounted } from 'vue'
 import { GridViewFile, useGlobalStore } from '@/store/useGlobalStore'
 import { getRandomImages } from '@/api/db'
@@ -140,8 +140,8 @@ const onContextMenuClickU: typeof onContextMenuClick = async (e, file, idx) => {
     <RecycleScroller ref="scroller" class="file-list" :items="files.slice()" :item-size="itemSize.first"
       key-field="fullpath" :item-secondary-size="itemSize.second" :gridItems="gridItems" @scroll="onScroll">
       <template v-slot="{ item: file, index: idx }">
-        <file-item :idx="idx" :file="file" :cell-width="cellWidth" :full-screen-preview-image-url="images[previewIdx] ? toImageUrl(images[previewIdx]) : ''
-          " @context-menu-click="onContextMenuClickU" @preview-visible-change="onPreviewVisibleChange"
+        <file-item :idx="idx" :file="file" :cell-width="cellWidth"
+          :enable-builtin-preview="false" @context-menu-click="onContextMenuClickU"
           :is-selected-mutil-files="multiSelectedIdxs.length > 1" :selected="multiSelectedIdxs.includes(idx)"
           @file-item-click="onFileItemClick" @tiktok-view="(_file, idx) => openTiktokViewWithFiles(files, idx)" />
       </template>
@@ -150,6 +150,8 @@ const onContextMenuClickU: typeof onContextMenuClick = async (e, file, idx) => {
       <LeftCircleOutlined @click="previewImgMove('prev')" :class="{ disable: !canPreview('prev') }" />
       <RightCircleOutlined @click="previewImgMove('next')" :class="{ disable: !canPreview('next') }" />
     </div>
+    <FullscreenPreview :files="images" :preview-idx="previewIdx" :previewing="previewing"
+      @visible-change="onPreviewVisibleChange" />
     <fullScreenContextMenu v-if="previewing && images && images[previewIdx]" :file="images[previewIdx]"
       :idx="previewIdx" @context-menu-click="onContextMenuClickU" />
   </div>

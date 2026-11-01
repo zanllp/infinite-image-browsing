@@ -18,7 +18,6 @@ export const de: Partial<IIBI18nMap> = {
     'Geben Sie einen Teil der Bildinformationen oder des Dateinamens ein, um passende Ergebnisse zu finden',
   'fuzzy-search': 'Schnellsuche',
   autoUpdate: 'Erkannte Änderungen, automatische Aktualisierung wird ausgeführt',
-  autoUpdatePendingPreview: 'Neue Inhalte gefunden. Sie werden geladen, sobald die Vollbildvorschau geschlossen ist',
   autoUpdateIndex: 'Index automatisch aktualisieren',
   autoUpdateIndexDesc: 'Index automatisch aktualisieren, wenn er veraltet ist (beim Zurückkehren zur Seite). Wenn deaktiviert, wird eine Aufforderung zur manuellen Aktualisierung angezeigt',
   indexExpiredManualUpdate: 'Index veraltet, bitte auf die Schaltfläche "Index aktualisieren" klicken, um manuell zu aktualisieren',

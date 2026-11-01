@@ -329,7 +329,6 @@ export const zhHant: Partial<IIBI18nMap> = {
   tagGraphFullscreenUnsupported: '目前環境不支援全螢幕',
   tagGraphFullscreenFailed: '全螢幕失敗',
   autoUpdate: '檢測到發生改變自動更新',
-  autoUpdatePendingPreview: '檢測到新內容，關閉全螢幕預覽後會自動重新整理',
   'fuzzy-search': '模糊搜尋',
   'fuzzy-search-placeholder': '輸入圖片信息或者文件名的一部分來進行搜尋',
   'fuzzy-search-noResults': '什麼都沒找到',

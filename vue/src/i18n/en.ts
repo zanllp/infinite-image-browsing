@@ -306,7 +306,6 @@ You can specify which snapshot to restore to when starting IIB in the global set
   'fuzzy-search-placeholder': 'Enter a part of the image information or filename to search',
   'fuzzy-search': 'Fuzzy search',
   autoUpdate: 'Detected changes, automatically updating',
-  autoUpdatePendingPreview: 'New content detected. It will be loaded after you close the fullscreen preview',
   faq: 'FAQ',
   helpFeedback: 'Help / Feedback',
   helpFeedbackWay1: 'Check FAQ / search related issues',

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import fileItemCell from '@/components/FileItem.vue'
 import { RecycleScroller } from '@/components/recycleScroller'
-import { toImageUrl } from '@/util/file'
+import FullscreenPreview from '@/page/fileTransfer/FullscreenPreview.vue'
 import { nextTick, watch, reactive } from 'vue'
 import { copy2clipboardI18n } from '@/util'
 import fullScreenContextMenu from '@/page/fileTransfer/fullScreenContextMenu.vue'
@@ -171,10 +171,9 @@ const onTiktokViewClick = () => {
             @dragend="onFileDragEnd"
             @file-item-click="onFileItemClick"
             @tiktok-view="(_file, idx) => openTiktokViewWithFiles(images, idx)"
-            :full-screen-preview-image-url="images[previewIdx] ? toImageUrl(images[previewIdx]) : ''"
             :selected="multiSelectedIdxs.includes(idx)"
+            :enable-builtin-preview="false"
             @context-menu-click="onContextMenuClickU"
-            @preview-visible-change="onPreviewVisibleChange"
             :is-selected-mutil-files="multiSelectedIdxs.length > 1"
             :enable-change-indicator="changeIndchecked"
             :seed-change-checked="seedChangeChecked"
@@ -194,6 +193,8 @@ const onTiktokViewClick = () => {
       </div>
     </ASpin>
 
+    <FullscreenPreview :files="images" :preview-idx="previewIdx" :previewing="previewing"
+      @visible-change="onPreviewVisibleChange" />
     <fullScreenContextMenu
       v-if="previewing && images && images[previewIdx]"
       :file="images[previewIdx]"
