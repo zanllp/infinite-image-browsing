@@ -16,7 +16,12 @@ from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
 from scripts.iib.db.datamodel import DataBase, ImageEmbedding, ImageEmbeddingFail, TopicClusterCache, TopicTitleCache
-from scripts.iib.tool import cwd, accumulate_streaming_response
+from scripts.iib.tool import (
+    cwd,
+    accumulate_streaming_response,
+    json_response_formats,
+    post_chat_with_response_format_fallback,
+)
 from scripts.iib.logger import logger
 from scripts.iib.marengo_embedding import is_marengo_model, marengo_text_embeddings
 
@@ -653,11 +658,9 @@ def _call_chat_title_sync(
         "top_p": 1.0,
         "max_tokens": 4096,
         "stream": True,  # Enable streaming
-        "response_format": {
-            "type": "json_object",
-            "schema": _TOPIC_NAMING_JSON_SCHEMA,
-        },
     }
+    response_formats = json_response_formats("topic_title", _TOPIC_NAMING_JSON_SCHEMA)
+    payload["response_format"] = response_formats[0]
     # Some OpenAI-compatible providers may use different token limit fields / casing.
     payload["max_output_tokens"] = payload["max_tokens"]
     payload["max_completion_tokens"] = payload["max_tokens"]
@@ -679,7 +682,10 @@ def _call_chat_title_sync(
 
     for attempt in range(1, 6):
         try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=120)
+            resp = post_chat_with_response_format_fallback(
+                url, payload, response_formats, log_prefix=f"[topic_cluster][{request_id}]",
+                headers=headers, timeout=120,
+            )
         except requests.RequestException as e:
             last_err = f"network_error: {type(e).__name__}: {e}"
             attempt_debug.append({"attempt": attempt, "reason": "network_error", "error": str(e)})
