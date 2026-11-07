@@ -905,3 +905,76 @@ def accumulate_streaming_response(resp: requests.Response) -> str:
             content_buffer += chunk_text
 
     return content_buffer.strip()
+
+
+def json_response_formats(name: str, schema: Dict[str, Any]) -> List[Optional[Dict[str, Any]]]:
+    """
+    Candidate `response_format` values for a JSON-schema constrained chat request,
+    in the order they should be tried:
+
+    1. OpenAI-standard structured output (`json_schema`), supported by OpenAI, llama.cpp,
+       vLLM, LM Studio, Ollama, MLX servers, ...
+    2. llama.cpp extension (`json_object` + `schema`) for older servers.
+    3. No constraint at all; the prompt asks for JSON and callers parse leniently.
+    """
+    return [
+        {"type": "json_schema", "json_schema": {"name": name, "schema": schema}},
+        {"type": "json_object", "schema": schema},
+        None,
+    ]
+
+
+# Substrings (lower-case) by which providers name `response_format` as the cause of an error,
+# e.g. LM Studio "'response_format.type' must be ...", OpenAI `"param": "response_format"`,
+# FastAPI/pydantic 422 `"loc": ["body", "response_format", ...]`.
+_RESPONSE_FORMAT_ERROR_MARKERS = ("response_format", "response format", "json_schema")
+
+
+def _is_response_format_rejection(resp: requests.Response) -> bool:
+    """True if a 400/422 response names `response_format` as the problem."""
+    if resp.status_code not in (400, 422):
+        return False
+    body = (resp.text or "").lower()
+    return any(marker in body for marker in _RESPONSE_FORMAT_ERROR_MARKERS)
+
+
+def post_chat_with_response_format_fallback(
+    url: str,
+    payload: Dict[str, Any],
+    response_formats: List[Optional[Dict[str, Any]]],
+    log_prefix: str = "[llm]",
+    **kwargs,
+) -> requests.Response:
+    """
+    POST a chat completion request, falling back to the next `response_format` candidate
+    when the provider rejects the request with 400/422 and the error names `response_format`.
+    Any other response (including unrelated 400/422 errors such as an oversized prompt) is
+    returned unchanged after the first request.
+
+    `payload["response_format"]` is left set to the accepted candidate, so callers that
+    retry with the same payload do not probe again. Network errors propagate to the caller.
+    """
+    from scripts.iib.logger import logger  # local import: scripts.iib.logger imports this module
+
+    current = payload.get("response_format")
+    idx = response_formats.index(current) if current in response_formats else 0
+    while True:
+        fmt = response_formats[idx]
+        if fmt is None:
+            payload.pop("response_format", None)
+        else:
+            payload["response_format"] = fmt
+        resp = requests.post(url, json=payload, **kwargs)
+        if idx == len(response_formats) - 1 or not _is_response_format_rejection(resp):
+            return resp
+        next_fmt = response_formats[idx + 1]
+        logger.warning(
+            "%s response_format=%s rejected status=%s body=%s; retrying with response_format=%s",
+            log_prefix,
+            fmt["type"] if fmt else None,
+            resp.status_code,
+            (resp.text or "")[:500],
+            next_fmt["type"] if next_fmt else None,
+        )
+        resp.close()
+        idx += 1

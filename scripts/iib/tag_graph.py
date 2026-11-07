@@ -13,7 +13,12 @@ from pydantic import BaseModel
 from fastapi import Depends, FastAPI, HTTPException
 
 from scripts.iib.db.datamodel import DataBase, GlobalSetting
-from scripts.iib.tool import normalize_output_lang, accumulate_streaming_response
+from scripts.iib.tool import (
+    normalize_output_lang,
+    accumulate_streaming_response,
+    json_response_formats,
+    post_chat_with_response_format_fallback,
+)
 from scripts.iib.logger import logger
 
 # Cache version for tag abstraction - increment to invalidate all caches
@@ -192,11 +197,9 @@ If unsure about Level 2, OMIT it entirely. Start response with {{ and end with }
                 "temperature": 0.0,
                 "max_tokens": 32768,
                 "stream": True,
-                "response_format": {
-                    "type": "json_object",
-                    "schema": TAG_GRAPH_JSON_SCHEMA,
-                },
             }
+            response_formats = json_response_formats("tag_graph", TAG_GRAPH_JSON_SCHEMA)
+            payload["response_format"] = response_formats[0]
 
             request_id = f"tg_{int(time.time() * 1000)}_{os.getpid()}"
             logger.info(
@@ -211,9 +214,11 @@ If unsure about Level 2, OMIT it entirely. Start response with {{ and end with }
             full_response_content = ""
             for attempt in range(1, _LLM_MAX_ATTEMPTS + 1):
                 try:
-                    resp = requests.post(
+                    resp = post_chat_with_response_format_fallback(
                         url,
-                        json=payload,
+                        payload,
+                        response_formats,
+                        log_prefix=f"[tag_graph][{request_id}]",
                         headers=headers,
                         timeout=_LLM_REQUEST_TIMEOUT_SEC,
                         stream=True,
