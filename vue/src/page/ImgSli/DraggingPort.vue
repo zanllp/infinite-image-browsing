@@ -26,6 +26,7 @@ const onImageDrop = async (e: DragEvent, side: 'left' | 'right') => {
 
 
 const onCancel = () => {
+  sliStore.fileDragging = false
   sliStore.left = undefined
   sliStore.right = undefined
   sliStore.opened = false
