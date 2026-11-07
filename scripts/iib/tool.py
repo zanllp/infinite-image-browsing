@@ -924,6 +924,20 @@ def json_response_formats(name: str, schema: Dict[str, Any]) -> List[Optional[Di
     ]
 
 
+# Substrings (lower-case) by which providers name `response_format` as the cause of an error,
+# e.g. LM Studio "'response_format.type' must be ...", OpenAI `"param": "response_format"`,
+# FastAPI/pydantic 422 `"loc": ["body", "response_format", ...]`.
+_RESPONSE_FORMAT_ERROR_MARKERS = ("response_format", "response format", "json_schema")
+
+
+def _is_response_format_rejection(resp: requests.Response) -> bool:
+    """True if a 400/422 response names `response_format` as the problem."""
+    if resp.status_code not in (400, 422):
+        return False
+    body = (resp.text or "").lower()
+    return any(marker in body for marker in _RESPONSE_FORMAT_ERROR_MARKERS)
+
+
 def post_chat_with_response_format_fallback(
     url: str,
     payload: Dict[str, Any],
@@ -933,7 +947,9 @@ def post_chat_with_response_format_fallback(
 ) -> requests.Response:
     """
     POST a chat completion request, falling back to the next `response_format` candidate
-    when the provider rejects the request with 400/422 (e.g. unsupported response_format).
+    when the provider rejects the request with 400/422 and the error names `response_format`.
+    Any other response (including unrelated 400/422 errors such as an oversized prompt) is
+    returned unchanged after the first request.
 
     `payload["response_format"]` is left set to the accepted candidate, so callers that
     retry with the same payload do not probe again. Network errors propagate to the caller.
@@ -949,7 +965,7 @@ def post_chat_with_response_format_fallback(
         else:
             payload["response_format"] = fmt
         resp = requests.post(url, json=payload, **kwargs)
-        if resp.status_code not in (400, 422) or idx == len(response_formats) - 1:
+        if idx == len(response_formats) - 1 or not _is_response_format_rejection(resp):
             return resp
         next_fmt = response_formats[idx + 1]
         logger.warning(
