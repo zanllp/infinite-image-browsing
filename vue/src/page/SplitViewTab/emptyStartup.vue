@@ -554,9 +554,6 @@ const modes = computed(() => {
           <span class="list-edit-hint">{{ $t('startupListEditHint') }}</span>
         </div>
         <ul ref="viewsUl">
-          <li class="item" @click="editingBlock !== 'views' && openInCurrentTab('fuzzy-search')">
-            <span class="text line-clamp-1"><PlusOutlined /> {{ $t('createImageView') }}</span>
-          </li>
           <li v-for="view in viewItems" :key="view.id" class="item rem" :data-item-id="view.id"
             @click.prevent="editingBlock !== 'views' && openImageView(view)">
             <HolderOutlined v-if="editingBlock === 'views'" class="drag-handle" />

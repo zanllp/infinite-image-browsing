@@ -8,6 +8,7 @@ import { h, ref } from 'vue'
 import { t } from '@/i18n'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { isTauri } from '@/util/env'
+import { EyeOutlined } from '@/icon'
 
 
 
@@ -59,7 +60,43 @@ export const addToExtraPath = async (initType: ExtraPathType, initPath?: string)
           ]),
           h('p', 'Walk: '+ t('walkModeDoc')),
           h('p', 'Normal: '+ t('normalModelDoc')),
-          h('p', 'Fixed: '+ t('fixedModeDoc'))
+          h('p', 'Fixed: '+ t('fixedModeDoc')),
+          h('div', {
+            style: {
+              marginTop: '24px',
+              padding: '16px 18px',
+              border: '1px solid var(--primary-color)',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, var(--primary-color-1), transparent)',
+              boxShadow: '0 8px 24px rgba(208, 63, 10, 0.12)'
+            }
+          }, [
+            h('div', {
+              style: {
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '6px',
+                color: 'var(--primary-color)',
+                fontSize: '16px',
+                fontWeight: 600
+              }
+            }, [h(EyeOutlined), t('imageViewPromoTitle')]),
+            h('div', {
+              style: {
+                color: 'var(--zp-secondary)',
+                fontSize: '13px',
+                lineHeight: 1.7
+              }
+            }, t('imageViewPromoDesc')),
+            h('div', {
+              style: {
+                marginTop: '8px',
+                color: 'var(--primary-color)',
+                fontSize: '12px'
+              }
+            }, t('imageViewPromoHint'))
+          ])
         ])
       },
       async onOk () {
