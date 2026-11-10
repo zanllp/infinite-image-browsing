@@ -539,7 +539,7 @@ const modes = computed(() => {
           </actionContextMenu>
         </ul>
       </div>
-      <div class="feature-item">
+      <div class="feature-item" v-if="viewItems.length">
         <div class="feature-head">
           <h2>{{ $t('imageViews') }}</h2>
           <AButton type="text" size="small"
