@@ -28,6 +28,8 @@ import { useTagStore } from '@/store/useTagStore'
 import { useLocalStorage } from '@vueuse/core'
 import TipsCarousel from '@/components/TipsCarousel.vue'
 import { useBackgroundMaintenance } from '@/composables/useBackgroundMaintenance'
+import ImageViewNameModal from '@/components/ImageViewNameModal.vue'
+import { useImageViewStore } from '@/store/useImageViewStore'
 
 const props = defineProps<{ tabIdx: number; paneIdx: number, searchScope?: string }>()
 const global = useGlobalStore()
@@ -55,6 +57,8 @@ const hideExpiredAlert = computed(() => bg.enabled.value && !bg.backgroundFailed
 const showIndexStaleHint = computed(() => bg.enabled.value && !!info.value?.expired)
 const showHistoryRecord = ref(false)
 const matchIds = ref<MatchImageByTagsReq>({ and_tags: [], or_tags: [], not_tags: [], folder_paths_str: props.searchScope })
+const imageViewStore = useImageViewStore()
+const saveViewVisible = ref(false)
 const tags = computed(() =>
   info.value ? info.value.tags.slice().sort((a, b) => b.count - a.count) : []
 )
@@ -247,6 +251,19 @@ const tagIdsToString = (tagIds: TagId[]) => {
   return tagIds.map((id) => tags.value.find((v) => v.id === id)?.name).join(', ')
 }
 
+const saveViewDefaultName = computed(() => {
+  const names = [...matchIds.value.and_tags, ...matchIds.value.or_tags, ...matchIds.value.not_tags]
+    .map((id) => tags.value.find((tag) => tag.id === id)?.name)
+    .filter(Boolean)
+    .slice(0, 3)
+  return names.join(' + ') || t('imageViewDefaultName')
+})
+
+const saveImageView = (name: string) => {
+  imageViewStore.addView(name, { type: 'tags', condition: cloneDeep(matchIds.value) })
+  message.success(t('imageViewSaved'))
+}
+
 </script>
 <template>
   <div class="container">
@@ -281,6 +298,12 @@ const tagIdsToString = (tagIds: TagId[]) => {
       </template>
     </HistoryRecord>
   </a-modal>
+  <ImageViewNameModal
+    v-model:visible="saveViewVisible"
+    :title="$t('saveAsView')"
+    :default-name="saveViewDefaultName"
+    @confirm="saveImageView"
+  />
     <ASelect v-if="false" />
     <template v-if="info">
       <a-alert
@@ -332,6 +355,7 @@ const tagIdsToString = (tagIds: TagId[]) => {
             v-model:value="matchIds.or_tags" :disabled="!tags.length" :placeholder="$t('selectAnyMatchTag')" />
             <div style="padding-left: 4px"></div>
             <AButton @click="showHistoryRecord = true">{{ $t('history') }}</AButton>
+            <AButton @click="saveViewVisible = true">{{ $t('saveAsView') }}</AButton>
         </div>
         <div class="search-bar">
           <div class="form-name">{{ $t('exclude') }}</div>
