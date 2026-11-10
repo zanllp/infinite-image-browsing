@@ -1,18 +1,16 @@
 import { setAppFeSetting } from '@/api'
-import { getDbBasicInfo, type Tag, type TagId } from '@/api/db'
+import { getDbBasicInfo } from '@/api/db'
 import { isSync } from '@/util'
 import { prefix } from '@/util/const'
 import { cloneDeep, debounce, uniqueId } from 'lodash-es'
 import { defineStore } from 'pinia'
 import { ref, toRaw, watch } from 'vue'
+import { resolveImageViewTagIds, type ImageViewTagRef } from '@/util/imageViewTagRefs'
 import { useGlobalStore, type TabPane } from './useGlobalStore'
 
-export type ImageViewMediaType = 'all' | 'image' | 'video'
+export { MissingImageViewTagError, toImageViewTagRefs, type ImageViewTagRef } from '@/util/imageViewTagRefs'
 
-export interface ImageViewTagRef {
-  name: string
-  type: string
-}
+export type ImageViewMediaType = 'all' | 'image' | 'video'
 
 export interface TagImageViewCondition {
   folder_paths_str?: string
@@ -46,60 +44,15 @@ export interface ImageView {
   query: ImageViewQuery
 }
 
-export class MissingImageViewTagError extends Error {
-  constructor(public readonly tag: Partial<ImageViewTagRef>) {
-    super(`Image view tag is missing: ${tag.type ?? '?'} / ${tag.name ?? '?'}`)
-    this.name = 'MissingImageViewTagError'
-  }
-}
-
-const tagRefKey = (tag: Pick<ImageViewTagRef, 'name' | 'type'>) => `${tag.type}\u0000${tag.name}`
-
-/** Tag IDs are not stable across index rebuilds; saved views must use name + type. */
-export const toImageViewTagRefs = (tags: Tag[], ids: TagId[]): ImageViewTagRef[] => {
-  const tagMap = new Map(tags.map((tag) => [tag.id, tag]))
-  return ids.map((id) => {
-    const tag = tagMap.get(id)
-    if (!tag) {
-      throw new Error(`Cannot resolve selected tag: ${String(id)}`)
-    }
-    return { name: tag.name, type: tag.type }
-  })
-}
-
-const resolveTagIdMap = async (refs: ImageViewTagRef[]) => {
-  const uniqueRefs = new Map<string, ImageViewTagRef>()
-  refs.forEach((ref) => {
-    if (typeof ref?.name !== 'string' || typeof ref?.type !== 'string') {
-      throw new MissingImageViewTagError(ref)
-    }
-    uniqueRefs.set(tagRefKey(ref), ref)
-  })
-  if (!uniqueRefs.size) {
-    return new Map<string, TagId>()
-  }
-
-  const tagMap = new Map((await getDbBasicInfo()).tags.map((tag) => [tagRefKey(tag), tag.id]))
-  uniqueRefs.forEach((ref) => {
-    if (!tagMap.has(tagRefKey(ref))) {
-      throw new MissingImageViewTagError(ref)
-    }
-  })
-  return tagMap
-}
-
-const resolveTagIds = (refs: ImageViewTagRef[], idMap: Map<string, TagId>) =>
-  refs.map((ref) => idMap.get(tagRefKey(ref))!)
-
 /** Turn a saved query into an existing search pane without duplicating result rendering. */
 export const createImageViewPane = async (view: ImageView): Promise<TabPane> => {
   if (view.query.type === 'tags') {
     const condition = view.query.condition
     const refs = [...condition.and_tags, ...condition.or_tags, ...condition.not_tags]
-    const idMap = await resolveTagIdMap(refs)
-    const andTags = resolveTagIds(condition.and_tags, idMap)
-    const orTags = resolveTagIds(condition.or_tags, idMap)
-    const notTags = resolveTagIds(condition.not_tags, idMap)
+    const tags = refs.length ? (await getDbBasicInfo()).tags : []
+    const andTags = resolveImageViewTagIds(condition.and_tags, tags)
+    const orTags = resolveImageViewTagIds(condition.or_tags, tags)
+    const notTags = resolveImageViewTagIds(condition.not_tags, tags)
     return {
       type: 'tag-search-matched-image-grid',
       id: `image-view-${view.id}`,
@@ -116,7 +69,7 @@ export const createImageViewPane = async (view: ImageView): Promise<TabPane> => 
 
   const condition = view.query.condition
   const andTags = condition.and_tags ?? []
-  const idMap = await resolveTagIdMap(andTags)
+  const tags = andTags.length ? (await getDbBasicInfo()).tags : []
   return {
     type: 'fuzzy-search',
     searchScope: condition.folder_paths_str,
@@ -124,7 +77,7 @@ export const createImageViewPane = async (view: ImageView): Promise<TabPane> => 
     initialIsRegex: condition.isRegex,
     initialPathOnly: condition.pathOnly,
     initialMediaType: condition.mediaType ?? 'all',
-    initialAndTags: resolveTagIds(andTags, idMap),
+    initialAndTags: resolveImageViewTagIds(andTags, tags),
     autoSearch: true,
     fromView: true,
     key: uniqueId(),
