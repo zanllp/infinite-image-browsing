@@ -437,6 +437,8 @@ You can specify which snapshot to restore to when starting IIB in the global set
   imageViewSaved: 'View saved',
   imageViewUpdated: 'View updated',
   imageViewTagMissing: 'Cannot open this view because a saved tag no longer exists.',
+  showSearchFilters: 'Show filters',
+  hideSearchFilters: 'Hide filters',
   deleteImageViewConfirm: 'Delete this view? The saved query definition will be removed.',
   imageViewDefaultName: 'Image view',
   tagView: 'Tags',

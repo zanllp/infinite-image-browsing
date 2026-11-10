@@ -135,6 +135,8 @@ export interface FuzzySearchTabPane extends TabPaneBase {
   initialAndTags?: TagId[]
   /** Whether to auto-search on mount */
   autoSearch?: boolean
+  /** Opened from a saved view; collapses editable filters by default */
+  fromView?: boolean
 }
 
 export type TabPane =

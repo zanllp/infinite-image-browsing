@@ -40,7 +40,8 @@ const createPaneFromType = (type: TabPane['type'], props: any): TabPane | null =
         initialPathOnly: props.pathOnly,
         initialMediaType: props.mediaType,
         initialAndTags: props.initialAndTags,
-        autoSearch: props.autoSearch
+        autoSearch: props.autoSearch,
+        fromView: props.fromView
       }
       return pane
     }

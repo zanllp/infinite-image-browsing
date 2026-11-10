@@ -126,6 +126,7 @@ export const createImageViewPane = async (view: ImageView): Promise<TabPane> => 
     initialMediaType: condition.mediaType ?? 'all',
     initialAndTags: resolveTagIds(andTags, idMap),
     autoSearch: true,
+    fromView: true,
     key: uniqueId(),
     name: view.name
   }

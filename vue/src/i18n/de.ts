@@ -214,6 +214,8 @@ export const de: Partial<IIBI18nMap> = {
   imageViewSaved: 'Ansicht gespeichert',
   imageViewUpdated: 'Ansicht aktualisiert',
   imageViewTagMissing: 'Diese Ansicht kann nicht geöffnet werden, weil ein gespeicherter Tag nicht mehr existiert.',
+  showSearchFilters: 'Filter anzeigen',
+  hideSearchFilters: 'Filter ausblenden',
   deleteImageViewConfirm: 'Diese Ansicht löschen? Die gespeicherte Abfragedefinition wird entfernt.',
   imageViewDefaultName: 'Bildansicht',
   tagView: 'Tags',
