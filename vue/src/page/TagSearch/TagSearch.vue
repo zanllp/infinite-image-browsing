@@ -13,7 +13,7 @@ import {
   updateTag
 } from '@/api/db'
 import { SearchSelect, delay } from 'vue3-ts-util'
-import { PlusOutlined, ArrowRightOutlined } from '@/icon'
+import { PlusOutlined, ArrowRightOutlined, HistoryOutlined, SaveOutlined } from '@/icon'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { groupBy, uniqueId, debounce, cloneDeep } from 'lodash-es'
 import { createReactiveQueue, type Dict, useGlobalEventListen, globalEvents } from '@/util'
@@ -361,9 +361,16 @@ const saveImageView = (name: string) => {
           <div class="form-name">{{ $t('anyMatch') }}</div>
           <SearchSelect :conv="conv" mode="multiple" style="width: 100%" :options="tags"
             v-model:value="matchIds.or_tags" :disabled="!tags.length" :placeholder="$t('selectAnyMatchTag')" />
-            <div style="padding-left: 4px"></div>
-            <AButton @click="showHistoryRecord = true">{{ $t('history') }}</AButton>
-            <AButton @click="saveViewVisible = true">{{ $t('saveAsView') }}</AButton>
+            <div class="view-actions">
+              <AButton @click="showHistoryRecord = true">
+                <template #icon><HistoryOutlined /></template>
+                {{ $t('history') }}
+              </AButton>
+              <AButton @click="saveViewVisible = true">
+                <template #icon><SaveOutlined /></template>
+                {{ $t('saveAsView') }}
+              </AButton>
+            </div>
         </div>
         <div class="search-bar">
           <div class="form-name">{{ $t('exclude') }}</div>
@@ -493,6 +500,13 @@ const saveImageView = (name: string) => {
       flex-shrink: 0;
       padding: 4px 8px;
       width: 128px;
+    }
+
+    .view-actions {
+      display: flex;
+      flex-shrink: 0;
+      gap: 8px;
+      margin-left: 4px;
     }
   }
 

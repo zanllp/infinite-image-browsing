@@ -6,7 +6,7 @@ import FullscreenPreview from '@/page/fileTransfer/FullscreenPreview.vue'
 import { getDbBasicInfo, getExpiredDirs, getImagesBySubstr, updateImageData, type DataBaseBasicInfo, type Tag, type TagId, SearchBySubstrReq } from '@/api/db'
 import { copy2clipboardI18n,  makeAsyncFunctionSingle, useGlobalEventListen, globalEvents } from '@/util'
 import fullScreenContextMenu from '@/page/fileTransfer/fullScreenContextMenu.vue'
-import { LeftCircleOutlined, RightCircleOutlined, regex, AimOutlined } from '@/icon'
+import { LeftCircleOutlined, RightCircleOutlined, regex, AimOutlined, HistoryOutlined, SaveOutlined } from '@/icon'
 import { message } from 'ant-design-vue'
 import { t } from '@/i18n'
 import { createImageSearchIter, useImageSearch } from './hook'
@@ -394,8 +394,16 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
     <div class="search-bar last actions">
       <a-button @click="saveLoadedFileAsJson" v-if="images.length">{{ $t('saveLoadedImageAsJson') }}</a-button>
       <a-button @click="saveAllFileAsJson" v-if="images.length">{{ $t('saveAllAsJson') }}</a-button>
-      <a-button @click="showHistoryRecord = true">{{ $t('history') }}</a-button>
-      <a-button @click="saveViewVisible = true">{{ $t('saveAsView') }}</a-button>
+      <div class="view-actions">
+        <a-button @click="showHistoryRecord = true">
+          <template #icon><HistoryOutlined /></template>
+          {{ $t('history') }}
+        </a-button>
+        <a-button @click="saveViewVisible = true">
+          <template #icon><SaveOutlined /></template>
+          {{ $t('saveAsView') }}
+        </a-button>
+      </div>
     <div class="tips-wrapper">
       <TipsCarousel :interval="10000" />
     </div>
@@ -536,6 +544,12 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
 
   .actions>* {
     margin-right: 4px;
+  }
+
+  .view-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
   }
 }
 
