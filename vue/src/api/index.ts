@@ -208,7 +208,7 @@ export interface GlobalConf {
   enable_access_control: boolean
   launch_mode: 'server' | 'sd'
   export_fe_fn: boolean
-  app_fe_setting: Record<'global' | 'fullscreen_layout' | 'auto_tag_rules' | 'startup_page_layout' | 'background_maintenance' | `workspace_snapshot_${string}`, any>
+  app_fe_setting: Record<'global' | 'fullscreen_layout' | 'auto_tag_rules' | 'startup_page_layout' | 'background_maintenance' | 'image_views' | `workspace_snapshot_${string}`, any>
   is_readonly: boolean
 }
 

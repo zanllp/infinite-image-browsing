@@ -14,15 +14,18 @@ import { ExtraPathType } from '@/api/db'
 import { onMounted, onUnmounted } from 'vue'
 import { hasNewRelease, version, latestCommit } from '@/util/versionManager'
 import { isTauri } from '@/util/env'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { useSettingSync } from '@/util'
 import { orderStartupItems, startupBlockIds, useStartupLayout, type StartupBlockId } from '@/util/startupLayout'
 import Sortable from 'sortablejs'
 import BackgroundMaintenanceBanner from '@/components/BackgroundMaintenanceBanner.vue'
+import ImageViewNameModal from '@/components/ImageViewNameModal.vue'
+import { createImageViewPane, MissingImageViewTagError, useImageViewStore, type ImageView } from '@/store/useImageViewStore'
 
 const global = useGlobalStore()
 const imgsli = useImgSliStore()
 const workspaceSnapshot = useWorkspeaceSnapshot()
+const imageViews = useImageViewStore()
 const props = defineProps<{
   tabIdx: number; paneIdx: number, popAddPathModal?: {
     path: string
@@ -104,6 +107,23 @@ const openInCurrentTab = (type: TabPane['type'], path?: string, mode?: FileTrans
   tab.key = pane.key
 }
 
+const openImageView = async (view: ImageView) => {
+  try {
+    const pane = await createImageViewPane(view)
+    const tab = global.tabList[props.tabIdx]
+    tab.panes.splice(props.paneIdx, 1, pane)
+    tab.key = pane.key
+  } catch (error) {
+    if (error instanceof MissingImageViewTagError) {
+      const tagLabel = `${error.tag.type ?? '?'}: ${error.tag.name ?? '?'}`
+      message.error(`${t('imageViewTagMissing')} (${tagLabel})`)
+      return
+    }
+    console.error('failed to open image view', error)
+    message.error(t('errorOccurred'))
+  }
+}
+
 const openInNewTab = (type: TabPane['type'], path?: string, mode?: FileTransModeIn) => {
   const pane = createPane(type, path, mode)
   if (!pane) return
@@ -170,6 +190,7 @@ const launchComps = computed(() =>
 )
 const launchItems = computed(() => orderStartupItems('launch', launchComps.value, (v) => v.id))
 const launchAllIds = computed(() => launchComps.value.map((v) => v.id))
+const viewItems = computed(() => orderStartupItems('views', imageViews.views, (v) => v.id))
 
 const hideAllPresets = (block: StartupBlockId, ids: string[]) => startupLayout.setHidden(block, ids, true)
 const showAllPresets = (block: StartupBlockId, ids: string[]) => startupLayout.setHidden(block, ids, false)
@@ -177,8 +198,9 @@ const showAllPresets = (block: StartupBlockId, ids: string[]) => startupLayout.s
 // ---- 拖拽排序：sortablejs，只有编辑模式下的拖拽把手能拖 ----
 const walkUl = ref<HTMLElement>()
 const normalUl = ref<HTMLElement>()
+const viewsUl = ref<HTMLElement>()
 const launchUl = ref<HTMLElement>()
-const listRefs = { walkMode: walkUl, normalFixed: normalUl, launch: launchUl }
+const listRefs = { walkMode: walkUl, normalFixed: normalUl, views: viewsUl, launch: launchUl }
 const sortables: Partial<Record<StartupBlockId, Sortable>> = {}
 
 const initSortable = (block: StartupBlockId) => {
@@ -199,7 +221,7 @@ const initSortable = (block: StartupBlockId) => {
   })
 }
 
-watch([walkUl, normalUl, launchUl], () => startupBlockIds.forEach(initSortable), { immediate: true })
+watch([walkUl, normalUl, viewsUl, launchUl], () => startupBlockIds.forEach(initSortable), { immediate: true })
 watch(editingBlock, (block) => {
   startupBlockIds.forEach((id) => sortables[id]?.option('disabled', id !== block))
 })
@@ -216,6 +238,31 @@ const restoreRecord = () => {
 
 const restoreWorkspaceSnapshot = (item: Snapshot) => {
   global.tabList = cloneDeep(item.tabs)
+}
+
+const renameViewVisible = ref(false)
+const renamingView = ref<ImageView>()
+
+const openRenameView = (view: ImageView) => {
+  renamingView.value = view
+  renameViewVisible.value = true
+}
+
+const renameImageView = (name: string) => {
+  if (!renamingView.value) {
+    return
+  }
+  imageViews.renameView(renamingView.value.id, name)
+  renamingView.value = undefined
+  message.success(t('imageViewUpdated'))
+}
+
+const removeImageView = (view: ImageView) => {
+  Modal.confirm({
+    title: t('confirmDelete'),
+    content: t('deleteImageViewConfirm'),
+    onOk: () => imageViews.removeView(view.id)
+  })
 }
 
 const machine = computed(() => {
@@ -347,6 +394,13 @@ const modes = computed(() => {
         </div>
       </div>
     </a-modal>
+
+    <ImageViewNameModal
+      v-model:visible="renameViewVisible"
+      :title="$t('rename')"
+      :default-name="renamingView?.name ?? ''"
+      @confirm="renameImageView"
+    />
 
     <!-- 实验性功能：后台静默更新索引/缩略图（默认关闭，开启后自动隐藏） -->
     <BackgroundMaintenanceBanner />
@@ -483,6 +537,32 @@ const modes = computed(() => {
               </template>
             </li>
           </actionContextMenu>
+        </ul>
+      </div>
+      <div class="feature-item" v-if="viewItems.length">
+        <div class="feature-head">
+          <h2>{{ $t('imageViews') }}</h2>
+          <AButton type="text" size="small"
+            :title="editingBlock === 'views' ? $t('startupListDone') : $t('startupListEdit')"
+            @click="toggleEdit('views')">
+            <CheckOutlined v-if="editingBlock === 'views'" />
+            <SettingOutlined v-else />
+          </AButton>
+        </div>
+        <div class="list-edit-bar" v-if="editingBlock === 'views'">
+          <AButton size="small" :title="$t('startupListReset')" @click="startupLayout.resetBlock('views')"><UndoOutlined /></AButton>
+          <span class="list-edit-hint">{{ $t('startupListEditHint') }}</span>
+        </div>
+        <ul ref="viewsUl">
+          <li v-for="view in viewItems" :key="view.id" class="item rem" :data-item-id="view.id"
+            @click.prevent="editingBlock !== 'views' && openImageView(view)">
+            <HolderOutlined v-if="editingBlock === 'views'" class="drag-handle" />
+            <span class="text line-clamp-1"><span class="fixed">{{ view.query.type === 'tags' ? $t('tagView') : $t('keywordView') }}</span>{{ view.name }}</span>
+            <template v-if="editingBlock === 'views'">
+              <AButton type="link" :title="$t('rename')" @click.stop="openRenameView(view)"><EditOutlined /></AButton>
+              <AButton type="link" :title="$t('remove')" @click.stop="removeImageView(view)"><DeleteOutlined /></AButton>
+            </template>
+          </li>
         </ul>
       </div>
       <div class="feature-item">

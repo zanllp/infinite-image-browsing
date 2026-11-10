@@ -1,5 +1,5 @@
 import type { GlobalConf } from '@/api'
-import type { ExtraPathType, MatchImageByTagsReq, Tag } from '@/api/db'
+import type { ExtraPathType, MatchImageByTagsReq, Tag, TagId } from '@/api/db'
 import type { OrganizeJobProgress, OrganizeFilesPreviewResp } from '@/api/organize'
 import { FileNodeInfo } from '@/api/files'
 import { i18n, t } from '@/i18n'
@@ -131,8 +131,12 @@ export interface FuzzySearchTabPane extends TabPaneBase {
   initialPathOnly?: boolean
   /** Initial media type filter value */
   initialMediaType?: 'all' | 'image' | 'video'
+  /** Initial AND-tag filter value */
+  initialAndTags?: TagId[]
   /** Whether to auto-search on mount */
   autoSearch?: boolean
+  /** Opened from a saved view; collapses editable filters by default */
+  fromView?: boolean
 }
 
 export type TabPane =

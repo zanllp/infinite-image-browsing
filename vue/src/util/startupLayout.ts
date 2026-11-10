@@ -4,7 +4,7 @@ import { setAppFeSetting } from '@/api'
 import { useGlobalStore } from '@/store/useGlobalStore'
 
 /** 启动页上支持自定义的列表 */
-export type StartupBlockId = 'walkMode' | 'normalFixed' | 'launch'
+export type StartupBlockId = 'walkMode' | 'normalFixed' | 'views' | 'launch'
 
 export interface StartupListLayout {
   /** 被隐藏的条目 id（主要是内置预设）：普通模式下不显示，编辑模式下半透明显示 */
@@ -15,11 +15,12 @@ export interface StartupListLayout {
 
 export type StartupLayout = Record<StartupBlockId, StartupListLayout>
 
-export const startupBlockIds: StartupBlockId[] = ['walkMode', 'normalFixed', 'launch']
+export const startupBlockIds: StartupBlockId[] = ['walkMode', 'normalFixed', 'views', 'launch']
 
 const emptyLayout = (): StartupLayout => ({
   walkMode: { hidden: [], order: [] },
   normalFixed: { hidden: [], order: [] },
+  views: { hidden: [], order: [] },
   launch: { hidden: [], order: [] }
 })
 

@@ -1,6 +1,11 @@
 [跳到中文](#中文)
 # English
 
+## 2026-11-11
+### ✨ Views: jump straight to pre-filtered images
+Save keywords, tag filters, folder scope, media type, and related search conditions as reusable Views. Opening a View takes you directly to the matching image grid and re-runs the saved query against the latest index. Keyword Views use a compact one-line toolbar with editable filters and tags collapsed by default, keeping the page focused on browsing.
+- Tag conditions are stored by name and type instead of mutable database IDs, so they still resolve correctly after an index rebuild. Missing tags fail explicitly instead of silently changing the query.
+
 ## 2026-11-01
 ### ✨ Fullscreen viewing is no longer interrupted by list refreshes
 While an image is open in full screen, a background list refresh (new images written to the folder, polling refresh, coming back to the page, walk mode loading the next batch) could close the preview or switch it to a different image; deleting the viewed image also made the preview flash and reopen.
@@ -926,6 +931,11 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-11-11
+### ✨ 视图：直达预筛选图片
+可将关键词、标签、目录、媒体类型等搜索条件保存为可复用视图。打开视图会直接进入匹配的图片列表，并按最新索引重新查询。关键词视图默认收起筛选栏和标签输入，只保留一行摘要与操作，方便专注看图。
+- 标签条件按名称和类型保存，不依赖易变的数据库 ID，重建索引后仍能正确恢复；标签不存在时会明确提示，不会悄悄改变查询条件。
 
 ## 2026-11-01
 ### ✨ 全屏查看不再被列表刷新打断

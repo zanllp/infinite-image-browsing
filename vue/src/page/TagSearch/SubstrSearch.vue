@@ -6,7 +6,7 @@ import FullscreenPreview from '@/page/fileTransfer/FullscreenPreview.vue'
 import { getDbBasicInfo, getExpiredDirs, getImagesBySubstr, updateImageData, type DataBaseBasicInfo, type Tag, type TagId, SearchBySubstrReq } from '@/api/db'
 import { copy2clipboardI18n,  makeAsyncFunctionSingle, useGlobalEventListen, globalEvents } from '@/util'
 import fullScreenContextMenu from '@/page/fileTransfer/fullScreenContextMenu.vue'
-import { LeftCircleOutlined, RightCircleOutlined, regex, AimOutlined } from '@/icon'
+import { LeftCircleOutlined, RightCircleOutlined, regex, AimOutlined, HistoryOutlined, SaveOutlined, FilterOutlined } from '@/icon'
 import { message } from 'ant-design-vue'
 import { t } from '@/i18n'
 import { createImageSearchIter, useImageSearch } from './hook'
@@ -21,6 +21,8 @@ import { useTagStore } from '@/store/useTagStore'
 import { useLocalStorage } from '@vueuse/core'
 import { SearchSelect, type SearchSelectConv } from 'vue3-ts-util'
 import { useBackgroundMaintenance } from '@/composables/useBackgroundMaintenance'
+import ImageViewNameModal from '@/components/ImageViewNameModal.vue'
+import { toImageViewTagRefs, useImageViewStore, type ImageViewMediaType } from '@/store/useImageViewStore'
 const tagStore = useTagStore()
 const bg = useBackgroundMaintenance()
 
@@ -48,8 +50,12 @@ const props = defineProps<{
   initialPathOnly?: boolean
   /** Initial media type filter value */
   initialMediaType?: 'all' | 'image' | 'video'
+  /** Initial AND-tag filter value */
+  initialAndTags?: TagId[]
   /** Whether to auto-search on mount */
   autoSearch?: boolean
+  /** Opened from a saved view; collapses editable filters by default */
+  fromView?: boolean
 }>()
 const isRegex = ref(false)
 const substr = ref('')
@@ -57,8 +63,11 @@ const pathOnly = ref(false)
 const folder_paths_str = ref(props.searchScope ?? '')
 const showHistoryRecord = ref(false)
 const searchCount = ref(0)
-const mediaType = ref('all')
+const mediaType = ref<ImageViewMediaType>('all')
 const andTags = ref<TagId[]>([])
+const imageViewStore = useImageViewStore()
+const saveViewVisible = ref(false)
+const showSearchFilters = ref(!props.fromView)
 const iter = createImageSearchIter(cursor => {
   const req: SearchBySubstrReq = {
     cursor,
@@ -146,6 +155,49 @@ const tagNameOf = (id: TagId) => {
 }
 const tagIdsToString = (ids?: TagId[]) => (ids ?? []).map(tagNameOf).join(', ')
 
+const viewQuerySummary = computed(() => {
+  const parts: string[] = []
+  if (substr.value.trim()) {
+    parts.push(isRegex.value ? `/${substr.value.trim()}/` : substr.value.trim())
+  }
+  if (pathOnly.value) {
+    parts.push(t('pathOnly'))
+  }
+  if (mediaType.value !== 'all') {
+    parts.push(t(mediaType.value))
+  }
+  if (andTags.value.length) {
+    const tagNames = andTags.value
+      .map((id) => tagMap.value.get(id)?.name)
+      .filter(Boolean)
+    parts.push(tagNames.length ? tagNames.join(', ') : `${t('tags')} × ${andTags.value.length}`)
+  }
+  const folder = folder_paths_str.value.trim()
+  if (folder) {
+    parts.push(folder)
+  }
+  return parts.join(' · ') || t('all')
+})
+
+const saveViewDefaultName = computed(() => {
+  return substr.value.trim() || tagIdsToString(andTags.value) || t('imageViewDefaultName')
+})
+
+const saveImageView = (name: string) => {
+  imageViewStore.addView(name, {
+    type: 'fuzzy',
+    condition: {
+      substr: substr.value,
+      folder_paths_str: folder_paths_str.value,
+      isRegex: isRegex.value,
+      pathOnly: pathOnly.value,
+      mediaType: mediaType.value,
+      and_tags: toImageViewTagRefs(tags.value, andTags.value)
+    }
+  })
+  message.success(t('imageViewSaved'))
+}
+
 onMounted(async () => {
   // 先确保实验功能配置已加载，避免 mount 时读到默认值导致误走阻塞式更新
   await bg.loadSettings().catch(() => undefined)
@@ -169,8 +221,11 @@ onMounted(async () => {
   if (props.initialMediaType !== undefined) {
     mediaType.value = props.initialMediaType
   }
-  // Auto-search if substr is provided and autoSearch is not false
-  if (props.initialSubstr && props.autoSearch !== false) {
+  if (props.initialAndTags !== undefined) {
+    andTags.value = [...props.initialAndTags]
+  }
+  // Saved views must execute even when their keyword is empty (for example, folder-only views).
+  if (props.autoSearch === true || (props.initialSubstr && props.autoSearch !== false)) {
     await query()
   } else if (props.searchScope && !props.initialSubstr) {
     // Legacy behavior: only search if searchScope but no search term
@@ -216,7 +271,7 @@ const reuse = (rec: FuzzySearchHistoryRecord & { id: string; time: string }) => 
   substr.value = rec.substr
   folder_paths_str.value = rec.folder_paths_str
   isRegex.value = rec.isRegex
-  mediaType.value = rec.mediaType || 'all'
+  mediaType.value = rec.mediaType === 'image' || rec.mediaType === 'video' ? rec.mediaType : 'all'
   andTags.value = rec.and_tags ?? []
   showHistoryRecord.value = false
   query()
@@ -289,9 +344,15 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
       </template>
     </HistoryRecord>
   </a-modal>
+  <ImageViewNameModal
+    v-model:visible="saveViewVisible"
+    :title="$t('saveAsView')"
+    :default-name="saveViewDefaultName"
+    @confirm="saveImageView"
+  />
   <div class="container" ref="stackViewEl">
     <a-alert
-      v-if="!showAutoUpdateFeatureTip && !hideExpiredAlert"
+      v-if="!fromView && !showAutoUpdateFeatureTip && !hideExpiredAlert"
       type="info"
       show-icon
       :message="$t('autoUpdateFeatureTip')"
@@ -313,9 +374,29 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
       style="margin: 8px;"
       closable
     />
-    <div v-if="showIndexStaleHint" class="index-stale-hint">{{ $t('indexStaleHint') }}</div>
+    <div v-if="showIndexStaleHint && !fromView" class="index-stale-hint">{{ $t('indexStaleHint') }}</div>
     <MultiSelectKeep :show="!!multiSelectedIdxs.length || g.keepMultiSelect" @clear-all-selected="onClearAllSelected"
       @select-all="onSelectAll" @reverse-select="onReverseSelect" />
+    <div v-if="fromView" class="search-bar last actions view-mode-bar">
+      <a-button type="text" size="small" @click="showSearchFilters = !showSearchFilters">
+        <template #icon><FilterOutlined /></template>
+        {{ showSearchFilters ? $t('hideSearchFilters') : $t('showSearchFilters') }}
+      </a-button>
+      <span class="view-query-summary" :title="viewQuerySummary">{{ viewQuerySummary }}</span>
+      <div class="view-mode-actions">
+        <a-button size="small" @click="saveLoadedFileAsJson" v-if="images.length">{{ $t('saveLoadedImageAsJson') }}</a-button>
+        <a-button size="small" @click="saveAllFileAsJson" v-if="images.length">{{ $t('saveAllAsJson') }}</a-button>
+        <a-button size="small" @click="showHistoryRecord = true">
+          <template #icon><HistoryOutlined /></template>
+          {{ $t('history') }}
+        </a-button>
+        <a-button size="small" @click="saveViewVisible = true">
+          <template #icon><SaveOutlined /></template>
+          {{ $t('saveAsView') }}
+        </a-button>
+      </div>
+    </div>
+    <template v-if="!fromView || showSearchFilters">
     <div class="search-bar"  @keydown.stop>
       <a-input v-model:value="substr" :placeholder="$t('fuzzy-search-placeholder') + ' ' + $t('regexSearchEnabledHint')"
         :disabled="searching" @keydown.enter="query" allow-clear />
@@ -357,10 +438,20 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
       <ATextarea :auto-size="{ maxRows: 8 }" v-model:value="folder_paths_str"
         :placeholder="$t('specifiedSearchFolder')" />
     </div>
-    <div class="search-bar last actions">
+    </template>
+    <div v-if="!fromView" class="search-bar last actions">
       <a-button @click="saveLoadedFileAsJson" v-if="images.length">{{ $t('saveLoadedImageAsJson') }}</a-button>
       <a-button @click="saveAllFileAsJson" v-if="images.length">{{ $t('saveAllAsJson') }}</a-button>
-      <a-button @click="showHistoryRecord = true">{{ $t('history') }}</a-button>
+      <div class="view-actions">
+        <a-button @click="showHistoryRecord = true">
+          <template #icon><HistoryOutlined /></template>
+          {{ $t('history') }}
+        </a-button>
+        <a-button @click="saveViewVisible = true">
+          <template #icon><SaveOutlined /></template>
+          {{ $t('saveAsView') }}
+        </a-button>
+      </div>
     <div class="tips-wrapper">
       <TipsCarousel :interval="10000" />
     </div>
@@ -501,6 +592,33 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
 
   .actions>* {
     margin-right: 4px;
+  }
+
+  .view-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
+  }
+}
+
+.view-mode-bar {
+  align-items: center;
+  gap: 8px;
+
+  .view-query-summary {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--zp-secondary);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .view-mode-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
   }
 }
 

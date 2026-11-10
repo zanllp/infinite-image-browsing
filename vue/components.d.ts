@@ -61,6 +61,7 @@ declare module '@vue/runtime-core' {
     FileItem: typeof import('./src/components/FileItem.vue')['default']
     GridCellLevelSlider: typeof import('./src/components/gridCellLevelSlider.vue')['default']
     HistoryRecord: typeof import('./src/components/HistoryRecord.vue')['default']
+    ImageViewNameModal: typeof import('./src/components/ImageViewNameModal.vue')['default']
     IndexStatusIndicator: typeof import('./src/components/IndexStatusIndicator.vue')['default']
     KvPairEditor: typeof import('./src/components/KvPairEditor.vue')['default']
     MultiSelectKeep: typeof import('./src/components/MultiSelectKeep.vue')['default']
