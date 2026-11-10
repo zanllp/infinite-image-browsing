@@ -20,7 +20,7 @@ import { orderStartupItems, startupBlockIds, useStartupLayout, type StartupBlock
 import Sortable from 'sortablejs'
 import BackgroundMaintenanceBanner from '@/components/BackgroundMaintenanceBanner.vue'
 import ImageViewNameModal from '@/components/ImageViewNameModal.vue'
-import { createImageViewPane, useImageViewStore, type ImageView } from '@/store/useImageViewStore'
+import { createImageViewPane, MissingImageViewTagError, useImageViewStore, type ImageView } from '@/store/useImageViewStore'
 
 const global = useGlobalStore()
 const imgsli = useImgSliStore()
@@ -107,11 +107,21 @@ const openInCurrentTab = (type: TabPane['type'], path?: string, mode?: FileTrans
   tab.key = pane.key
 }
 
-const openImageView = (view: ImageView) => {
-  const pane = createImageViewPane(view)
-  const tab = global.tabList[props.tabIdx]
-  tab.panes.splice(props.paneIdx, 1, pane)
-  tab.key = pane.key
+const openImageView = async (view: ImageView) => {
+  try {
+    const pane = await createImageViewPane(view)
+    const tab = global.tabList[props.tabIdx]
+    tab.panes.splice(props.paneIdx, 1, pane)
+    tab.key = pane.key
+  } catch (error) {
+    if (error instanceof MissingImageViewTagError) {
+      const tagLabel = `${error.tag.type ?? '?'}: ${error.tag.name ?? '?'}`
+      message.error(`${t('imageViewTagMissing')} (${tagLabel})`)
+      return
+    }
+    console.error('failed to open image view', error)
+    message.error(t('errorOccurred'))
+  }
 }
 
 const openInNewTab = (type: TabPane['type'], path?: string, mode?: FileTransModeIn) => {

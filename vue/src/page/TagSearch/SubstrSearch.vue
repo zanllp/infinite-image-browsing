@@ -22,7 +22,7 @@ import { useLocalStorage } from '@vueuse/core'
 import { SearchSelect, type SearchSelectConv } from 'vue3-ts-util'
 import { useBackgroundMaintenance } from '@/composables/useBackgroundMaintenance'
 import ImageViewNameModal from '@/components/ImageViewNameModal.vue'
-import { useImageViewStore, type ImageViewMediaType } from '@/store/useImageViewStore'
+import { toImageViewTagRefs, useImageViewStore, type ImageViewMediaType } from '@/store/useImageViewStore'
 const tagStore = useTagStore()
 const bg = useBackgroundMaintenance()
 
@@ -165,7 +165,7 @@ const saveImageView = (name: string) => {
       isRegex: isRegex.value,
       pathOnly: pathOnly.value,
       mediaType: mediaType.value,
-      and_tags: [...andTags.value]
+      and_tags: toImageViewTagRefs(tags.value, andTags.value)
     }
   })
   message.success(t('imageViewSaved'))

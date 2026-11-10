@@ -29,7 +29,7 @@ import { useLocalStorage } from '@vueuse/core'
 import TipsCarousel from '@/components/TipsCarousel.vue'
 import { useBackgroundMaintenance } from '@/composables/useBackgroundMaintenance'
 import ImageViewNameModal from '@/components/ImageViewNameModal.vue'
-import { useImageViewStore } from '@/store/useImageViewStore'
+import { toImageViewTagRefs, useImageViewStore } from '@/store/useImageViewStore'
 
 const props = defineProps<{ tabIdx: number; paneIdx: number, searchScope?: string }>()
 const global = useGlobalStore()
@@ -260,7 +260,15 @@ const saveViewDefaultName = computed(() => {
 })
 
 const saveImageView = (name: string) => {
-  imageViewStore.addView(name, { type: 'tags', condition: cloneDeep(matchIds.value) })
+  imageViewStore.addView(name, {
+    type: 'tags',
+    condition: {
+      folder_paths_str: matchIds.value.folder_paths_str,
+      and_tags: toImageViewTagRefs(tags.value, matchIds.value.and_tags),
+      or_tags: toImageViewTagRefs(tags.value, matchIds.value.or_tags),
+      not_tags: toImageViewTagRefs(tags.value, matchIds.value.not_tags)
+    }
+  })
   message.success(t('imageViewSaved'))
 }
 

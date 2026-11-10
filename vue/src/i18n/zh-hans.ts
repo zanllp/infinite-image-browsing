@@ -246,6 +246,7 @@ export const zhHans = {
   imageViewNameRequired: '请输入视图名称',
   imageViewSaved: '视图已保存',
   imageViewUpdated: '视图已更新',
+  imageViewTagMissing: '无法打开视图：保存的标签已不存在。',
   deleteImageViewConfirm: '确定删除该视图吗？查询定义会被移除。',
   imageViewDefaultName: '图像视图',
   tagView: '标签',
