@@ -133,6 +133,14 @@ exe版本同样支持ComfyUI/Fooocus/NovelAI
 
 从仓库页面右侧的`releases`部分下载并安装程序。如果提示检测到病毒忽略即可这是误报。在windows下的编译有两个版本, pyinstaller版本拥有比较低的误报率。
 
+### macOS（未公证预览版）
+
+Apple Silicon（M 系列）下载 `aarch64-unsigned.dmg`，Intel 下载 `x64-unsigned.dmg`，需要 macOS 14 或更新版本。将 **Infinite Image Browsing** 拖入「应用程序」后再打开，不要直接从磁盘映像运行。
+
+这些安装包没有 Apple Developer ID 签名，也未经公证。如果被系统拦截，请参考 [Apple 关于打开未公证应用的说明](https://support.apple.com/zh-cn/102445)，仅在信任本仓库下载来源时允许打开。不要全局关闭 Gatekeeper。包内代码的 ad-hoc 签名用于完整性校验，不代表已获 Apple 认证。
+
+桌面版会启动内置 Python 后端。如果窗口已打开但后端没有启动，仅放行主程序可能还不够；请检查 `~/Library/Application Support/com.zanllp.iib/` 中的 `iib_api_server.log`，反馈时附上相关错误。数据库、备份、`.env` 和可选的 `app.conf.json` 也存放在这个目录，而非应用包内。桌面、文稿等受保护目录的访问权限，需另在「系统设置 > 隐私与安全性 > 文件与文件夹」管理。
+
 如果你需要自行编译请参考 https://github.com/zanllp/sd-webui-infinite-image-browsing/blob/main/.github/workflows/tauri_app_build.yml
 ## 作为库使用
 

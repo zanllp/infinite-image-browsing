@@ -1,12 +1,22 @@
 name: tauri_app_build
 
 on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [build, verify-draft]
+        default: build
+      draft_tag:
+        type: string
+        default: v1.11.0
   push:
     branches:    
       - 'releases/**'
 
 jobs:
   build:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'verify-draft'
     strategy:
       matrix:
         os: [windows-latest]
@@ -17,7 +27,7 @@ jobs:
       contents: write
     steps:
       - name: Check-out repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - run: echo "VERSION=$(jq -r '.package.version' vue/src-tauri/tauri.conf.json)" >> "$GITHUB_ENV"
         if: matrix.os == 'ubuntu-22.04'
@@ -25,7 +35,7 @@ jobs:
         if: matrix.os == 'windows-latest'
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10' 
           cache: 'pip'
@@ -90,7 +100,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         
       - name: Use Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
@@ -121,6 +131,7 @@ jobs:
 
 
   build-by-pyinstaller:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'verify-draft'
     strategy:
       matrix:
         os: [windows-latest]
@@ -131,12 +142,12 @@ jobs:
       contents: write
     steps:
       - name: Check-out repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - run: echo "VERSION=$(jq -r '.package.version' vue/src-tauri/tauri.conf.json)" >> $env:GITHUB_ENV
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10' 
           cache: 'pip'
@@ -155,7 +166,7 @@ jobs:
         with:
             spec: 'app.py'
             upload_exe_with_name: 'My executable'
-            options: --onefile --additional-hooks-dir=pyinstaller_hooks
+            options: --onefile --additional-hooks-dir=pyinstaller_hooks --add-data "vue/dist;vue/dist"
 
       - run: mv dist/app.exe vue/src-tauri/iib_api_server-x86_64-pc-windows-msvc.exe
 
@@ -167,7 +178,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         
       - name: Use Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
@@ -198,21 +209,97 @@ jobs:
           path: |
             vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${{ env.VERSION }}_x64-setup-pyinstaller.exe
             
+  build-macos:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'verify-draft'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+            arch: aarch64
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    env:
+      # The selected NumPy macOS wheel requires macOS 14 or newer.
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
+      # Keep hnswlib portable instead of targeting the CI runner's CPU.
+      HNSWLIB_NO_NATIVE: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: echo "VERSION=$(jq -r '.package.version' vue/src-tauri/tauri.conf.json)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt av==14.0.1 pyinstaller==6.16.0 imageio-ffmpeg
+          yarn --cwd vue install --frozen-lockfile
+
+      # Embed the standalone frontend before Tauri rebuilds it with its own base URL.
+      - name: Build standalone frontend
+        run: yarn --cwd vue build
+
+      - name: Test desktop resource paths and parent watchdog
+        run: python -m unittest scripts.iib.test_frozen_resources scripts.iib.test_parent_watchdog
+
+      - name: Build Python sidecar
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --name iib_api_server \
+            --additional-hooks-dir pyinstaller_hooks --add-data "vue/dist:vue/dist" app.py
+          cp dist/iib_api_server "vue/src-tauri/iib_api_server-${{ matrix.target }}"
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@1.85.1
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './vue/src-tauri -> target'
+
+      - name: Build application bundle
+        run: yarn tauri-build --bundles app
+        working-directory: vue
+
+      - name: Package and verify ad-hoc signed application
+        run: |
+          bash scripts/package_macos.sh \
+            "vue/src-tauri/target/release/bundle/macos/Infinite Image Browsing.app" \
+            out "${{ env.VERSION }}" "${{ matrix.arch }}"
+
+      - name: Exercise the final desktop bundle
+        run: |
+          python scripts/smoke_test_desktop.py --app \
+            "vue/src-tauri/target/release/bundle/macos/Infinite Image Browsing.app"
+          python scripts/smoke_test_desktop.py \
+            "vue/src-tauri/target/release/bundle/macos/Infinite Image Browsing.app/Contents/MacOS/iib_api_server"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ env.VERSION }}-macOS-${{ matrix.arch }}
+          path: out/*-unsigned.dmg
+          if-no-files-found: error
+
   release:
-    needs: [build-by-pyinstaller, build]
+    if: startsWith(github.ref, 'refs/heads/releases/') && (github.event_name != 'workflow_dispatch' || inputs.mode != 'verify-draft')
+    needs: [build-by-pyinstaller, build, build-macos]
     runs-on: ubuntu-latest
 
     permissions:
       contents: write
     steps:
       - name: Check-out repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - run: echo "VERSION=$(jq -r '.package.version' vue/src-tauri/tauri.conf.json)" >> "$GITHUB_ENV"
-
-      - name: Delete drafts
-        uses: hugo19941994/delete-draft-releases@v1.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -229,10 +316,75 @@ jobs:
           name: iib_app_cli_Windows
           path: artifacts
 
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bundle-${{ env.VERSION }}-macOS-*
+          merge-multiple: true
+          path: artifacts
+
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           draft: true
           tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          body_path: docs/releases/v${{ env.VERSION }}.md
           files: artifacts/**/*
-          
+
+  verify-draft:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify-draft'
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            variant: windows
+            pattern: '*_x64-setup.exe'
+          - os: windows-latest
+            variant: windows-pyinstaller
+            pattern: '*_x64-setup-pyinstaller.exe'
+          - os: windows-latest
+            variant: windows-cli
+            pattern: 'iib_app_cli-*-Windows.exe'
+          - os: macos-15-intel
+            variant: macos-x64
+            pattern: '*_x64-unsigned.dmg'
+          - os: macos-15
+            variant: macos-aarch64
+            pattern: '*_aarch64-unsigned.dmg'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DRAFT_TAG: ${{ inputs.draft_tag }}
+      ASSET_PATTERN: ${{ matrix.pattern }}
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install test fixture dependencies
+        run: python -m pip install av==14.0.1 Pillow
+      - name: Download actual draft release asset
+        shell: bash
+        run: |
+          gh release view "$DRAFT_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' | grep -qx true
+          gh release download "$DRAFT_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ASSET_PATTERN" --dir downloads
+      - name: Install and exercise downloaded artifact
+        shell: bash
+        run: |
+          python scripts/verify_draft_asset.py downloads/* verification
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: draft-verification-${{ matrix.variant }}
+          path: |
+            verification/*.json
+            verification/*.log
+            verification/*.png
+            verification/*.stdout
+            verification/*.stderr
