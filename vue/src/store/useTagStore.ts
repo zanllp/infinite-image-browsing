@@ -2,6 +2,8 @@ import { Tag, batchGetTagsByPath } from '@/api/db'
 import { defineStore } from 'pinia'
 import sjcl from 'sjcl'
 import { reactive, ref } from 'vue'
+import { globalEvents } from '@/util'
+import { onCrossTab } from '@/util/crossTab'
 import type { GridViewFileTag } from './useGlobalStore'
 function generateColors() {
   const colors = []
@@ -77,6 +79,31 @@ export const useTagStore = defineStore('useTagStore', () => {
     const normalizedTags = tags.map(v => tagConvert(typeof v === 'string' ? { name: v } : v))
     tagMap.set(path, normalizedTags)
   }
+
+  /**
+   * 其他浏览器标签页改了标签：删掉对应路径的缓存，再交给已有的补拉链路。
+   *
+   * 只删「变化的那几个路径」而不是整个 clear：clear 会让每个 tab 都把整屏可视区
+   * 重新拉一遍（几十个请求），而 fetchImageTags 本身只拉缓存里没有的路径。
+   */
+  onCrossTab((msg) => {
+    if (msg.type !== 'tagsChanged') {
+      return
+    }
+    const bulk = !!msg.all || !msg.paths?.length
+    if (bulk) {
+      // 标签库本身变了（新增 / 删除 / 改名 / 改色）
+      tagMap.clear()
+      // 让各网格立刻补拉可视区（否则要等用户滚动才恢复）
+      globalEvents.emit('tagsInvalidated')
+      // TagSearch / SubstrSearch 靠这个事件重拉 getDbBasicInfo，标签计数才能跟上
+      globalEvents.emit('backgroundMaintenanceUpdated')
+      return
+    }
+    msg.paths!.forEach((path) => tagMap.delete(path))
+    globalEvents.emit('tagsInvalidated')
+  })
+
   return {
     set,
     colorCache,
