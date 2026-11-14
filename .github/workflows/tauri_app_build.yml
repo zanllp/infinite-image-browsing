@@ -385,7 +385,8 @@ jobs:
             pattern: '*_aarch64-unsigned.dmg'
     runs-on: ${{ matrix.os }}
     permissions:
-      contents: read
+      # GitHub only exposes unpublished drafts to tokens with push access.
+      contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       DRAFT_TAG: ${{ inputs.draft_tag }}
