@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import platform
 import re
 import shutil
 import subprocess
@@ -168,7 +169,8 @@ if __name__ == "__main__":
     root = Path(sys.argv[2]).resolve()
     root.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256(asset.read_bytes()).hexdigest()
-    report = {"asset": asset.name, "sha256": digest, "platform": sys.platform}
+    report = {"asset": asset.name, "sha256": digest, "platform": sys.platform,
+              "architecture": platform.machine(), "os_version": platform.platform()}
     try:
         if sys.platform == "win32":
             verify_windows(asset, root, report)

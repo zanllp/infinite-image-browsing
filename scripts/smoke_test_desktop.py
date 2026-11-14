@@ -136,7 +136,7 @@ def smoke_test(executable):
                 try:
                     with urlopen(Request(base + "/infinite_image_browsing/shutdown", method="POST"), timeout=5):
                         pass
-                except RemoteDisconnected:
+                except (RemoteDisconnected, ConnectionResetError):
                     # The existing shutdown endpoint sends SIGKILL before responding.
                     pass
                 code = process.wait(timeout=15)
