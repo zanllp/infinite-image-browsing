@@ -12,6 +12,9 @@ on:
         default: v1.11.0
       artifact_run_id:
         type: string
+      baseline_tag:
+        type: string
+        default: v1.10.1
   push:
     branches:    
       - 'releases/**'
@@ -377,6 +380,14 @@ jobs:
           - os: windows-latest
             variant: windows-cli
             pattern: 'iib_app_cli-*-Windows.exe'
+          - os: windows-latest
+            variant: baseline-windows
+            pattern: '*_x64-setup.exe'
+            baseline: true
+          - os: windows-latest
+            variant: baseline-windows-pyinstaller
+            pattern: '*_x64-setup-pyinstaller.exe'
+            baseline: true
           - os: macos-15-intel
             variant: macos-x64
             pattern: '*_x64-unsigned.dmg'
@@ -391,6 +402,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       DRAFT_TAG: ${{ inputs.draft_tag }}
       ASSET_PATTERN: ${{ matrix.pattern }}
+      BASELINE_TEST: ${{ matrix.baseline || false }}
+      BASELINE_TAG: ${{ inputs.baseline_tag }}
       PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@v4
@@ -402,8 +415,13 @@ jobs:
       - name: Download actual draft release asset
         shell: bash
         run: |
-          gh release view "$DRAFT_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' | grep -qx true
-          gh release download "$DRAFT_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ASSET_PATTERN" --dir downloads
+          tag="$DRAFT_TAG"
+          if [ "$BASELINE_TEST" = true ]; then
+            tag="$BASELINE_TAG"
+          else
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' | grep -qx true
+          fi
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$ASSET_PATTERN" --dir downloads
       - name: Install and exercise downloaded artifact
         shell: bash
         run: |

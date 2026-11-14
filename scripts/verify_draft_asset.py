@@ -58,6 +58,7 @@ def verify_windows(asset, root, report):
     data.mkdir()
     startup_log = data / "iib_api_server.log"
     child_pid = None
+    application_error = None
     with (root / "app.log").open("w+") as log:
         process = subprocess.Popen([str(executables[0])], cwd=data, stdout=log, stderr=log)
         try:
@@ -88,6 +89,15 @@ def verify_windows(asset, root, report):
                     raise RuntimeError("Installed Windows app left its sidecar running")
                 time.sleep(.2)
             report["installed_application"] = "passed: WebView ready, database, sidecar cleanup"
+        except Exception as error:
+            application_error = error
+            report["installed_application"] = repr(error)
+            time.sleep(3)
+            events = run(["powershell", "-NoProfile", "-Command",
+                          "Get-WinEvent -FilterHashtable @{LogName='Application';Id=1000,1001} "
+                          "-ErrorAction SilentlyContinue | Select-Object -First 8 TimeCreated,Id,Message "
+                          "| ConvertTo-Json -Depth 4"])
+            (root / "windows-events.log").write_text(events.stdout, encoding="utf-8")
         finally:
             log.flush()
             log.seek(0)
@@ -98,9 +108,16 @@ def verify_windows(asset, root, report):
                 if pid and windows_process_running(pid):
                     run(["taskkill", "/F", "/T", "/PID", str(pid)])
             process.wait()
-    smoke_test(backend)
-    report["installed_sidecar"] = "passed: HTML/JS, database, thumbnails, video, shutdown"
+    try:
+        smoke_test(backend)
+        report["installed_sidecar"] = "passed: HTML/JS, database, thumbnails, video, shutdown"
+    except Exception as error:
+        report["installed_sidecar"] = repr(error)
+        if application_error is None:
+            raise
     report["windows_security_scope"] = "Silent installer/native process test; SmartScreen UI not tested"
+    if application_error:
+        raise application_error
 
 
 def verify_macos(asset, root, report):
