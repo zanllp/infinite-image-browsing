@@ -140,7 +140,8 @@ def smoke_test(executable):
                     # The existing shutdown endpoint sends SIGKILL before responding.
                     pass
                 code = process.wait(timeout=15)
-                assert code == -signal.SIGKILL, f"Unexpected shutdown exit code: {code}"
+                expected = 9 if sys.platform == "win32" else -signal.SIGKILL
+                assert code == expected, f"Unexpected shutdown exit code: {code}"
                 print("PASS: packaged sidecar, HTML/JS, database, image thumbnail, video cover, shutdown")
             except BaseException:
                 log.flush()
@@ -152,7 +153,10 @@ def smoke_test(executable):
                 raise
             finally:
                 if process.poll() is None:
-                    os.killpg(process.pid, signal.SIGKILL)
+                    if sys.platform == "win32":
+                        subprocess.run(["taskkill", "/F", "/T", "/PID", str(process.pid)], check=False)
+                    else:
+                        os.killpg(process.pid, signal.SIGKILL)
                     process.wait()
 
 

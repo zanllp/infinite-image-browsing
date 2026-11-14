@@ -2,12 +2,21 @@ name: tauri_app_build
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [build, verify-draft]
+        default: build
+      draft_tag:
+        type: string
+        default: v1.11.0
   push:
     branches:    
       - 'releases/**'
 
 jobs:
   build:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'verify-draft'
     strategy:
       matrix:
         os: [windows-latest]
@@ -122,6 +131,7 @@ jobs:
 
 
   build-by-pyinstaller:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'verify-draft'
     strategy:
       matrix:
         os: [windows-latest]
@@ -200,6 +210,7 @@ jobs:
             vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${{ env.VERSION }}_x64-setup-pyinstaller.exe
             
   build-macos:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'verify-draft'
     strategy:
       fail-fast: false
       matrix:
@@ -279,7 +290,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/heads/releases/')
+    if: startsWith(github.ref, 'refs/heads/releases/') && (github.event_name != 'workflow_dispatch' || inputs.mode != 'verify-draft')
     needs: [build-by-pyinstaller, build, build-macos]
     runs-on: ubuntu-latest
 
@@ -319,4 +330,61 @@ jobs:
           target_commitish: ${{ github.sha }}
           body_path: docs/releases/v${{ env.VERSION }}.md
           files: artifacts/**/*
-          
+
+  verify-draft:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify-draft'
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            variant: windows
+            pattern: '*_x64-setup.exe'
+          - os: windows-latest
+            variant: windows-pyinstaller
+            pattern: '*_x64-setup-pyinstaller.exe'
+          - os: windows-latest
+            variant: windows-cli
+            pattern: 'iib_app_cli-*-Windows.exe'
+          - os: macos-15-intel
+            variant: macos-x64
+            pattern: '*_x64-unsigned.dmg'
+          - os: macos-15
+            variant: macos-aarch64
+            pattern: '*_aarch64-unsigned.dmg'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DRAFT_TAG: ${{ inputs.draft_tag }}
+      ASSET_PATTERN: ${{ matrix.pattern }}
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install test fixture dependencies
+        run: python -m pip install av==14.0.1 Pillow
+      - name: Download actual draft release asset
+        shell: bash
+        run: |
+          gh release view "$DRAFT_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' | grep -qx true
+          gh release download "$DRAFT_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ASSET_PATTERN" --dir downloads
+      - name: Install and exercise downloaded artifact
+        shell: bash
+        run: |
+          python scripts/verify_draft_asset.py downloads/* verification
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: draft-verification-${{ matrix.variant }}
+          path: |
+            verification/*.json
+            verification/*.log
+            verification/*.png
+            verification/*.stdout
+            verification/*.stderr
