@@ -102,7 +102,8 @@ jobs:
         working-directory: vue
 
       - name: Rust setup
-        uses: dtolnay/rust-toolchain@stable
+        # Match the compiler used for the working v1.10.1 Windows installers.
+        uses: dtolnay/rust-toolchain@1.99.1
         
       - name: Use Node.js
         uses: actions/setup-node@v4
@@ -124,7 +125,19 @@ jobs:
         run: |
           yarn tauri-build
         working-directory: vue
-      
+
+      - name: Verify Windows installer before attaching to a draft
+        shell: bash
+        run: python scripts/verify_draft_asset.py "vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${VERSION}_x64-setup.exe" verification
+
+      - name: Upload Windows verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-verification-windows
+          path: |
+            verification/*.json
+            verification/*.log
       
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -180,7 +193,7 @@ jobs:
         working-directory: vue
 
       - name: Rust setup
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.99.1
         
       - name: Use Node.js
         uses: actions/setup-node@v4
@@ -206,7 +219,19 @@ jobs:
       - run: |
          cd vue/src-tauri/target/release/bundle/nsis
          mv "Infinite Image Browsing_${{ env.VERSION }}_x64-setup.exe" "Infinite Image Browsing_${{ env.VERSION }}_x64-setup-pyinstaller.exe"
-      
+
+      - name: Verify alternative Windows installer before attaching to a draft
+        shell: bash
+        run: python scripts/verify_draft_asset.py "vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${VERSION}_x64-setup-pyinstaller.exe" verification
+
+      - name: Upload Windows verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-verification-windows-pyinstaller
+          path: |
+            verification/*.json
+            verification/*.log
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -298,7 +323,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/heads/releases/') && (github.event_name != 'workflow_dispatch' || inputs.mode == 'build')
+    if: (startsWith(github.ref, 'refs/heads/releases/') && github.event_name != 'workflow_dispatch') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'build')
     needs: [build-by-pyinstaller, build, build-macos]
     runs-on: ubuntu-latest
 
@@ -367,6 +392,8 @@ jobs:
   verify-draft:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify-draft'
     timeout-minutes: 15
+    # Historical installers are diagnostic controls, not release candidates.
+    continue-on-error: ${{ matrix.baseline || false }}
     strategy:
       fail-fast: false
       matrix:
