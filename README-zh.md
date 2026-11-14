@@ -4,7 +4,7 @@
 # 无边图像浏览
 
 
-[查看近期更新](https://github.com/zanllp/sd-webui-infinite-image-browsing/wiki/Change-log)
+[查看近期更新](./CHANGELOG.md)
 
 [安装/运行](#安装运行)
 

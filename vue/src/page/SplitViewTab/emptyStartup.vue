@@ -339,7 +339,7 @@ const modes = computed(() => {
         <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/releases" target="_blank"
           class="quick-action">Releases</a>
       </a-badge>
-      <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/wiki/Change-log" target="_blank"
+      <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/blob/main/CHANGELOG.md" target="_blank"
         class="quick-action">{{ $t('changlog') }}</a>
       <a href="#" class="quick-action" @click.prevent="helpModalOpen = true">{{ $t('helpFeedback') }}</a>
       <div class="quick-action" v-if="!isTauri">

@@ -3,7 +3,7 @@
 > ✨ **New from the same author**: [SpindleStudio](https://github.com/zanllp/SpindleStudio) — a Threads-style parallel image generation studio. Its images carry SD WebUI–compatible metadata and are indexed by IIB out of the box.
 
 [中文文档](./README-zh.md)
-[Change log](https://github.com/zanllp/sd-webui-infinite-image-browsing/wiki/Change-log)
+[Change log](./CHANGELOG.md)
 [Installation / Running](#installation--running)
 
 
