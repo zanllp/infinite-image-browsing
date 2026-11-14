@@ -128,7 +128,7 @@ jobs:
 
       - name: Verify Windows installer before attaching to a draft
         shell: bash
-        run: python scripts/verify_draft_asset.py "vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${VERSION}_x64-setup.exe" verification
+        run: python tests/desktop/verify_draft_asset.py "vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${VERSION}_x64-setup.exe" verification
 
       - name: Upload Windows verification evidence
         if: always()
@@ -222,7 +222,7 @@ jobs:
 
       - name: Verify alternative Windows installer before attaching to a draft
         shell: bash
-        run: python scripts/verify_draft_asset.py "vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${VERSION}_x64-setup-pyinstaller.exe" verification
+        run: python tests/desktop/verify_draft_asset.py "vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${VERSION}_x64-setup-pyinstaller.exe" verification
 
       - name: Upload Windows verification evidence
         if: always()
@@ -284,7 +284,7 @@ jobs:
         run: yarn --cwd vue build
 
       - name: Test desktop resource paths and parent watchdog
-        run: python -m unittest scripts.iib.test_frozen_resources scripts.iib.test_parent_watchdog
+        run: python -m unittest discover -s tests/unit -p 'test_*.py'
 
       - name: Build Python sidecar
         run: |
@@ -305,15 +305,15 @@ jobs:
 
       - name: Package and verify ad-hoc signed application
         run: |
-          bash scripts/package_macos.sh \
+          bash tools/release/package_macos.sh \
             "vue/src-tauri/target/release/bundle/macos/Infinite Image Browsing.app" \
             out "${{ env.VERSION }}" "${{ matrix.arch }}"
 
       - name: Exercise the final desktop bundle
         run: |
-          python scripts/smoke_test_desktop.py --app \
+          python tests/desktop/smoke_test_desktop.py --app \
             "vue/src-tauri/target/release/bundle/macos/Infinite Image Browsing.app"
-          python scripts/smoke_test_desktop.py \
+          python tests/desktop/smoke_test_desktop.py \
             "vue/src-tauri/target/release/bundle/macos/Infinite Image Browsing.app/Contents/MacOS/iib_api_server"
 
       - uses: actions/upload-artifact@v4
@@ -452,7 +452,7 @@ jobs:
       - name: Install and exercise downloaded artifact
         shell: bash
         run: |
-          python scripts/verify_draft_asset.py downloads/* verification
+          python tests/desktop/verify_draft_asset.py downloads/* verification
       - name: Upload verification evidence
         if: always()
         uses: actions/upload-artifact@v4
