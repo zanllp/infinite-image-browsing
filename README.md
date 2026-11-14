@@ -156,6 +156,14 @@ Choose the `aarch64-unsigned.dmg` download for Apple Silicon (M-series), or `x64
 
 These builds have no Apple Developer ID signature and are not notarized. If macOS blocks the app, review [Apple's instructions for opening an unnotarized app](https://support.apple.com/en-us/102445). Only allow it if you trust the download from this repository. Do not disable Gatekeeper system-wide. An ad-hoc signature protects the integrity of bundled code, but does not make Apple trust the app.
 
+If the trusted official download still will not start, the following command removes the download quarantine flag from **this app only**, including its bundled backend:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Infinite Image Browsing.app"
+```
+
+This is an explicit per-app exception, not Apple verification. Do not run it on your Downloads folder or an entire disk. Both macOS architectures have been tested with this exception; the original quarantined downloads are still blocked by Gatekeeper.
+
 The app starts a bundled Python backend. If the window opens but the backend does not start, allowing the main app alone may not have resolved the problem. Check `iib_api_server.log` in `~/Library/Application Support/com.zanllp.iib/` and include the relevant error when reporting an issue. The database, backups, `.env`, and optional `app.conf.json` also live in this directory, not inside the app bundle. Access to protected folders is controlled separately in **System Settings > Privacy & Security > Files and Folders**.
 
 If you need to compile it yourself, please refer to https://github.com/zanllp/sd-webui-infinite-image-browsing/blob/main/.github/workflows/tauri_app_build.yml.

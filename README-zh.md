@@ -139,6 +139,14 @@ Apple Silicon（M 系列）下载 `aarch64-unsigned.dmg`，Intel 下载 `x64-uns
 
 这些安装包没有 Apple Developer ID 签名，也未经公证。如果被系统拦截，请参考 [Apple 关于打开未公证应用的说明](https://support.apple.com/zh-cn/102445)，仅在信任本仓库下载来源时允许打开。不要全局关闭 Gatekeeper。包内代码的 ad-hoc 签名用于完整性校验，不代表已获 Apple 认证。
 
+如果已确认是可信的官方安装包，仍无法启动，可执行以下命令，仅清除**这个应用及其内置后端**的下载隔离标记：
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Infinite Image Browsing.app"
+```
+
+这是针对单个应用的明确例外，不代表通过 Apple 认证。不要对整个下载目录或磁盘执行此命令。两种架构的 macOS 安装包均已验证清除该标记后可以运行，但原始下载包仍会被 Gatekeeper 拦截。
+
 桌面版会启动内置 Python 后端。如果窗口已打开但后端没有启动，仅放行主程序可能还不够；请检查 `~/Library/Application Support/com.zanllp.iib/` 中的 `iib_api_server.log`，反馈时附上相关错误。数据库、备份、`.env` 和可选的 `app.conf.json` 也存放在这个目录，而非应用包内。桌面、文稿等受保护目录的访问权限，需另在「系统设置 > 隐私与安全性 > 文件与文件夹」管理。
 
 如果你需要自行编译请参考 https://github.com/zanllp/sd-webui-infinite-image-browsing/blob/main/.github/workflows/tauri_app_build.yml
