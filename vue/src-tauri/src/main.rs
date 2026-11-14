@@ -213,6 +213,18 @@ fn shutdown_api_server_command(state: tauri::State<'_, AppState>) {
 }
 
 fn main() {
+    let context = tauri::generate_context!();
+    #[cfg(target_os = "macos")]
+    {
+        // Finder's working directory is not a writable data directory.
+        // The sidecar inherits this directory, including on automatic restarts.
+        let data_dir = tauri::api::path::app_data_dir(context.config())
+            .expect("Failed to locate the application data directory");
+        std::fs::create_dir_all(&data_dir)
+            .expect("Failed to create the application data directory");
+        std::env::set_current_dir(&data_dir)
+            .expect("Failed to use the application data directory");
+    }
     let log_file = Arc::new(
         OpenOptions::new()
             .create(true)
@@ -279,8 +291,8 @@ fn main() {
                                 &log_file,
                                 "INFO",
                                 &format!(
-                                    "[TIMELINE] event=sidecar_terminated code={:?}",
-                                    payload.code
+                                    "[TIMELINE] event=sidecar_terminated code={:?} signal={:?}",
+                                    payload.code, payload.signal
                                 ),
                             );
                         }
@@ -370,6 +382,6 @@ fn main() {
             }
             _ => (),
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }

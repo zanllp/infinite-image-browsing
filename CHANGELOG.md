@@ -1,6 +1,15 @@
 [跳到中文](#中文)
 # English
 
+## 2026-11-15
+### macOS desktop preview and release 1.11.0
+- Added separate Apple Silicon and Intel macOS installers. These are ad-hoc signed preview builds, without Apple Developer ID signing or notarization; macOS may still block the first launch. See the README before installing.
+- The macOS app stores its database, backups, configuration, and logs in the user's Application Support directory, so launching from Finder no longer requires writing into the launch directory.
+- Fixed the macOS parent watchdog mistaking the extra process created by Python's onefile packaging for an exited desktop app and shutting down the backend immediately.
+- The backend can still exit when the desktop app disappears after its log pipes have closed.
+- Packaged Python resources are resolved from the extraction directory. Release builds check the bundled backend's startup, image thumbnails, video covers, and shutdown; sidecar termination logs now include the signal as well as the exit code.
+- Fixed LoRA and hypernetwork name parsing in escaped prompts, closing image comparison, and structured-output requests to OpenAI-compatible services. Homepage and README changelog links now point to this file.
+
 ## 2026-11-11
 ### ✨ Views: jump straight to pre-filtered images
 Save keywords, tag filters, folder scope, media type, and related search conditions as reusable Views. Opening a View takes you directly to the matching image grid and re-runs the saved query against the latest index. Keyword Views use a compact one-line toolbar with editable filters and tags collapsed by default, keeping the page focused on browsing.
@@ -931,6 +940,15 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-11-15
+### macOS 桌面预览版与 1.11.0 发布准备
+- 新增 Apple Silicon 和 Intel 独立安装包。这些是仅作 ad-hoc 签名的预览版本，没有 Apple Developer ID 签名，也未经公证；首次打开仍可能被 macOS 拦截，安装前请阅读 README。
+- macOS 版将数据库、备份、配置和日志存入用户的 Application Support 目录，从 Finder 启动不再依赖启动目录的写权限。
+- 修复 macOS 看门狗将 Python 单文件打包产生的中间进程误判为桌面主程序已退出，导致后端刚启动就自行退出的问题。
+- 主程序消失、日志管道已关闭时，后端仍能正常退出，不会因为写日志失败而留下进程。
+- 修正 Python 打包资源的查找位置。发布构建会实际检查包内后端的启动、图片缩略图、视频封面与退出，后端终止日志也增加了信号记录。
+- 修复转义提示词中的 LoRA 和 hypernetwork 名称解析、关闭图片对比、OpenAI 兼容服务的结构化输出请求。首页及 README 的更新日志链接改为直达本文件。
 
 ## 2026-11-11
 ### ✨ 视图：直达预筛选图片

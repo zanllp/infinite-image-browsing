@@ -855,12 +855,10 @@ def get_frame_at_second(video_path, second):
     
 def get_data_file_path(filename):
     if hasattr(sys, '_MEIPASS'):
-        # Running in a PyInstaller bundle
-        base_path = os.path.join(sys._MEIPASS)
-    else:
-        # Running in a normal Python environment
-        base_path = os.path.join(os.path.dirname(__file__))
-    
+        return os.path.normpath(os.path.join(sys._MEIPASS, filename))
+
+    # Source and Nuitka retain the scripts/iib module layout.
+    base_path = os.path.dirname(__file__)
     return os.path.normpath(os.path.join(base_path, "../../", filename))
 
 

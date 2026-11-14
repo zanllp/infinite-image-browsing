@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Browse images and videos in folders you choose on your Desktop.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Browse images and videos in folders you choose in Documents.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Browse images and videos in folders you choose in Downloads.</string>
+    <key>NSNetworkVolumesUsageDescription</key>
+    <string>Browse images and videos on network volumes you choose.</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>Browse images and videos on removable drives you choose.</string>
+</dict>
+</plist>

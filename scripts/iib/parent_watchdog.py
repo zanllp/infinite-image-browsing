@@ -3,10 +3,12 @@
 桌面版由 tauri 壳以 `--parent_pid <pid>` 启动；父进程一旦消失（正常关闭、强杀、崩溃），
 sidecar 就自己退出，避免变成孤儿进程继续占端口、占着数据库。
 
-用的是父进程的**句柄**而不是 pid，所以不存在 pid 被复用导致的误判。
+Windows 使用进程句柄，macOS 使用 kqueue 的进程退出事件。
+onefile 的 Python 进程不一定是 Tauri 的直接子进程，不能只比较 getppid()。
 """
 import ctypes
 import os
+import select
 import sys
 import threading
 import time
@@ -28,11 +30,16 @@ def watch_parent(parent_pid: int) -> None:
 def _watch(parent_pid: int) -> None:
     if sys.platform == "win32":
         _wait_windows(parent_pid)
+    elif sys.platform == "darwin":
+        _wait_macos(parent_pid)
     else:
         _wait_posix(parent_pid)
-    tlog("parent_gone", parent_pid=parent_pid)
-    print(f"parent process {parent_pid} is gone, exiting", flush=True)
-    os._exit(0)
+    try:
+        tlog("parent_gone", parent_pid=parent_pid)
+        print(f"parent process {parent_pid} is gone, exiting", flush=True)
+    finally:
+        # The desktop process may already have closed our stdout/stderr pipes.
+        os._exit(0)
 
 
 def _wait_windows(pid: int) -> None:
@@ -51,6 +58,24 @@ def _wait_windows(pid: int) -> None:
     finally:
         kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
         kernel32.CloseHandle(handle)
+
+
+def _wait_macos(pid: int) -> None:
+    queue = select.kqueue()
+    try:
+        event = select.kevent(
+            pid,
+            filter=select.KQ_FILTER_PROC,
+            flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+            fflags=select.KQ_NOTE_EXIT,
+        )
+        try:
+            queue.control([event], 0, 0)
+        except ProcessLookupError:
+            return
+        queue.control(None, 1, None)
+    finally:
+        queue.close()
 
 
 def _wait_posix(pid: int) -> None:
