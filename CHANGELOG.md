@@ -1,6 +1,14 @@
 [跳到中文](#中文)
 # English
 
+## 2026-11-15
+### 🐛 Tagging stays in sync across browser tabs
+Tagging an image in one tab left every other tab opened on the same library showing the old state: the star stayed off, and the tag list and its counts on the search page went stale until the page was reloaded. Tabs now broadcast what changed and each one re-fetches only that.
+- Tagging or untagging an image (single or batch) only drops the cached tags for those paths in the other tabs, so their grids re-fetch just the affected cells instead of the whole visible page.
+- Adding, deleting, renaming or recoloring a tag invalidates the whole cache, which also refreshes the tag list and counts on the search pages.
+- Notifications are coalesced over a 150 ms window, so dragging a tag's color picker does not make the other tabs re-query on every tick.
+- Only same-origin tabs are involved, and the channel is skipped when `BroadcastChannel` is unavailable, so single-tab usage is unchanged.
+
 ## 2026-11-11
 ### ✨ Views: jump straight to pre-filtered images
 Save keywords, tag filters, folder scope, media type, and related search conditions as reusable Views. Opening a View takes you directly to the matching image grid and re-runs the saved query against the latest index. Keyword Views use a compact one-line toolbar with editable filters and tags collapsed by default, keeping the page focused on browsing.
@@ -931,6 +939,14 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-11-15
+### 🐛 多标签页打标签不再不同步
+在一个标签页里给图片打了标签，另一个开在同一图库上的标签页仍然显示旧状态：星星不亮，搜索页的标签列表和计数也要刷新页面才更新。现在各标签页之间会广播失效通知，各自只重拉真正变了的那部分。
+- 给图片打/取消标签（单张或批量）只让其他标签页丢掉这几个路径的缓存，网格只补拉受影响的格子，不会整屏重查。
+- 新增、删除、改名、改色标签会让整份缓存失效，搜索页的标签列表和计数也跟着刷新。
+- 通知在 150ms 窗口内合并，拖标签颜色选择器不会让别的标签页每动一下都重查一遍。
+- 只在同源标签页之间生效；`BroadcastChannel` 不可用时自动跳过，单标签页使用没有变化。
 
 ## 2026-11-11
 ### ✨ 视图：直达预筛选图片

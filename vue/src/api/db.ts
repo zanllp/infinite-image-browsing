@@ -1,7 +1,46 @@
 import { Dict } from '@/util'
+import { postCrossTab } from '@/util/crossTab'
 import type { FileNodeInfo } from './files'
 import { axiosInst } from './index'
 import { PageCursor } from 'vue3-ts-util'
+
+/**
+ * 标签写入成功后通知其他浏览器标签页「哪些缓存失效了」。
+ * 只广播失效范围，不搬运状态；失败静默，不能影响写操作本身。
+ *
+ * 150ms 内合并：颜色选择器这类 onChange 连发的场景，别的 tab 不能每一下都
+ * 清缓存重拉一遍。
+ */
+let pendingPaths = new Set<string>()
+let pendingAll = false
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+const flushTagsChanged = () => {
+  flushTimer = null
+  const all = pendingAll
+  const paths = [...pendingPaths]
+  pendingPaths = new Set()
+  pendingAll = false
+  try {
+    if (all || paths.length > 1000) {
+      postCrossTab({ type: 'tagsChanged', all: true })
+    } else if (paths.length) {
+      postCrossTab({ type: 'tagsChanged', paths })
+    }
+  } catch (error) {
+    console.warn('[db] notifyTagsChanged failed', error)
+  }
+}
+
+const notifyTagsChanged = (payload: { paths?: string[]; all?: boolean }) => {
+  if (payload.all) {
+    pendingAll = true
+  }
+  payload.paths?.forEach((path) => pendingPaths.add(path))
+  if (!flushTimer) {
+    flushTimer = setTimeout(flushTagsChanged, 150)
+  }
+}
 
 export interface Tag {
   name: string
@@ -105,6 +144,7 @@ export const runIndexNow = async (): Promise<{ ok: boolean, reason?: string, sta
 
 export const updateTag = async (tag: Tag) => {
   await axiosInst.value.post('/db/update_tag', tag)
+  notifyTagsChanged({ all: true })
 }
 
 export type TagId = number | string
@@ -130,20 +170,25 @@ export const getImagesByTags = async (req: MatchImageByTagsReq, cursor: string) 
 
 export const addCustomTag = async (req: { tag_name: string }) => {
   const resp = await axiosInst.value.post('/db/add_custom_tag', req)
+  notifyTagsChanged({ all: true })
   return resp.data as Tag
 }
 
 export const toggleCustomTagToImg = async (req: { tag_id: TagId; img_path: string }) => {
   const resp = await axiosInst.value.post('/db/toggle_custom_tag_to_img', req)
+  notifyTagsChanged({ paths: [req.img_path] })
   return resp.data as { is_remove: boolean }
 }
 
 export const removeCustomTag = async (req: { tag_id: TagId }) => {
   await axiosInst.value.post('/db/remove_custom_tag', req)
+  notifyTagsChanged({ all: true })
 }
 
 export const removeCustomTagToImg = async (req: { tag_id: TagId; img_id: TagId }) => {
   await axiosInst.value.post('/db/add_custom_tag_from_img', req)
+  // 这里只有 img_id 拿不到路径，只能整体失效
+  notifyTagsChanged({ all: true })
 }
 
 export const getImageSelectedCustomTag = async (path: string) => {
@@ -220,8 +265,10 @@ export interface BatchUpdateTagParams {
   tag_id: number
 }
 
-export const batchUpdateImageTag = (data: BatchUpdateTagParams) => {
-  return axiosInst.value.post('/db/batch_update_image_tag', data)
+export const batchUpdateImageTag = async (data: BatchUpdateTagParams) => {
+  const resp = await axiosInst.value.post('/db/batch_update_image_tag', data)
+  notifyTagsChanged({ paths: data.img_paths })
+  return resp
 }
 
 export interface RenameFileParams {
