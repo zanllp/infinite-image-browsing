@@ -5,11 +5,13 @@ on:
     inputs:
       mode:
         type: choice
-        options: [build, build-macos, verify-draft]
+        options: [build, build-macos, stage-macos-draft, verify-draft]
         default: build
       draft_tag:
         type: string
         default: v1.11.0
+      artifact_run_id:
+        type: string
   push:
     branches:    
       - 'releases/**'
@@ -210,7 +212,7 @@ jobs:
             vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${{ env.VERSION }}_x64-setup-pyinstaller.exe
             
   build-macos:
-    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'verify-draft'
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'build' || inputs.mode == 'build-macos'
     strategy:
       fail-fast: false
       matrix:
@@ -293,7 +295,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/heads/releases/') && (github.event_name != 'workflow_dispatch' || inputs.mode != 'verify-draft')
+    if: startsWith(github.ref, 'refs/heads/releases/') && (github.event_name != 'workflow_dispatch' || inputs.mode == 'build')
     needs: [build-by-pyinstaller, build, build-macos]
     runs-on: ubuntu-latest
 
@@ -333,6 +335,31 @@ jobs:
           target_commitish: ${{ github.sha }}
           body_path: docs/releases/v${{ env.VERSION }}.md
           files: artifacts/**/*
+
+  stage-macos-draft:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'stage-macos-draft'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DRAFT_TAG: ${{ inputs.draft_tag }}
+      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+    steps:
+      - name: Require a successful build and an unpublished draft
+        run: |
+          gh run view "$ARTIFACT_RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion' | grep -qx success
+          gh release view "$DRAFT_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' | grep -qx true
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run_id }}
+          pattern: bundle-*-macOS-*
+          path: artifacts
+          merge-multiple: true
+      - name: Attach verified macOS installers without publishing
+        run: gh release upload "$DRAFT_TAG" artifacts/*.dmg --repo "$GITHUB_REPOSITORY" --clobber
 
   verify-draft:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify-draft'
