@@ -42,27 +42,21 @@ onBeforeUnmount(unregister)
 </script>
 
 <template>
-  <a-image
-    v-if="currentFile"
-    class="iib-fullscreen-preview-host"
-    :src="thumbSrc"
-    :preview="{
-      visible: previewing,
-      src: previewSrc,
-      onVisibleChange
-    }"
-  />
+  <div v-if="currentFile" class="iib-fullscreen-preview-host">
+    <a-image
+      :src="thumbSrc"
+      :preview="{
+        visible: previewing,
+        src: previewSrc,
+        onVisibleChange
+      }"
+    />
+  </div>
 </template>
 
 <style scoped>
-/* 只作为预览的锚点，不参与布局 */
+/* 隐藏原生容器；预览弹层通过 Teleport 挂载，不受此处影响。 */
 .iib-fullscreen-preview-host {
-  position: fixed;
-  left: -9999px;
-  top: -9999px;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
+  display: none;
 }
 </style>
