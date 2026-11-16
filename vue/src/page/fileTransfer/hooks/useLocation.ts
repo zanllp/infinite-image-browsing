@@ -263,7 +263,7 @@ export function useLocation () {
     }
   }
   // 切换目录、翻页、模式切换后，丢弃还在路上的旧请求结果
-  watch([currLocation, currPage, walker, () => props.value.mode], invalidateAutoRefresh, { flush: 'sync' })
+  watch([currLocation, currPage, walker, () => props.value.mode], invalidateAutoRefresh)
   onUnmounted(invalidateAutoRefresh)
 
   const refresh = makeAsyncFunctionSingle(async () => {
