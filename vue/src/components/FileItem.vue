@@ -37,6 +37,8 @@ const props = withDefaults(
     idx: number
     selected?: boolean
     showMenuIdx?: number
+    /** RecycleScroller slot prop `active`: false while this view sits unused in the pool (stale file/idx) */
+    active?: boolean
     cellWidth: number
     fullScreenPreviewImageUrl?: string
     /** 是否使用 a-image 自带的全屏预览；使用应用级 FullscreenPreview 的页面需要关掉 */
@@ -52,7 +54,7 @@ const props = withDefaults(
     getGenDiffWatchDep?: (idx: number) => any
   }>(),
   {
-    selected: false, enableRightClickMenu: true, enableCloseIcon: false, enableBuiltinPreview: true
+    selected: false, enableRightClickMenu: true, enableCloseIcon: false, enableBuiltinPreview: true, active: true
   }
 )
 
@@ -360,7 +362,7 @@ const handleAudioClick = () => {
 }
 </script>
 <template>
-  <a-dropdown :trigger="['contextmenu']" :visible="!global.longPressOpenContextMenu ? undefined : typeof idx === 'number' && showMenuIdx === idx
+  <a-dropdown :trigger="['contextmenu']" :visible="!global.longPressOpenContextMenu ? undefined : active && typeof idx === 'number' && showMenuIdx === idx
     " @update:visible="(v: boolean) => typeof idx === 'number' && emit('update:showMenuIdx', v ? idx : -1)">
     <li class="file file-item-trigger grid" :class="{
     clickable: file.type === 'dir' || previewable,

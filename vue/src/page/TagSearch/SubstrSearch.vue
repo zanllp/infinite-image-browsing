@@ -515,9 +515,9 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
         <template #after>
           <div style="padding: 16px 0 512px;" />
         </template>
-        <template v-slot="{ item: file, index: idx }">
+        <template v-slot="{ item: file, index: idx, active }">
           <!-- idx 和file有可能丢失 -->
-          <file-item-cell :idx="idx" :file="file" v-model:show-menu-idx="showMenuIdx" @file-item-click="onFileItemClick"
+          <file-item-cell :idx="idx" :file="file" :active="active" v-model:show-menu-idx="showMenuIdx" @file-item-click="onFileItemClick"
             :enable-builtin-preview="false"
             :cell-width="cellWidth" :selected="multiSelectedIdxs.includes(idx)"
             @context-menu-click="onContextMenuClickU" @dragstart="onFileDragStart" @dragend="onFileDragEnd"
