@@ -405,10 +405,11 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         if not is_path_trusted(path):
             raise HTTPException(status_code=403)
 
-    def check_dest_trust(path: str):
+    def check_write_trust(path: str):
         """
-        A folder to write to has to be inside a scanned path. check_path_trust
-        is not enough, it also accepts the parents of the scanned paths.
+        A path to write to or to change has to be inside a scanned path.
+        check_path_trust is not enough, it also accepts the parents of the
+        scanned paths.
         """
         if not enable_access_control:
             return
@@ -609,7 +610,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         dependencies=[Depends(verify_secret), Depends(write_permission_required)],
     )
     async def create_folders(req: CreateFoldersReq):
-        check_dest_trust(req.dest_folder)
+        check_write_trust(req.dest_folder)
         os.makedirs(req.dest_folder, exist_ok=True)
 
     class MoveFilesReq(BaseModel):
@@ -623,7 +624,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         dependencies=[Depends(verify_secret), Depends(write_permission_required)],
     )
     async def copy_files(req: MoveFilesReq):
-        check_dest_trust(req.dest)
+        check_write_trust(req.dest)
         if req.create_dest_folder:
             os.makedirs(req.dest, exist_ok=True)
         elif not os.path.isdir(req.dest):
@@ -683,7 +684,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         dependencies=[Depends(verify_secret), Depends(write_permission_required)],
     )
     async def move_files(req: MoveFilesReq):
-        check_dest_trust(req.dest)
+        check_write_trust(req.dest)
         if req.create_dest_folder:
             os.makedirs(req.dest, exist_ok=True)
         elif not os.path.isdir(req.dest):
@@ -1757,35 +1758,42 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         dependencies=[Depends(verify_secret), Depends(write_permission_required)],
     )
     async def rename_file(req: RenameFileReq):
+        check_write_trust(req.path)
+        name = req.name
+        if not name or name in (".", "..") or os.path.basename(name) != name:
+            raise HTTPException(status_code=400, detail="Invalid file name")
         conn = DataBase.get_conn()
         try:
             # Normalize the paths
 
             path = os.path.normpath(req.path)
-            new_path = os.path.join(os.path.dirname(path), req.name)
+            new_path = os.path.join(os.path.dirname(path), name)
 
             # Check if the file exists
             if not os.path.exists(path):
                 raise HTTPException(status_code=404, detail="File not found")
 
             # Check if a file with the new name already exists
-            if os.path.exists(new_path):
+            if os.path.lexists(new_path):
                 raise HTTPException(status_code=400, detail="A file with the new name already exists")
             close_video_file_reader(path)
-            img = DbImg.get(conn, path)
-            if img:
-                img.update_path(conn, new_path)
-                conn.commit()
 
             # Perform the file rename operation
             os.rename(path, new_path)
 
+            img = DbImg.get(conn, path)
+            if img:
+                img.update_path(conn, new_path, force=True)
+                conn.commit()
 
             return {"detail": "File renamed successfully", "new_path": new_path}
 
+        except HTTPException:
+            raise
         except PermissionError:
             raise HTTPException(status_code=403, detail="Permission denied")
         except Exception as e:
+            conn.rollback()
             raise HTTPException(status_code=500, detail=str(e))
 
     class RemoveCustomTagReq(BaseModel):
