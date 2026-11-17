@@ -1278,6 +1278,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
                 img = DbImg.get(conn, full_path)
                 if img:
                     img.update_path(conn, dest_path, force=True)
+                    conn.commit()
 
                 # Move associated txt file if exists
                 txt_path = get_img_geninfo_txt_path(full_path)
@@ -1287,6 +1288,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
 
                 moved_count += 1
             except Exception as e:
+                conn.rollback()
                 errors.append(f"{full_path}: {str(e)}")
 
         # Clean up empty directories
