@@ -379,9 +379,9 @@ onMounted(() => {
         <RecycleScroller class="file-list" :items="sortedFiles" ref="scroller" @scroll="onScroll"
           :item-size="itemSize.first" key-field="fullpath" :item-secondary-size="itemSize.second"
           :gridItems="gridItems">
-          <template v-slot="{ item: file, index: idx }">
+          <template v-slot="{ item: file, index: idx, active }">
             <!-- idx 和file有可能丢失 -->
-            <file-item :idx="parseInt(idx)" :file="file"
+            <file-item :idx="parseInt(idx)" :file="file" :active="active"
               v-model:show-menu-idx="showMenuIdx" :selected="multiSelectedIdxs.includes(idx)" :cell-width="cellWidth"
               @file-item-click="onFileItemClick" @dragstart="onFileDragStart" @dragend="onFileDragEnd"
               @context-menu-click="onContextMenuClick"

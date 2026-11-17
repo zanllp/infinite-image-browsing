@@ -161,9 +161,10 @@ const onTiktokViewClick = () => {
         <template #after>
           <div style="padding: 16px 0 512px;" />
         </template>
-        <template v-slot="{ item: file, index: idx }">
+        <template v-slot="{ item: file, index: idx, active }">
           <file-item-cell
             :idx="idx"
+            :active="active"
             :file="file"
             :cell-width="cellWidth"
             v-model:show-menu-idx="showMenuIdx"
