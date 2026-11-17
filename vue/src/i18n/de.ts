@@ -492,4 +492,8 @@ export const de: Partial<IIBI18nMap> = {
   dataBackupClose: 'Schließen',
   dataBackupPendingQueued: 'Wartet auf Zuordnung',
   dataBackupPendingApplied: 'Automatisch ergänzt',
+  moveIncomplete: 'Einige Dateien wurden nicht verschoben',
+  copyIncomplete: 'Einige Dateien wurden nicht kopiert',
+  moveSummary: '{done} von {total} verschoben, {failed} übersprungen:',
+  copySummary: '{done} von {total} kopiert, {failed} übersprungen:'
 }
