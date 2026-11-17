@@ -685,12 +685,16 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
 
         conn = DataBase.get_conn()        
         errors = []
+        # .txt files already moved along with their image by this request.
+        # A .txt may also be selected itself: don't move or report it again.
+        moved_txts = set()
 
         def move_file_with_geninfo(path: str, dest: str):
             path = os.path.normpath(path)
             txt_path = get_img_geninfo_txt_path(path)
             if txt_path:
                 shutil.move(txt_path, dest)
+                moved_txts.add(txt_path)
             img = DbImg.get(conn, path)
             new_path = os.path.normpath(os.path.join(dest, os.path.basename(path)))
             if img:
@@ -701,9 +705,24 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
             try:
                 check_path_trust(path)
                 path = os.path.normpath(path)
+                if path in moved_txts:
+                    continue
                 base_dir = os.path.dirname(path)
                 files = list(os.walk(path))
                 is_dir = os.path.isdir(path)
+                # Check the targets of the file and its .txt before moving
+                # anything. The .txt is moved after the file, so a taken .txt
+                # name would leave the file in dest and its db row at the old
+                # path. A folder's .txt files move along with the folder.
+                targets = [os.path.join(req.dest, os.path.basename(path))]
+                txt_path = None if is_dir else get_img_geninfo_txt_path(path)
+                if txt_path:
+                    targets.append(
+                        os.path.join(req.dest, os.path.basename(txt_path))
+                    )
+                taken = next((t for t in targets if os.path.lexists(t)), None)
+                if taken:
+                    raise FileExistsError(f"{taken} already exists")
                 shutil.move(path, req.dest)
                 if is_dir:
                     for root, _, files in files:
