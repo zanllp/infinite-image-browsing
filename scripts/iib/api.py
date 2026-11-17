@@ -1241,12 +1241,26 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
                     full_path = os.path.join(root, f)
                     all_files.append((full_path, f))
 
-        # Check for filename conflicts
+        # Check for filename conflicts. The generation-info .txt files move
+        # along with the images, so their names count as well. Images with
+        # the same stem in one folder share a single .txt, count it once.
         filename_count = {}
-        for _, filename in all_files:
+        txt_srcs = set()
+        for full_path, filename in all_files:
             filename_count[filename] = filename_count.get(filename, 0) + 1
+            txt_path = get_img_geninfo_txt_path(full_path)
+            if txt_path and txt_path not in txt_srcs:
+                txt_srcs.add(txt_path)
+                txt_name = os.path.basename(txt_path)
+                filename_count[txt_name] = filename_count.get(txt_name, 0) + 1
 
-        conflicts = [name for name, count in filename_count.items() if count > 1]
+        # A name is a conflict if it is used more than once or already exists
+        # in the folder itself.
+        conflicts = [
+            name
+            for name, count in filename_count.items()
+            if count > 1 or os.path.lexists(os.path.join(folder_path, name))
+        ]
 
         if req.dry_run:
             return FlattenFolderResp(
@@ -1270,6 +1284,20 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         for full_path, filename in all_files:
             try:
                 dest_path = os.path.join(folder_path, filename)
+
+                # Never overwrite. The check above can miss files that appear
+                # while moving, and names in different subfolders that differ
+                # only in case on case-insensitive file systems.
+                txt_src = get_img_geninfo_txt_path(full_path)
+                targets = [dest_path]
+                if txt_src:
+                    targets.append(
+                        os.path.join(folder_path, os.path.basename(txt_src))
+                    )
+                taken = next((t for t in targets if os.path.lexists(t)), None)
+                if taken:
+                    errors.append(f"{full_path}: {taken} already exists")
+                    continue
 
                 # Move the file
                 shutil.move(full_path, dest_path)
