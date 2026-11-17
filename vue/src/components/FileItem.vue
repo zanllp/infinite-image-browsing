@@ -84,6 +84,17 @@ const emit = defineEmits<{
   'tiktokView': [file: FileNodeInfo, idx: number]
 }>()
 
+/**
+ * `active` 变 false 只把菜单藏起来，`showMenuIdx` 仍留着旧 idx；这个 view 被
+ * 复用成新 idx 后，另一个文件会带着同一个 idx 变成 active，菜单就在它身上自己弹出来。
+ * 停用时顺手把状态清掉，别指望 a-dropdown 回吐 update:visible（受控 visible 变化不 emit）。
+ */
+watch(() => props.active, (active) => {
+  if (!active && props.showMenuIdx === props.idx) {
+    emit('update:showMenuIdx', -1)
+  }
+})
+
 const customTags = computed(() => {
   return tagStore.tagMap.get(props.file.fullpath) ?? []
 })
