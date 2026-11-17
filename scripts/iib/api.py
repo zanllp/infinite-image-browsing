@@ -614,14 +614,48 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         dependencies=[Depends(verify_secret), Depends(write_permission_required)],
     )
     async def copy_files(req: MoveFilesReq):
+        if req.create_dest_folder:
+            os.makedirs(req.dest, exist_ok=True)
+        elif not os.path.isdir(req.dest):
+            error_msg = (
+                f"Destination folder {req.dest} does not exist."
+                if locale == "en"
+                else f"目标文件夹 {req.dest} 不存在。"
+            )
+            raise HTTPException(400, detail=error_msg)
+
         errors = []
+        # Source files already copied by this request. A .txt is copied along
+        # with its image, images with the same stem share one, and it may also
+        # be selected itself: copy it only once.
+        copied = set()
         for path in req.file_paths:
             try:
                 check_path_trust(path)
-                shutil.copy(path, req.dest)
+                path = os.path.normpath(path)
+                if path in copied:
+                    continue
+                dest_path = os.path.join(req.dest, os.path.basename(path))
                 txt_path = get_img_geninfo_txt_path(path)
+                if txt_path == path or txt_path in copied:
+                    txt_path = None
+                dest_txt = (
+                    os.path.join(req.dest, os.path.basename(txt_path))
+                    if txt_path
+                    else None
+                )
+                # Never overwrite an existing file.
+                taken = next(
+                    (t for t in (dest_path, dest_txt) if t and os.path.lexists(t)),
+                    None,
+                )
+                if taken:
+                    raise FileExistsError(f"{taken} already exists")
+                shutil.copy(path, dest_path)
+                copied.add(path)
                 if txt_path:
-                    shutil.copy(txt_path, req.dest)
+                    shutil.copy(txt_path, dest_txt)
+                    copied.add(txt_path)
             except OSError as e:
                 error_msg = (
                     f"Error copying file {path} to {req.dest}: {e}"
