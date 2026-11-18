@@ -580,9 +580,17 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
                     close_video_file_reader(path)
                     txt_path = get_img_geninfo_txt_path(path)
 
-                    os.remove(path)
-                    if txt_path:
-                        os.remove(txt_path)
+                    # A file that is already gone (deleted in another tab or
+                    # outside iib) counts as deleted: clean up its entry below
+                    # and go on with the other files. This also covers a .txt
+                    # selected along with its image, or a .txt itself, where
+                    # txt_path is the file itself.
+                    for p in (path, txt_path):
+                        if p:
+                            try:
+                                os.remove(p)
+                            except FileNotFoundError:
+                                logger.info("delete file: %s is already gone", p)
 
                     img = DbImg.get(conn, os.path.normpath(path))
                     if img:
