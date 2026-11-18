@@ -32,7 +32,7 @@ import os
 from contextlib import closing
 from datetime import datetime
 from sqlite3 import Connection
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 from scripts.iib.db.datamodel import UserTagPending, commit_with_retry
 from scripts.iib.logger import logger
@@ -509,6 +509,7 @@ def import_user_data(
     *,
     mode: str = "merge",
     dry_run: bool = False,
+    extra_path_allowed: Optional[Callable[[str], bool]] = None,
 ) -> Dict[str, Any]:
     """Merge an exported document into the current database.
 
@@ -517,6 +518,8 @@ def import_user_data(
         data: parsed export document.
         mode: ``merge`` only fills gaps, ``overwrite`` replaces existing values.
         dry_run: compute the stats without writing anything.
+        extra_path_allowed: if set, extra paths it rejects count as invalid
+            and are not written.
 
     Returns:
         A stats dict suitable for a preview / result summary.
@@ -609,6 +612,9 @@ def import_user_data(
     for item in extra_paths_in:
         types = [t for t in str(item["type"]).split("+") if t]
         if types and not set(types).issubset(ALLOWED_EXTRA_PATH_TYPES):
+            invalid_extra_paths += 1
+            continue
+        if extra_path_allowed and not extra_path_allowed(item["path"]):
             invalid_extra_paths += 1
             continue
         allowed_extra_paths.append(item)
