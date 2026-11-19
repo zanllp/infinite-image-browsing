@@ -31,8 +31,8 @@ import MultiSelectKeep from '@/components/MultiSelectKeep.vue'
 import { openSmartOrganizeConfig } from '@/util/smartOrganize'
 import { Modal, message } from 'ant-design-vue'
 import { t } from '@/i18n'
-import { h, ref, watch, onMounted, nextTick } from 'vue'
-import { normalize } from '@/util/path'
+import { h, ref, watch, onMounted, nextTick, computed } from 'vue'
+import { normalize, getParentDirectory } from '@/util/path'
 import FullscreenPreview from './FullscreenPreview.vue'
 
 const global = useGlobalStore()
@@ -105,6 +105,17 @@ const onTiktokViewClick = () => {
   // 只传入图片和视频文件，从当前预览索引开始
   openTiktokViewWithFiles(sortedFiles.value, previewIdx.value || 0)
 }
+
+// "Move up": parent of the current folder, only inside a quick move path (never above it) and not in walk mode
+const moveUpDest = computed(() => {
+  if (props.mode === 'walk' || !currLocation.value) {
+    return undefined
+  }
+  const curr = normalize(currLocation.value)
+  const roots = global.quickMovePaths.map((v) => normalize(v.dir)).filter((v) => v)
+  const inside = roots.some((r) => curr.startsWith(r.endsWith('/') ? r : r + '/'))
+  return inside && !roots.includes(curr) ? getParentDirectory(curr) : undefined
+})
 
 // Flatten folder handler
 const flattenFolderLoading = ref(false)
@@ -388,6 +399,7 @@ onMounted(() => {
               @drop-to-folder="onDropToFolder"
               @tiktok-view="(_file, idx) => openTiktokViewWithFiles(sortedFiles, idx)"
               :is-selected-mutil-files="multiSelectedIdxs.length > 1"
+              :move-up-dest="moveUpDest"
               :enable-builtin-preview="false"
               :enable-change-indicator="changeIndchecked"
               :seed-change-checked="seedChangeChecked"
@@ -413,6 +425,7 @@ onMounted(() => {
       </div>
     </div>
     <fullScreenContextMenu v-if="previewing && sortedFiles[previewIdx]" :file="sortedFiles[previewIdx]" :idx="previewIdx"
+      :move-up-dest="moveUpDest"
       @context-menu-click="onContextMenuClick" />
     <BaseFileListInfo :file-num="sortedFiles.length" :selected-file-num="multiSelectedIdxs.length" />
   </ASpin>

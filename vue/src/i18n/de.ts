@@ -179,6 +179,7 @@ export const de: Partial<IIBI18nMap> = {
   confirmDelete: 'Sind Sie sicher, dass Sie dies löschen möchten?',
   deleteSuccess: 'Erfolgreich gelöscht',
   moveToTrashSuccess: 'In den Papierkorb verschoben',
+  moveUpOneLevel: 'Eine Ebene hoch ({name})',
   doubleClickToCopy: 'Doppelklick zum Kopieren',
   root: 'Root',
   drive: ' Laufwerk',

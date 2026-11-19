@@ -213,6 +213,7 @@ export const zhHans = {
   confirmDelete: '确认删除？',
   deleteSuccess: '删除成功',
   moveToTrashSuccess: '已移动到回收站',
+  moveUpOneLevel: '上一级（{name}）',
   doubleClickToCopy: '双击复制',
   root: '根',
   drive: '盘',

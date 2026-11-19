@@ -39,6 +39,7 @@ import * as Pinyin from 'jian-pinyin'
 import { Tag } from '@/api/db'
 import { aiChat } from '@/api'
 import { message } from 'ant-design-vue'
+import { basename, normalize } from '@/util/path'
 
 const global = useGlobalStore()
 
@@ -47,7 +48,13 @@ const el = ref<HTMLElement>()
 const props = defineProps<{
   file: FileNodeInfo
   idx: number
+  /** parent of the current folder; set by folder views only */
+  moveUpDest?: string
 }>()
+const moveUpName = computed(() => props.moveUpDest ? basename(props.moveUpDest) : '')
+const moveToPaths = computed(() =>
+  global.quickMovePaths.filter((v) => !props.moveUpDest || normalize(v.dir) !== props.moveUpDest)
+)
 const selectedTag = computed(() => tagStore.tagMap.get(props.file.fullpath) ?? [])
 const currImgResolution = ref('')
 const q = createReactiveQueue()
@@ -494,7 +501,7 @@ const editPromptAndReload = async () => {
             <ellipsis-outlined />
           </div>
           <template #overlay>
-            <context-menu :file="file" :idx="idx" :selected-tag="selectedTag"
+            <context-menu :file="file" :idx="idx" :selected-tag="selectedTag" :move-up-dest="moveUpDest"
               @context-menu-click="(e, f, i) => emit('contextMenuClick', e, f, i)" />
           </template>
         </a-dropdown>
@@ -522,7 +529,11 @@ const editPromptAndReload = async () => {
                   </a-menu-item>
                 </a-sub-menu>
                 <a-sub-menu key="move2target" :title="$t('moveTo')">
-                  <a-menu-item v-for="path in global.quickMovePaths" :key="`move-to-${path.dir}`">{{ path.zh }}
+                  <template v-if="moveUpDest">
+                    <a-menu-item :key="`move-to-${moveUpDest}`">↑ {{ $t('moveUpOneLevel', { name: moveUpName }) }}</a-menu-item>
+                    <a-menu-divider />
+                  </template>
+                  <a-menu-item v-for="path in moveToPaths" :key="`move-to-${path.dir}`">{{ path.zh }}
                   </a-menu-item>
                 </a-sub-menu>
                 <a-menu-divider />

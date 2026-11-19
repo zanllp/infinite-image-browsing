@@ -6,16 +6,25 @@ import { isMediaFile } from '@/util'
 import { StarFilled, StarOutlined } from '@/icon'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { computed } from 'vue'
+import { basename, normalize } from '@/util/path'
 const global = useGlobalStore()
 const props = defineProps<{
   file: FileNodeInfo
   idx: number,
   selectedTag: Tag[],
   isSelectedMutilFiles?: boolean
+  /** parent of the current folder; set by folder views only */
+  moveUpDest?: string
 }>()
 const emit = defineEmits<{
   (type: 'contextMenuClick', e: MenuInfo, file: FileNodeInfo, idx: number): void
 }>()
+
+const moveUpName = computed(() => props.moveUpDest ? basename(props.moveUpDest) : '')
+// the "up" entry uses the same key as a quick move path when the parent is one; show it only once
+const moveToPaths = computed(() =>
+  global.quickMovePaths.filter((v) => !props.moveUpDest || normalize(v.dir) !== props.moveUpDest)
+)
 
 const tags = computed(() => {
   return (global.conf?.all_custom_tags ?? []).reduce((p, c) => {
@@ -58,7 +67,11 @@ const tags = computed(() => {
 
         </a-sub-menu>
         <a-sub-menu key="move2target" :title="$t('moveTo')">
-          <a-menu-item v-for="path in global.quickMovePaths" :key="`move-to-${path.dir}`">{{ path.zh }}
+          <template v-if="moveUpDest">
+            <a-menu-item :key="`move-to-${moveUpDest}`">↑ {{ $t('moveUpOneLevel', { name: moveUpName }) }}</a-menu-item>
+            <a-menu-divider />
+          </template>
+          <a-menu-item v-for="path in moveToPaths" :key="`move-to-${path.dir}`">{{ path.zh }}
           </a-menu-item>
         </a-sub-menu>
 

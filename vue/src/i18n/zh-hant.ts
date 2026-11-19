@@ -219,6 +219,7 @@ export const zhHant: Partial<IIBI18nMap> = {
   confirmDelete: '確認刪除?',
   deleteSuccess: '刪除成功',
   moveToTrashSuccess: '已移動到回收站',
+  moveUpOneLevel: '上一層（{name}）',
   doubleClickToCopy: '雙擊複製',
   promptcompare: 'Compare Prompts',
   root: '根',

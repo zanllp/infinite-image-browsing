@@ -404,6 +404,7 @@ You can specify which snapshot to restore to when starting IIB in the global set
   confirmDelete: 'Are you sure you want to delete?',
   deleteSuccess: 'Deleted successfully',
   moveToTrashSuccess: 'Moved to trash',
+  moveUpOneLevel: 'One level up ({name})',
   doubleClickToCopy: 'Double-click to copy',
   root: 'Root',
   drive: ' drive',
