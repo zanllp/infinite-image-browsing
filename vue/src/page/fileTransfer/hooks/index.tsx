@@ -25,7 +25,8 @@ export const sli = useImgSliStore()
 export const imgTransferBus = new BroadcastChannel('iib-image-transfer-bus')
 export const { eventEmitter: events, useEventListen } = typedEventEmitter<{
   removeFiles (_: { paths: string[]; loc: string }): void
-  addFiles (_: { files: FileNodeInfo[]; loc: string }): void
+  /** reload the views that show this folder */
+  refreshLocation (_: { loc: string }): void
 }>()
 
 

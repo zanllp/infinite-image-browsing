@@ -7,7 +7,7 @@ import {
   createReactiveQueue,
   isImageFile,
   copy2clipboardI18n} from '@/util'
-import { type FileNodeInfo, deleteFiles, moveFiles, copyFiles } from '@/api/files'
+import { type FileNodeInfo, deleteFiles } from '@/api/files'
 import { last, range, uniqueId } from 'lodash-es'
 import * as Path from '@/util/path'
 import { Checkbox, Modal, message } from 'ant-design-vue'
@@ -19,6 +19,7 @@ import { getShortcutStrFromEvent } from '@/util/shortcut'
 import { MultiSelectTips, openAddNewTagModal, openRenameFileModal } from '@/components/functionalCallableComp'
 import { batchDownload, events, imgTransferBus, stackCache, tagStore, useEventListen, useHookShareState, global } from '.'
 import { openTiktokViewWithFiles } from '@/util/tiktokHelper'
+import { copyFilesAndUpdateViews, moveFilesAndUpdateViews } from './transferResult'
 import { getVisibleRange } from '@/util/scroller'
 
 
@@ -54,16 +55,10 @@ export function useFileItemActions (
     paths.filter(isImageFile).forEach(path => deletedFiles.value.add(path.replace(/\.\w+$/, '.txt')))
   })
 
-  useEventListen('addFiles', ({ files, loc }) => {
-    if (nor(loc) !== nor(currLocation.value)) {
-      return
+  useEventListen('refreshLocation', ({ loc }) => {
+    if (nor(loc) === nor(currLocation.value)) {
+      eventEmitter.value.emit('refresh')
     }
-    const top = last(stack.value)
-    if (!top) {
-      return
-    }
-
-    top.files.unshift(...files)
   })
 
   const q = createReactiveQueue()
@@ -161,19 +156,24 @@ export function useFileItemActions (
     } else if (key.startsWith('copy-to-')){
       const targetPath = key.split('copy-to-')[1]
       const selectedFiles = getSelectedImg()
-      const paths = selectedFiles.map((v) => v.fullpath)
-      await copyFiles(paths, targetPath, true)
-      events.emit('addFiles', { files: selectedFiles, loc: targetPath })
-      message.success(t('copySuccess'))
+      await copyFilesAndUpdateViews({
+        paths: selectedFiles.map((v) => v.fullpath),
+        from: currLocation.value,
+        dest: targetPath,
+        createDestFolder: true,
+        continueOnError: true
+      })
       return
     } else if (key.startsWith('move-to-')){
       const targetPath = key.split('move-to-')[1]
       const selectedFiles = getSelectedImg()
-      const paths = selectedFiles.map((v) => v.fullpath)
-      await moveFiles(paths, targetPath, true)
-      events.emit('removeFiles', { paths, loc: currLocation.value })
-      events.emit('addFiles', { files: selectedFiles, loc: targetPath })
-      message.success(t('moveSuccess'))
+      await moveFilesAndUpdateViews({
+        paths: selectedFiles.map((v) => v.fullpath),
+        from: currLocation.value,
+        dest: targetPath,
+        createDestFolder: true,
+        continueOnError: true
+      })
       return
     }
 
@@ -219,16 +219,13 @@ export function useFileItemActions (
         }
         const absolutePath = Path.normalizeRelativePathToAbsolute(dir.dir, global.conf?.sd_cwd!)
         const selectedImg = getSelectedImg()
-        await moveFiles(
-          selectedImg.map((v) => v.fullpath),
-          absolutePath,
-          true
-        )
-        events.emit('removeFiles', {
+        await moveFilesAndUpdateViews({
           paths: selectedImg.map((v) => v.fullpath),
-          loc: currLocation.value
+            from: currLocation.value,
+          dest: absolutePath,
+          createDestFolder: true,
+          continueOnError: true
         })
-        events.emit('addFiles', { files: selectedImg, loc: absolutePath })
         break
       }
       case 'send2controlnet-img2img':

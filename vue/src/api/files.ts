@@ -40,7 +40,7 @@ export const moveFiles = async (
   continue_on_error?: boolean
 ) => {
   const resp = await axiosInst.value.post('/move_files', { file_paths, dest, create_dest_folder, continue_on_error })
-  return resp.data as { files: FileNodeInfo[] }
+  return resp.data as { errors: string[] }
 }
 
 export const copyFiles = async (
@@ -50,7 +50,7 @@ export const copyFiles = async (
   continue_on_error?: boolean
 ) => {
   const resp = await axiosInst.value.post('/copy_files', { file_paths, dest, create_dest_folder, continue_on_error })
-  return resp.data as { files: FileNodeInfo[] }
+  return resp.data as { errors: string[] }
 }
 
 export const mkdirs = async (dest_folder: string) => {

@@ -4,8 +4,8 @@ import {
 } from 'vue3-ts-util'
 import { FileTransferData, getFileTransferDataFromDragEvent } from '@/util/file'
 import type { FileNodeInfo } from '@/api/files'
-import { useHookShareState, global, events, sli } from '.'
-import { copyFiles, moveFiles } from '@/api/files'
+import { useHookShareState, global, sli } from '.'
+import { copyFilesAndUpdateViews, moveFilesAndUpdateViews } from './transferResult'
 import { MultiSelectTips } from '@/components/functionalCallableComp'
 import { t } from '@/i18n'
 import { createReactiveQueue } from '@/util'
@@ -15,7 +15,7 @@ import * as Path from '@/util/path'
 import { cloneDeep, uniqBy } from 'lodash-es'
 
 export function useFileTransfer () {
-  const { currLocation, sortedFiles, currPage, multiSelectedIdxs, eventEmitter, walker } =
+  const { currLocation, sortedFiles, currPage, multiSelectedIdxs, walker } =
     useHookShareState().toRefs()
   const recover = () => {
     multiSelectedIdxs.value = []
@@ -99,20 +99,25 @@ export function useFileTransfer () {
 
   const openMoveOrCopyConfirm = (data: FileTransferData, toPath: string) => {
     const q = createReactiveQueue()
-    const continueOnError = ref(false)
+    const continueOnError = ref(true)
+    const transferArgs = () => ({ paths: data.path, from: data.loc, dest: toPath, continueOnError: continueOnError.value })
+    // close only this dialog, not the summary of skipped files; also on failure, its list is outdated then
     const onCopyBtnClick = async () => q.pushAction(async () => {
-      await copyFiles(data.path, toPath, false, continueOnError.value)
-      eventEmitter.value.emit('refresh')
-      Modal.destroyAll()
+      try {
+        await copyFilesAndUpdateViews(transferArgs())
+      } finally {
+        modal.destroy()
+      }
     })
 
     const onMoveBtnClick = () => q.pushAction(async () => {
-      await moveFiles(data.path, toPath, false, continueOnError.value)
-      events.emit('removeFiles', { paths: data.path, loc: data.loc })
-      eventEmitter.value.emit('refresh')
-      Modal.destroyAll()
+      try {
+        await moveFilesAndUpdateViews(transferArgs())
+      } finally {
+        modal.destroy()
+      }
     })
-    Modal.confirm({
+    const modal = Modal.confirm({
       title: t('confirm') + '?',
       width: '60vw',
       content: () => <div>
@@ -128,7 +133,7 @@ export function useFileTransfer () {
           <div style={{ color: '#888', fontSize: '12px', marginTop: '4px' }}>{t('continueOnErrorDesc')}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }} class="actions">
-          <Button onClick={Modal.destroyAll}>{t('cancel')}</Button>
+          <Button onClick={() => modal.destroy()}>{t('cancel')}</Button>
           <Button type="primary" loading={!q.isIdle} onClick={onCopyBtnClick}>{t('copy')}</Button>
           <Button type="primary" loading={!q.isIdle} onClick={onMoveBtnClick}>{t('move')}</Button>
         </div>
