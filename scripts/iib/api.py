@@ -409,12 +409,16 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         """
         A path to write to or to change has to be inside a scanned path.
         check_path_trust is not enough, it also accepts the parents of the
-        scanned paths.
+        scanned paths. Both the path as given and its normpath are checked:
+        the endpoints work on either, and with a symlink in front of a ".."
+        they point to different places.
         """
         if not enable_access_control:
             return
         parents = [os.path.realpath(p) for p in mem["all_scanned_paths"]]
-        if not parents or not is_path_under_parents(path, parents):
+        if not parents or not all(
+            is_path_under_parents(p, parents) for p in (path, os.path.normpath(path))
+        ):
             raise HTTPException(status_code=403)
 
     def filter_allowed_files(files: List[FileInfoDict]):
@@ -563,10 +567,13 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         dependencies=[Depends(verify_secret), Depends(write_permission_required)],
     )
     async def delete_files(req: DeleteFilesReq):
+        # Check all paths before deleting anything.
+        for path in req.file_paths:
+            check_write_trust(path)
+
         conn = DataBase.get_conn()
 
         for path in req.file_paths:
-            check_path_trust(path)
             try:
                 if os.path.isdir(path):
                     if len(os.listdir(path)):
@@ -633,6 +640,10 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
     )
     async def copy_files(req: MoveFilesReq):
         check_write_trust(req.dest)
+        # Check all sources before changing anything: a 403 in the loop below
+        # would stop the request after some files were already handled.
+        for path in req.file_paths:
+            check_write_trust(path)
         if req.create_dest_folder:
             os.makedirs(req.dest, exist_ok=True)
         elif not os.path.isdir(req.dest):
@@ -650,7 +661,6 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         copied = set()
         for path in req.file_paths:
             try:
-                check_path_trust(path)
                 path = os.path.normpath(path)
                 if path in copied:
                     continue
@@ -693,6 +703,10 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
     )
     async def move_files(req: MoveFilesReq):
         check_write_trust(req.dest)
+        # Check all sources before changing anything: a 403 in the loop below
+        # would stop the request after some files were already handled.
+        for path in req.file_paths:
+            check_write_trust(path)
         if req.create_dest_folder:
             os.makedirs(req.dest, exist_ok=True)
         elif not os.path.isdir(req.dest):
@@ -723,7 +737,6 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
 
         for path in req.file_paths:
             try:
-                check_path_trust(path)
                 path = os.path.normpath(path)
                 if path in moved_txts:
                     continue
@@ -1162,6 +1175,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
     @app.post(api_base + "/update_exif", dependencies=[Depends(verify_secret), Depends(write_permission_required)])
     async def update_exif(req: UpdateExifReq):
         """更新图片/视频的 exif 信息"""
+        check_write_trust(req.path)
         conn = DataBase.get_conn()
         try:
             img = DbImg.get(conn, req.path)
@@ -1297,7 +1311,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         1. dry_run=True: Scan and check for filename conflicts
         2. dry_run=False: Actually move the files
         """
-        check_path_trust(req.folder_path)
+        check_write_trust(req.folder_path)
         folder_path = os.path.normpath(req.folder_path)
 
         if not os.path.isdir(folder_path):
@@ -1450,9 +1464,20 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         from scripts.iib.userdata import import_user_data as _import
         from scripts.iib.userdata import UserDataError
 
+        def extra_path_allowed(path: str) -> bool:
+            try:
+                check_write_trust(path)
+                return True
+            except HTTPException:
+                return False
+
         def _run():
             return _import(
-                DataBase.get_conn(), req.data, mode=req.mode, dry_run=req.dry_run
+                DataBase.get_conn(),
+                req.data,
+                mode=req.mode,
+                dry_run=req.dry_run,
+                extra_path_allowed=extra_path_allowed if enable_access_control else None,
             )
 
         try:
@@ -1859,6 +1884,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         db_api_base=db_api_base,
         verify_secret=verify_secret,
         write_permission_required=write_permission_required,
+        check_write_trust=check_write_trust,
         start_cluster_job_func=topic_cluster_funcs["start_cluster_job"],
         get_cluster_job_status_func=topic_cluster_funcs["get_cluster_job_status"],
     )
@@ -1880,9 +1906,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         dependencies=[Depends(verify_secret), Depends(write_permission_required)],
     )
     async def create_extra_path(extra_path: ExtraPathModel):
-        if enable_access_control:
-            if not is_path_under_parents(extra_path.path):
-                raise HTTPException(status_code=403)
+        check_write_trust(extra_path.path)
         conn = DataBase.get_conn()
         path = ExtraPath.get_target_path(conn, extra_path.path)
         if path:

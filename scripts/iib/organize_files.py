@@ -318,6 +318,7 @@ def mount_organize_routes(
     db_api_base: str,
     verify_secret,
     write_permission_required,
+    check_write_trust,
     # Cluster job functions from topic_cluster
     start_cluster_job_func: Callable,
     get_cluster_job_status_func: Callable,
@@ -636,6 +637,11 @@ def mount_organize_routes(
 
         if not folders:
             raise HTTPException(400, "folder_paths is required")
+
+        for f in folders:
+            check_write_trust(f)
+        if req.dest_folder:
+            check_write_trust(req.dest_folder)
 
         for f in folders:
             if not os.path.exists(f) or not os.path.isdir(f):
