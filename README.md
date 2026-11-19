@@ -335,3 +335,19 @@ unless you select a Marengo model. You can grab a free API key (generous free ti
 <https://twelvelabs.io>.
 
 > Note: There is **no mock fallback** for AI calls. If the provider/model fails or returns invalid output, the API will return an error directly.
+
+## Testing
+
+The unit tests need no SD-webui, no GPU and no network:
+
+```bash
+python -m pytest tests/unit
+```
+
+Run them from the repository root, otherwise `scripts.iib` cannot be imported.
+`tests/unit/test_api_file_write.py` calls every endpoint that changes files
+(`rename`, `delete_files`, `copy_files`, `move_files`, `update_exif`,
+`flatten_folder`, `extra_paths`, `organize_files_start`, `import_user_data`)
+through the real FastAPI app, including which paths they are allowed to touch
+when access control is on. Everything happens inside temporary directories, so
+your library and database are not touched.

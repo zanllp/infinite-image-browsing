@@ -299,4 +299,19 @@ https://github.com/user-attachments/assets/c1279556-d255-4e71-b230-48523a4859bf
 
 > 注意：AI 调用**没有 mock 兜底**。只要服务端/模型返回异常或不符合约束，就会直接报错，避免产生“看似能跑但其实不可信”的结果。
 
+## 测试
+
+单元测试不需要 SD-webui、不需要 GPU，也不需要网络：
+
+```bash
+python -m pytest tests/unit
+```
+
+请在仓库根目录执行，否则 `scripts.iib` 无法导入。
+`tests/unit/test_api_file_write.py` 会通过真实的 FastAPI app 调用所有会修改文件的接口
+（`rename`、`delete_files`、`copy_files`、`move_files`、`update_exif`、
+`flatten_folder`、`extra_paths`、`organize_files_start`、`import_user_data`），
+并覆盖开启访问控制时这些接口可以触碰哪些路径。测试全部在临时目录里进行，
+不会动你的图库和数据库。
+
 
