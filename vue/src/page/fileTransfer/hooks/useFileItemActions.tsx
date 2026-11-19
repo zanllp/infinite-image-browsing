@@ -16,7 +16,7 @@ import { t } from '@/i18n'
 import { batchUpdateImageTag, toggleCustomTagToImg } from '@/api/db'
 import { downloadFileInfoJSON, downloadFiles, toRawFileUrl } from '@/util/file'
 import { getShortcutStrFromEvent } from '@/util/shortcut'
-import { MultiSelectTips, openAddNewTagModal, openRenameFileModal } from '@/components/functionalCallableComp'
+import { MultiSelectTips, openAddNewTagModal, openRenameFileModal, openTransferToFolderModal } from '@/components/functionalCallableComp'
 import { batchDownload, events, imgTransferBus, stackCache, tagStore, useEventListen, useHookShareState, global } from '.'
 import { openTiktokViewWithFiles } from '@/util/tiktokHelper'
 import { copyFilesAndUpdateViews, moveFilesAndUpdateViews } from './transferResult'
@@ -92,7 +92,7 @@ export function useFileItemActions (
     }
   }
 
-  const onContextMenuClick = async (e: MenuInfo, file: FileNodeInfo, idx: number) => {
+  const onContextMenuClick = async (e: MenuInfo, file: FileNodeInfo, idx: number): Promise<unknown> => {
     const url = toRawFileUrl(file)
     const path = currLocation.value
     const preset = { IIB_container_id: parent.IIB_container_id } 
@@ -178,6 +178,15 @@ export function useFileItemActions (
     }
 
     switch (e.key) {
+      case 'moveToOtherFolder':
+      case 'copyToOtherFolder': {
+        const mode = e.key === 'moveToOtherFolder' ? 'move' : 'copy'
+        const dest = await openTransferToFolderModal(mode, Path.getParentDirectory(file.fullpath))
+        if (dest) {
+          return onContextMenuClick({ key: `${mode}-to-${dest}` } as MenuInfo, file, idx)
+        }
+        return
+      }
       case 'previewInNewWindow':
         return window.open(url)
       case 'copyFilePath':

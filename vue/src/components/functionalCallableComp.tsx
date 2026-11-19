@@ -1,8 +1,9 @@
 import { Button, Input, Modal, message, Spin } from 'ant-design-vue'
-import { StyleValue, ref } from 'vue'
+import { StyleValue, computed, ref, watch } from 'vue'
+import { debounce } from 'lodash-es'
 import * as Path from '@/util/path'
 import { FileNodeInfo, mkdirs } from '@/api/files'
-import { setTargetFrameAsCover, getImageGenerationInfo, openWithDefaultApp } from '@/api'
+import { setTargetFrameAsCover, getImageGenerationInfo, openWithDefaultApp, checkPathExists } from '@/api'
 import { parse } from '@/util/stable-diffusion-image-metadata'
 import { t } from '@/i18n'
 import { downloadFiles, formatDuration, globalEvents, toRawFileUrl, toStreamVideoUrl, toStreamAudioUrl } from '@/util'
@@ -30,6 +31,80 @@ export const openCreateFlodersModal = (base: string) => {
         resolve()
       }
     })
+  })
+}
+
+/**
+ * Asks for a destination folder with a single path field, prefilled with `base`.
+ * A relative input is resolved against `base`. Resolves with the absolute path, or undefined when cancelled.
+ */
+export const openTransferToFolderModal = (mode: 'move' | 'copy', base: string) => {
+  const input = ref(base)
+  const root = Path.normalize(base)
+  const dest = computed(() => input.value.trim() ? Path.normalizeRelativePathToAbsolute(input.value.trim(), root) : '')
+  const unchanged = computed(() => !dest.value || dest.value === root)
+  const exists = ref<boolean>()
+  return new Promise<string | undefined>((resolve) => {
+    let settled = false
+    let focused = false
+    const stops: (() => void)[] = []
+    const finish = (v?: string) => {
+      if (!settled) {
+        settled = true
+        stops.forEach((stop) => stop())
+        resolve(v)
+      }
+    }
+    const check = debounce(async (p: string) => {
+      try {
+        const r = await checkPathExists([p])
+        if (dest.value === p) {
+          exists.value = !!r[p]
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }, 300)
+    stops.push(watch(dest, (p) => {
+      exists.value = undefined
+      if (p && p !== root) {
+        check(p)
+      }
+    }, { immediate: true }))
+    const modal = Modal.confirm({
+      title: t(mode === 'move' ? 'moveTo' : 'copyTo'),
+      okButtonProps: { disabled: unchanged.value },
+      content: () => (
+        <div>
+          <Input
+            v-model:value={input.value}
+            ref={(el: any) => {
+              if (el && !focused) {
+                focused = true
+                setTimeout(() => { el.focus?.(); el.select?.() }, 100)
+              }
+            }}
+            onPressEnter={() => {
+              if (!unchanged.value) {
+                finish(dest.value)
+                modal.destroy()
+              }
+            }}
+          />
+          <div style={{ color: '#888', fontSize: '12px', marginTop: '4px', minHeight: '18px' }}>
+            {dest.value === root
+              ? t('alreadyInDestFolder')
+              : exists.value === false
+                ? t('destFolderWillBeCreated')
+                : ''}
+          </div>
+        </div>
+      ),
+      onOk: () => finish(dest.value),
+      onCancel: () => finish(undefined),
+      afterClose: () => finish(undefined)
+    })
+    stops.push(watch(unchanged, (v) => modal.update({ okButtonProps: { disabled: v } })))
   })
 }
 

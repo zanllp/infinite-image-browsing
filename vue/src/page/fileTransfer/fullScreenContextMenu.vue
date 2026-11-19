@@ -527,6 +527,8 @@ const editPromptAndReload = async () => {
                 <a-sub-menu key="copy2target" :title="$t('copyTo')">
                   <a-menu-item v-for="path in global.quickMovePaths" :key="`copy-to-${path.dir}`">{{ path.zh }}
                   </a-menu-item>
+                  <a-menu-divider />
+                  <a-menu-item key="copyToOtherFolder">{{ $t('otherFolder') }}</a-menu-item>
                 </a-sub-menu>
                 <a-sub-menu key="move2target" :title="$t('moveTo')">
                   <template v-if="moveUpDest">
@@ -535,6 +537,8 @@ const editPromptAndReload = async () => {
                   </template>
                   <a-menu-item v-for="path in moveToPaths" :key="`move-to-${path.dir}`">{{ path.zh }}
                   </a-menu-item>
+                  <a-menu-divider />
+                  <a-menu-item key="moveToOtherFolder">{{ $t('otherFolder') }}</a-menu-item>
                 </a-sub-menu>
                 <a-menu-divider />
                 <a-menu-item key="deleteFiles">
