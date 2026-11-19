@@ -248,6 +248,7 @@ export const zhHans = {
   imageViewTagMissing: '无法打开视图：保存的标签已不存在。',
   showSearchFilters: '展开筛选',
   hideSearchFilters: '收起筛选',
+  refreshImageView: '重新执行该视图的查询',
   imageViewPromoTitle: '视图：直达预筛选过的图片',
   imageViewPromoDesc: '把关键词、标签和目录等条件保存下来。再次打开会直接进入筛选后的图片列表，并自动按最新图库重新筛选。',
   imageViewPromoHint: '在关键词或标签搜索页调好条件后，点击「保存为视图」。',

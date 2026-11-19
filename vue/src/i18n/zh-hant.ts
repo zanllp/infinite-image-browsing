@@ -255,6 +255,7 @@ export const zhHant: Partial<IIBI18nMap> = {
   imageViewTagMissing: '無法開啟檢視：儲存的標籤已不存在。',
   showSearchFilters: '展開篩選',
   hideSearchFilters: '收起篩選',
+  refreshImageView: '重新執行此檢視的查詢',
   imageViewPromoTitle: '檢視：直達預先篩選過的圖片',
   imageViewPromoDesc: '把關鍵詞、標籤和目錄等條件儲存下來。再次開啟會直接進入篩選後的圖片列表，並自動依最新圖庫重新篩選。',
   imageViewPromoHint: '在關鍵詞或標籤搜尋頁調整好條件後，點擊「儲存為檢視」。',

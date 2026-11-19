@@ -6,7 +6,7 @@ import FullscreenPreview from '@/page/fileTransfer/FullscreenPreview.vue'
 import { getDbBasicInfo, getExpiredDirs, getImagesBySubstr, updateImageData, type DataBaseBasicInfo, type Tag, type TagId, SearchBySubstrReq } from '@/api/db'
 import { copy2clipboardI18n,  makeAsyncFunctionSingle, useGlobalEventListen, globalEvents } from '@/util'
 import fullScreenContextMenu from '@/page/fileTransfer/fullScreenContextMenu.vue'
-import { LeftCircleOutlined, RightCircleOutlined, regex, AimOutlined, HistoryOutlined, SaveOutlined, FilterOutlined } from '@/icon'
+import { LeftCircleOutlined, RightCircleOutlined, regex, AimOutlined, HistoryOutlined, SaveOutlined, FilterOutlined, ReloadOutlined } from '@/icon'
 import { message } from 'ant-design-vue'
 import { t } from '@/i18n'
 import { createImageSearchIter, useImageSearch } from './hook'
@@ -277,23 +277,34 @@ const reuse = (rec: FuzzySearchHistoryRecord & { id: string; time: string }) => 
   query()
 }
 
-const query = async () => {
+/**
+ * 执行一次搜索。`recordHistory` 为 false 时不写搜索历史——
+ * 视图 headerbar 的「刷新」只是重跑当前查询，反复点不该把历史刷满。
+ */
+const runSearch = async (recordHistory = true) => {
   searchCount.value++
-  fuzzySearchHistory.value.add({
-    substr: substr.value,
-    folder_paths_str: folder_paths_str.value,
-    isRegex: isRegex.value,
-    mediaType: mediaType.value,
-    and_tags: andTags.value
-  })
+  if (recordHistory) {
+    fuzzySearchHistory.value.add({
+      substr: substr.value,
+      folder_paths_str: folder_paths_str.value,
+      isRegex: isRegex.value,
+      mediaType: mediaType.value,
+      and_tags: andTags.value
+    })
+  }
   await iter.reset({ refetch: true })
   await nextTick()
   onScroll()
-  scroller.value!.scrollToItem(0)
+  scroller.value?.scrollToItem(0)
   if (!images.value.length) {
     message.info(t('fuzzy-search-noResults'))
   }
 }
+
+const query = () => runSearch(true)
+
+/** 视图 headerbar 的手动刷新：按当前视图条件重新拉一遍结果 */
+const refreshView = () => runSearch(false)
 
 useGlobalEventListen('returnToIIB', async () => {
   const res = await queue.pushAction(getExpiredDirs).res
@@ -393,6 +404,10 @@ const { onClearAllSelected, onSelectAll, onReverseSelect } = useKeepMultiSelect(
         <a-button size="small" @click="saveViewVisible = true">
           <template #icon><SaveOutlined /></template>
           {{ $t('saveAsView') }}
+        </a-button>
+        <a-button size="small" :loading="searching" :title="$t('refreshImageView')" @click="refreshView">
+          <template #icon><ReloadOutlined /></template>
+          {{ $t('refresh') }}
         </a-button>
       </div>
     </div>
