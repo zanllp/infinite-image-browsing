@@ -438,6 +438,7 @@ You can specify which snapshot to restore to when starting IIB in the global set
   imageViewTagMissing: 'Cannot open this view because a saved tag no longer exists.',
   showSearchFilters: 'Show filters',
   hideSearchFilters: 'Hide filters',
+  refreshImageView: 'Re-run this view query',
   imageViewPromoTitle: 'Views: jump straight to pre-filtered images',
   imageViewPromoDesc: 'Save keywords, tags, and folders as reusable conditions. Reopening the view takes you directly to the matching images and re-filters against the latest library.',
   imageViewPromoHint: 'Set your filters on a search page, then click “Save as view”.',

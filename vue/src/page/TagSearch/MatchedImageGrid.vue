@@ -6,7 +6,7 @@ import { getImagesByTags, type MatchImageByTagsReq } from '@/api/db'
 import { nextTick, watch, ref } from 'vue'
 import { copy2clipboardI18n } from '@/util'
 import fullScreenContextMenu from '@/page/fileTransfer/fullScreenContextMenu.vue'
-import { LeftCircleOutlined, RightCircleOutlined } from '@/icon'
+import { LeftCircleOutlined, RightCircleOutlined, ReloadOutlined } from '@/icon'
 import { useImageSearch, createImageSearchIter } from './hook'
 import { openRebuildImageIndexModal } from '@/components/functionalCallableComp'
 import { useGlobalStore } from '@/store/useGlobalStore'
@@ -64,13 +64,31 @@ const {
   getGenDiffWatchDep
 } = useImageSearch(iter)
 
+const reloadResults = async () => {
+  await iter.reset()
+  await nextTick()
+  scroller.value?.scrollToItem(0)
+  onScroll() // 重新获取
+}
+
+/** 视图 headerbar 的手动刷新：按当前条件重新拉一遍结果 */
+const refreshing = ref(false)
+const refresh = async () => {
+  if (refreshing.value) {
+    return
+  }
+  refreshing.value = true
+  try {
+    await reloadResults()
+  } finally {
+    refreshing.value = false
+  }
+}
+
 watch(
   () => props.selectedTagIds,
   async () => {
-    await iter.reset()
-    await nextTick()
-    scroller.value?.scrollToItem(0)
-    onScroll() // 重新获取
+    await reloadResults()
   },
   { immediate: true }
 )
@@ -79,10 +97,7 @@ watch(
 watch(
   randomSort,
   async () => {
-    await iter.reset()
-    await nextTick()
-    scroller.value?.scrollToItem(0)
-    onScroll() // 重新获取
+    await reloadResults()
   }
 )
 
@@ -137,6 +152,10 @@ const onTiktokViewClick = () => {
         <a-button @click="onTiktokViewClick" :disabled="!images?.length">{{ $t('tiktokView') }}</a-button>
         <a-button @click="saveLoadedFileAsJson">{{ $t('saveLoadedImageAsJson') }}</a-button>
         <a-button @click="saveAllFileAsJson">{{ $t('saveAllAsJson') }}</a-button>
+        <a-button class="action-bar-right" :loading="refreshing" :title="$t('refreshImageView')" @click="refresh">
+          <template #icon><ReloadOutlined /></template>
+          {{ $t('refresh') }}
+        </a-button>
 
       </div>
       <RecycleScroller
@@ -214,6 +233,9 @@ const onTiktokViewClick = () => {
     padding: 4px;
     &>* {
       flex-wrap: wrap;
+    }
+    .action-bar-right {
+      margin-left: auto;
     }
   }
 

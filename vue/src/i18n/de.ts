@@ -215,6 +215,7 @@ export const de: Partial<IIBI18nMap> = {
   imageViewTagMissing: 'Diese Ansicht kann nicht geöffnet werden, weil ein gespeicherter Tag nicht mehr existiert.',
   showSearchFilters: 'Filter anzeigen',
   hideSearchFilters: 'Filter ausblenden',
+  refreshImageView: 'Abfrage dieser Ansicht erneut ausführen',
   imageViewPromoTitle: 'Ansichten: direkt zu vorgefilterten Bildern',
   imageViewPromoDesc: 'Speichern Sie Keywords, Tags und Ordner als wiederverwendbare Bedingungen. Beim nächsten Öffnen gelangen Sie direkt zu den passenden Bildern und filtern erneut mit der aktuellen Bibliothek.',
   imageViewPromoHint: 'Filter in der Keyword- oder Tag-Suche festlegen und dann auf „Als Ansicht speichern“ klicken.',
