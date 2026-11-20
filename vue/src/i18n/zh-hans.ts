@@ -214,6 +214,7 @@ export const zhHans = {
   deleteSuccess: '删除成功',
   moveToTrashSuccess: '已移动到回收站',
   moveUpOneLevel: '上一级（{name}）',
+  chooseSubfolder: '选择子文件夹',
   otherFolder: '其他文件夹…',
   destFolderWillBeCreated: '文件夹不存在，将自动创建',
   alreadyInDestFolder: '文件已在此文件夹中',

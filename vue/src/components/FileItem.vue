@@ -46,7 +46,6 @@ const props = withDefaults(
     enableRightClickMenu?: boolean,
     enableCloseIcon?: boolean,
     isSelectedMutilFiles?: boolean
-    moveUpDest?: string
     genInfo?: string
     enableChangeIndicator?: boolean
     extraTags?: Tag[]
@@ -395,7 +394,7 @@ const handleAudioClick = () => {
             <template #overlay>
               <context-menu :file="file" :idx="idx" :selected-tag="customTags"
                 @context-menu-click="(e, f, i) => emit('contextMenuClick', e, f, i)"
-                :is-selected-mutil-files="isSelectedMutilFiles" :move-up-dest="moveUpDest" />
+                :is-selected-mutil-files="isSelectedMutilFiles" />
             </template>
           </a-dropdown>
           <a-dropdown v-if="file.type === 'file'">
@@ -516,7 +515,7 @@ const handleAudioClick = () => {
     <template #overlay>
       <context-menu :file="file" :idx="idx" :selected-tag="customTags" v-if="enableRightClickMenu"
         @context-menu-click="(e, f, i) => emit('contextMenuClick', e, f, i)"
-        :is-selected-mutil-files="isSelectedMutilFiles" :move-up-dest="moveUpDest" />
+        :is-selected-mutil-files="isSelectedMutilFiles" />
     </template>
   </a-dropdown>
 </template>

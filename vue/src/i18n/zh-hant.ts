@@ -220,6 +220,7 @@ export const zhHant: Partial<IIBI18nMap> = {
   deleteSuccess: '刪除成功',
   moveToTrashSuccess: '已移動到回收站',
   moveUpOneLevel: '上一層（{name}）',
+  chooseSubfolder: '選擇子資料夾',
   otherFolder: '其他文件夾…',
   destFolderWillBeCreated: '文件夾不存在，將自動建立',
   alreadyInDestFolder: '檔案已在此文件夾中',

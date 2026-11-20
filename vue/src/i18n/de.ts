@@ -180,6 +180,7 @@ export const de: Partial<IIBI18nMap> = {
   deleteSuccess: 'Erfolgreich gelöscht',
   moveToTrashSuccess: 'In den Papierkorb verschoben',
   moveUpOneLevel: 'Eine Ebene hoch ({name})',
+  chooseSubfolder: 'Unterordner auswählen',
   otherFolder: 'Anderer Ordner…',
   destFolderWillBeCreated: 'Der Ordner existiert nicht und wird angelegt',
   alreadyInDestFolder: 'Die Dateien liegen bereits in diesem Ordner',

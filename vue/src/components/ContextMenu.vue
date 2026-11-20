@@ -1,29 +1,29 @@
 <script setup lang="ts">
 import type { Tag } from '@/api/db'
 import type { FileNodeInfo } from '@/api/files'
+import TransferFolderMenuItem from '@/page/fileTransfer/TransferFolderMenuItem.vue'
 import type { MenuInfo } from 'ant-design-vue/lib/menu/src/interface'
 import { isMediaFile } from '@/util'
 import { StarFilled, StarOutlined } from '@/icon'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { computed } from 'vue'
-import { basename, normalize } from '@/util/path'
+import { basename, getMoveUpDest, normalize } from '@/util/path'
 const global = useGlobalStore()
 const props = defineProps<{
   file: FileNodeInfo
   idx: number,
   selectedTag: Tag[],
   isSelectedMutilFiles?: boolean
-  /** parent of the current folder; set by folder views only */
-  moveUpDest?: string
 }>()
 const emit = defineEmits<{
   (type: 'contextMenuClick', e: MenuInfo, file: FileNodeInfo, idx: number): void
 }>()
 
-const moveUpName = computed(() => props.moveUpDest ? basename(props.moveUpDest) : '')
+const moveUpDest = computed(() => getMoveUpDest(props.file.fullpath, global.quickMovePaths))
+const moveUpName = computed(() => basename(moveUpDest.value) || moveUpDest.value)
 // the "up" entry uses the same key as a quick move path when the parent is one; show it only once
 const moveToPaths = computed(() =>
-  global.quickMovePaths.filter((v) => !props.moveUpDest || normalize(v.dir) !== props.moveUpDest)
+  global.quickMovePaths.filter((v) => !moveUpDest.value || normalize(v.dir) !== normalize(moveUpDest.value))
 )
 
 const tags = computed(() => {
@@ -62,19 +62,25 @@ const tags = computed(() => {
         <a-menu-item key="send2BatchDownload">{{ $t('sendToBatchDownload') }}</a-menu-item>
 
         <a-sub-menu key="copy2target" :title="$t('copyTo')">
-          <a-menu-item v-for="path in global.quickMovePaths" :key="`copy-to-${path.dir}`">{{ path.zh }}
-          </a-menu-item>
+          <template v-if="moveUpDest">
+            <TransferFolderMenuItem mode="copy" :folder="moveUpDest" :label="`↑ ${$t('moveUpOneLevel', { name: moveUpName })}`"
+              @browse="emit('contextMenuClick', $event, file, idx)" />
+            <a-menu-divider />
+          </template>
+          <TransferFolderMenuItem v-for="path in moveToPaths" :key="path.dir" mode="copy" :folder="path.dir" :label="path.zh"
+            @browse="emit('contextMenuClick', $event, file, idx)" />
           <a-menu-divider />
           <a-menu-item key="copyToOtherFolder">{{ $t('otherFolder') }}</a-menu-item>
 
         </a-sub-menu>
         <a-sub-menu key="move2target" :title="$t('moveTo')">
           <template v-if="moveUpDest">
-            <a-menu-item :key="`move-to-${moveUpDest}`">↑ {{ $t('moveUpOneLevel', { name: moveUpName }) }}</a-menu-item>
+            <TransferFolderMenuItem mode="move" :folder="moveUpDest" :label="`↑ ${$t('moveUpOneLevel', { name: moveUpName })}`"
+              @browse="emit('contextMenuClick', $event, file, idx)" />
             <a-menu-divider />
           </template>
-          <a-menu-item v-for="path in moveToPaths" :key="`move-to-${path.dir}`">{{ path.zh }}
-          </a-menu-item>
+          <TransferFolderMenuItem v-for="path in moveToPaths" :key="path.dir" mode="move" :folder="path.dir" :label="path.zh"
+            @browse="emit('contextMenuClick', $event, file, idx)" />
           <a-menu-divider />
           <a-menu-item key="moveToOtherFolder">{{ $t('otherFolder') }}</a-menu-item>
         </a-sub-menu>
