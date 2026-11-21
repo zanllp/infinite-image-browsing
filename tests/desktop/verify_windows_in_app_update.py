@@ -91,9 +91,19 @@ def run_upgrade(exe, root, feed_dir, origin, version, target_hash):
     index.write_text(html.replace("</body>", '<script defer src="/click-update.js"></script></body>'),
                      encoding="utf-8")
     (dist / "click-update.js").write_text("""
+        let opened = false;
         const timer = setInterval(() => {
             const update = Array.from(document.querySelectorAll('button'))
                 .find(button => button.textContent.trim() === 'Update now');
+            if (!opened) {
+                // A startup prompt must fail this test, not silently pass as a user click.
+                if (update) { clearInterval(timer); throw Error('Unexpected startup update prompt'); }
+                const releases = document.querySelector('a[data-desktop-update]');
+                if (!releases) return;
+                opened = true;
+                releases.click();
+                return;
+            }
             if (update && !update.disabled) {
                 clearInterval(timer);
                 update.click();

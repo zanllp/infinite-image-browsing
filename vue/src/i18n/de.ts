@@ -6,6 +6,7 @@ export const de: Partial<IIBI18nMap> = {
     available: 'Eine neue Version ist verfügbar. Nach dem Update startet die App neu.',
     install: 'Jetzt aktualisieren',
     working: 'Das Update wird heruntergeladen und installiert…',
+    download: 'Installationspaket von GitHub herunterladen',
     failed: 'Das Update ist fehlgeschlagen. Du kannst diese Version weiter verwenden.'
   },
   blockVisibilitySettings: 'Panel-Einstellungen',
