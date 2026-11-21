@@ -149,9 +149,7 @@ class AppUtils:
         """
         # 不建议改成 async def，并且用 await 替换 return，
         # 因为这样会失去对 server.serve() 的控制。
-        config = uvicorn.Config(app, host=host, port=port)
-        server = uvicorn.Server(config)
-        return server.serve()
+        return desktop_server(app, host, port).serve()
 
     def wrap_app(self, app: FastAPI) -> None:
         """
@@ -280,6 +278,12 @@ def setup_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def desktop_server(app: FastAPI, host: str, port: int) -> uvicorn.Server:
+    server = uvicorn.Server(uvicorn.Config(app, host=host, port=port))
+    app.state.iib_server = server
+    return server
+
+
 def launch_app(
     port: int = default_port, host: str = default_host, *args, **kwargs: dict
 ) -> None:
@@ -292,7 +296,7 @@ def launch_app(
     """
     app_utils = AppUtils(*args, **kwargs)
     app = app_utils.get_root_browser_app()
-    uvicorn.run(app, host=host, port=port)
+    desktop_server(app, host, port).run()
 
 
 async def async_launch_app(
