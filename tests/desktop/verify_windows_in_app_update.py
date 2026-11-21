@@ -64,7 +64,10 @@ def verify(root, feed_dir):
             entry["url"] = origin + "/" + archive.name
             (public / "feed.json").write_text(json.dumps(manifest))
             threading.Thread(target=server.serve_forever, daemon=True).start()
-            subprocess.run(["certutil", "-user", "-addstore", "Root", str(cert)], check=True)
+            # CurrentUser\Root asks for a desktop click. The disposable hosted
+            # runner can import into LocalMachine non-interactively instead.
+            print("Preparing loopback HTTPS on the disposable runner", flush=True)
+            subprocess.run(["certutil", "-f", "-addstore", "Root", str(cert)], check=True, timeout=30)
             try:
                 run_upgrade(exe, root, feed_dir, origin, manifest["version"], target_hash)
             finally:
@@ -73,7 +76,7 @@ def verify(root, feed_dir):
                 if proc:
                     proc.kill()
                     proc.wait(15)
-                subprocess.run(["certutil", "-user", "-delstore", "Root", thumbprint], check=True)
+                subprocess.run(["certutil", "-delstore", "Root", thumbprint], check=True, timeout=30)
 
 
 def run_upgrade(exe, root, feed_dir, origin, version, target_hash):
@@ -85,7 +88,7 @@ def run_upgrade(exe, root, feed_dir, origin, version, target_hash):
     (vue / "baseline.json").write_text(json.dumps(config))
     subprocess.run(["node", "node_modules/@tauri-apps/cli/tauri.js", "build", "--features",
                     "desktop-updater", "--bundles", "nsis", "--config", "baseline.json"],
-                   cwd=vue, check=True)
+                   cwd=vue, check=True, timeout=600)
     baseline = feed_dir / f"Infinite Image Browsing_{old}_x64-setup.exe"
     subprocess.run(f'"{baseline}" /S /D={exe.parent}', check=True, timeout=180)
     assert hashlib.sha256(exe.read_bytes()).digest() != target_hash, "Baseline did not install"
@@ -99,6 +102,7 @@ def run_upgrade(exe, root, feed_dir, origin, version, target_hash):
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
     env = {**os.environ, "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS": f"--remote-debugging-port={port}"}
+    print(f"Starting baseline {old} to update to {version}", flush=True)
     first = subprocess.Popen([str(exe)], cwd=exe.parent, env=env)
     def debugger_ready():
         if first.poll() is not None:
@@ -112,6 +116,7 @@ def run_upgrade(exe, root, feed_dir, origin, version, target_hash):
     with sync_playwright() as pw:
         browser = pw.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
         page = browser.contexts[0].pages[0]
+        page.on("console", lambda msg: print("WebView:", msg.text, flush=True) if "update" in msg.text.lower() and len(msg.text) < 500 else None)
         button = page.get_by_role("button", name="Update now", exact=True)
         button.wait_for(timeout=150_000)
         log_offset = startup_log.stat().st_size
