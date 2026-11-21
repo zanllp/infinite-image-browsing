@@ -110,6 +110,11 @@ watch(
     if (promptTabActivedKey.value === 'exif') {
       loadExifData()
     }
+    // the grid only fetches tags for its viewable area, and it does not scroll while previewing,
+    // so fetch them here for files navigated to with the arrow keys/buttons
+    if (props.file.is_under_scanned_path) {
+      tagStore.fetchImageTags([path])
+    }
   },
   { immediate: true }
 )
