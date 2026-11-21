@@ -6,7 +6,7 @@ import { DatabaseOutlined } from '@/icon'
 import { TagSearchTabPane, FuzzySearchTabPane, FileTransferTabPane, EmptyStartTabPane } from '@/store/useGlobalStore'
 import { copy2clipboardI18n, makeAsyncFunctionSingle, useGlobalEventListen } from '@/util'
 import { message, Modal } from 'ant-design-vue'
-import { ref, watch, onMounted, h, computed, onUnmounted } from 'vue'
+import { ref, watch, onMounted, h, computed, onUnmounted, nextTick } from 'vue'
 import { delay, ok, Task, useWatchDocument } from 'vue3-ts-util'
 import { useHookShareState, stackCache, global } from '.'
 import NumInput from '@/components/numInput.vue'
@@ -142,12 +142,14 @@ export function useLocation () {
   }
 
   const back = (idx: number) => {
-    if (props.value.mode == 'walk') {
+    if (props.value.mode == 'walk' || idx >= stack.value.length - 1) {
       return
     }
     while (idx < stack.value.length - 1) {
       stack.value.pop()
     }
+    // Wait for the directory-change watcher to invalidate the previous request.
+    return nextTick(() => lazyRefreshSafely(true))
   }
 
   const backToLastUseTo = () => {
@@ -275,8 +277,13 @@ export function useLocation () {
         eventEmitter.value.emit('loadNextDir')
       } else {
 
+        // the folder this refresh started for, even if the user went elsewhere in the meantime
+        const page = last(stack.value)!
         const { files } = await getTargetFolderFiles(currLocation.value)
-        last(stack.value)!.files = files
+        page.files = files
+        if (page !== last(stack.value)) {
+          return
+        }
       }
 
       deletedFiles.value.clear()
@@ -291,7 +298,7 @@ export function useLocation () {
   /**
    * 上面那个是Force
    */
-  const lazyRefresh = (async () => {
+  const lazyRefresh = (async (afterBack = false) => {
     // 预览期间也照常拉取：全屏预览已经是应用级组件，列表更新不会再销毁它，
     // 所以每次轮询都可以直接应用（只需把 previewIdx 跟到同一张图的新下标）。
     const version = ++autoRefreshVersion
@@ -331,30 +338,30 @@ export function useLocation () {
       return
     }
     try {
-      if (!global.autoRefreshNormalFixedMode) {
+      if (!afterBack && !global.autoRefreshNormalFixedMode) {
         return
       }
-      np.value?.start()
+      if (!afterBack) np.value?.start()
       const { files } = await getTargetFolderFiles(currLocation.value)
       // 先比较有没有变化：没变化就什么都不做
       const currFiles = last(stack.value)!.files
-      if (currFiles.map((v) => v.date).join() === files.map((v) => v.date).join()) {
+      if (files.length === currFiles.length && files.every((f, i) => f.fullpath === currFiles[i].fullpath && f.date === currFiles[i].date)) {
         return
       }
       // 立即更新；预览的那张图按 fullpath 找回新下标，预览继续停在同一张图上（找不到就关掉）
       const nextPreviewIdx = nextPreviewIndexAfterListUpdate(files)
       applyAutoRefresh(version, nextPreviewIdx, () => {
         last(stack.value)!.files = files
-        message.success(t('autoUpdate'))
+        if (!afterBack) message.success(t('autoUpdate'))
       })
     } finally {
-      np.value?.done()
+      if (!afterBack) np.value?.done()
     }
   })
 
   // 轮询和全局事件都没有调用方接收错误，这里兜底，避免自动刷新失败变成 unhandled rejection
-  const lazyRefreshSafely = () =>
-    lazyRefresh().catch((error) => {
+  const lazyRefreshSafely = (afterBack = false) =>
+    lazyRefresh(afterBack).catch((error) => {
       console.error('auto refresh failed', error)
     })
 

@@ -15,6 +15,20 @@ const source = ts.transpileModule(
   { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }
 ).outputText
 
+// The real path helpers; only lodash's memoize is replaced.
+const pathSource = ts.transpileModule(
+  readFileSync(join(__dirname, '../src/util/path.ts'), 'utf8'),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }
+).outputText
+const Path = {}
+runInNewContext(pathSource, {
+  exports: Path,
+  require: (name) => {
+    assert.equal(name, 'lodash-es')
+    return { memoize: (fn) => fn }
+  }
+})
+
 const deferred = () => {
   let resolve
   const promise = new Promise(done => { resolve = done })
@@ -27,23 +41,33 @@ afterEach(() => {
   cleanups.splice(0).forEach(cleanup => cleanup())
 })
 
-function setup({ mode = 'scanned', previewing = false, fetchFiles, walker } = {}) {
+function setup({ mode = 'scanned', previewing = false, fetchFiles, walker, stack, isWin = false } = {}) {
   const state = {
     scroller: vue.ref({ scrollToItem() {} }),
     stackViewEl: vue.ref(),
-    stack: vue.ref([{ curr: '/images', files: oldFiles }]),
+    stack: vue.ref(stack ?? [{ curr: '/images', files: oldFiles }]),
     currLocation: vue.ref('/images'),
     props: vue.ref({ mode }),
     deletedFiles: vue.ref(new Set()),
     walker: vue.shallowRef(walker),
     previewing: vue.ref(previewing),
     previewIdx: vue.ref(-1),
-    sortMethod: vue.ref('date-desc')
+    sortMethod: vue.ref('date-desc'),
+    multiSelectedIdxs: vue.ref([])
+  }
+  if (stack) {
+    // as in index.tsx (scanned mode): the path is built from the curr of the pages
+    state.currLocation = vue.computed(() => state.stack.value.length === 1
+      ? '/'
+      : Path.join(...state.stack.value.map(v => v.curr).slice(isWin ? 1 : 0)))
   }
   state.currPage = vue.computed(() => state.stack.value.at(-1))
   // 真实实现里 sortedFiles 由 currPage.files 派生，这里保持同样的派生关系
   state.sortedFiles = vue.computed(() => state.stack.value.at(-1)?.files ?? [])
   const listeners = new Map()
+  const fetched = []
+  const scrolledTo = []
+  state.scroller.value.scrollToItem = idx => scrolledTo.push(idx)
   const events = []
   const messages = []
   let fetchCount = 0
@@ -57,12 +81,14 @@ function setup({ mode = 'scanned', previewing = false, fetchFiles, walker } = {}
     autoRefreshNormalFixedMode: true,
     autoRefreshWalkMode: true,
     autoRefreshWalkModePosLimit: 100,
-    quickMovePaths: []
+    quickMovePaths: [],
+    conf: { is_win: isWin, sd_cwd: '/' }
   })
   const modules = {
-    '@/api/files': { getTargetFolderFiles: async () => {
+    '@/api/files': { getTargetFolderFiles: async (path) => {
       fetchCount++
-      return fetchFiles ? fetchFiles() : { files: newFiles }
+      fetched.push(path)
+      return fetchFiles ? fetchFiles(path) : { files: newFiles }
     } },
     '@/components/functionalCallableComp': {},
     '../sortedFiles': { computeSortedFiles: files => files.slice() },
@@ -76,6 +102,7 @@ function setup({ mode = 'scanned', previewing = false, fetchFiles, walker } = {}
       message: {
         success: text => messages.push(text),
         info: text => messages.push(String(text)),
+        error: text => messages.push(String(text)),
         loading: content => { loadingContent = content; return () => {} }
       },
       Modal: { confirm: options => { confirm = options } }
@@ -83,12 +110,13 @@ function setup({ mode = 'scanned', previewing = false, fetchFiles, walker } = {}
     vue: { ...vue, onMounted() {}, onUnmounted: fn => unmountCallbacks.push(fn) },
     'vue3-ts-util': {
       delay: async () => {},
+      ok: (value, text) => { if (!value) throw new Error(text) },
       useWatchDocument() {},
       Task: { run: ({ action }) => { poll = action; return { clearTask() {} } } }
     },
     '.': { useHookShareState: () => ({ toRefs: () => state }), stackCache: { get: () => undefined }, global },
     '@/components/numInput.vue': {},
-    '@/util/path': { normalize: value => value },
+    '@/util/path': Path,
     '@/util/scroller': { getVisibleRange: () => ({ start: 0, end: 20 }) },
     'multi-nprogress': {},
     'lodash-es': { last: items => items.at(-1), debounce: () => () => {} },
@@ -113,6 +141,8 @@ function setup({ mode = 'scanned', previewing = false, fetchFiles, walker } = {}
   return {
     state, global, events, messages, location, unmount,
     fetchCount: () => fetchCount,
+    fetched,
+    scrolledTo,
     disableWalkRefresh: () => loadingContent.children[1].props.onClick(),
     returnToIIB: () => listeners.get('returnToIIB')(),
     poll: () => {
@@ -257,5 +287,125 @@ test('manual refresh still fetches and reports completion', async () => {
   await c.location.refresh()
   assert.equal(c.fetchCount(), 1)
   assert.deepEqual(c.state.currPage.value.files, newFiles)
+  assert.deepEqual(c.messages, ['refreshCompleted'])
+})
+
+// ---- 返回上层目录：静默重新加载（移动/复制/删除之后，缓存的列表已经过时） ----
+
+const settle = () => new Promise(resolve => setTimeout(resolve, 0))
+const file = (fullpath, date = 'd') => ({ fullpath, date, name: fullpath.split('/').pop(), type: 'file' })
+const dir = (fullpath) => ({ ...file(fullpath), type: 'dir' })
+const page = (curr, files = oldFiles) => ({ curr, files })
+const named = [file('/images/old.png')] // handleToScannedOnly compares names
+const posixStack = () => [page('/', named), page('images', named), page('a', named), page('b', named)]
+const withMoved = [file('/images/a/moved.png', 'new'), ...named]
+
+test('going back reloads the folder and replaces a changed list without scrolling', async () => {
+  const c = setup({ stack: posixStack(), fetchFiles: async () => ({ files: withMoved }) })
+  c.global.autoRefreshNormalFixedMode = false
+  await c.location.back(2)
+  assert.deepEqual(c.fetched, ['/images/a'])
+  assert.deepEqual(c.state.currPage.value.files, withMoved)
+  assert.deepEqual(c.scrolledTo, [])
+  assert.deepEqual(c.events, [])
+  assert.deepEqual(c.messages, []) // silent
+})
+
+test('going back to an unchanged folder keeps the list, the selection and the position', async () => {
+  const c = setup({ stack: posixStack(), fetchFiles: async () => ({ files: named.slice() }) })
+  const files = c.state.stack.value[2].files
+  c.state.multiSelectedIdxs.value = [0]
+  await c.location.back(2)
+  assert.equal(c.fetchCount(), 1)
+  assert.equal(c.state.currPage.value.files, files)
+  assert.deepEqual(c.state.multiSelectedIdxs.value, [0])
+  assert.deepEqual(c.events, [])
+  assert.deepEqual(c.messages, [])
+})
+
+test('going back detects a replaced file even if the timestamp did not change', async () => {
+  const replacement = [file('/images/a/replacement.png', named[0].date)]
+  const c = setup({ stack: posixStack(), fetchFiles: async () => ({ files: replacement }) })
+  await c.location.back(2)
+  assert.deepEqual(c.state.currPage.value.files, replacement)
+})
+
+test('going back to the root and to a windows drive loads the right folder', async () => {
+  const root = setup({ stack: posixStack() })
+  await root.location.back(0)
+  assert.deepEqual(root.fetched, ['/'])
+  const win = setup({ isWin: true, stack: [page('/'), page('C:/'), page('img'), page('a')] })
+  await win.location.back(2)
+  assert.deepEqual(win.fetched, ['C:/img'])
+  await win.location.back(1)
+  assert.deepEqual(win.fetched, ['C:/img', 'C:/'])
+})
+
+test('the current breadcrumb, the fixed and the walk mode do not reload', async () => {
+  const c = setup({ stack: posixStack() })
+  await c.location.back(3)
+  const fixed = setup({ mode: 'scanned-fixed', stack: [page('/images/a')] })
+  await fixed.location.back(0)
+  assert.equal(c.fetchCount() + fixed.fetchCount(), 0)
+})
+
+for (const order of [['first', 'second'], ['second', 'first']]) {
+  test(`overlapping reloads of a folder: the newer one wins (answers ${order.join(', ')})`, async () => {
+    const answers = { first: deferred(), second: deferred() }
+    const sequence = [answers.first.promise, async () => ({ files: oldFiles }), answers.second.promise]
+    const c = setup({ stack: posixStack(), fetchFiles: () => { const v = sequence.shift(); return typeof v === 'function' ? v() : v } })
+    const first = c.location.back(2) // a, reload #1
+    await settle()
+    await c.location.openNext(dir('/images/a/b')) // and back again: reload #2
+    const second = c.location.back(2)
+    await settle()
+    const files = { first: [file('/images/a/first.png')], second: [file('/images/a/second.png')] }
+    for (const name of order) {
+      answers[name].resolve({ files: files[name] })
+      await settle()
+    }
+    await Promise.all([first, second])
+    assert.deepEqual(c.fetched, ['/images/a', '/images/a/b', '/images/a'])
+    assert.deepEqual(c.state.currPage.value.files, files.second)
+  })
+}
+
+test('a refresh that was started before going back updates its own folder, not the one shown', async () => {
+  const pending = deferred()
+  const parent = [file('/images/a/p.png')]
+  const child = [file('/images/a/b/c.png')]
+  const c = setup({ stack: posixStack(), fetchFiles: (path) => path === '/images/a/b' ? pending.promise : { files: parent } })
+  const b = c.state.stack.value[3]
+  const refresh = c.location.refresh()
+  await c.location.back(2)
+  pending.resolve({ files: child })
+  await refresh
+  assert.deepEqual(c.state.currPage.value.files, parent)
+  assert.deepEqual(b.files, child)
+  assert.deepEqual(c.scrolledTo, []) // and it does not scroll the folder shown now
+})
+
+test('previewing: a reload keeps the preview on the same image', async () => {
+  const c = setup({ previewing: true, stack: posixStack(), fetchFiles: async () => ({ files: withMoved }) })
+  const back = c.location.back(2)
+  c.state.previewIdx.value = 0 // old.png, moves to 1
+  await back
+  assert.equal(c.state.previewIdx.value, 1)
+  assert.equal(c.state.previewing.value, true)
+})
+
+test('previewing: a reload closes the preview when the image is gone', async () => {
+  const c = setup({ previewing: true, stack: posixStack(), fetchFiles: async () => ({ files: [file('/images/a/other.png')] }) })
+  const back = c.location.back(2)
+  c.state.previewIdx.value = 0
+  await back
+  assert.equal(c.state.previewing.value, false)
+})
+
+test('navigate up loads the folder once (by refresh)', async () => {
+  const c = setup({ stack: posixStack() })
+  await c.location.backToLastUseTo()
+  await settle()
+  assert.deepEqual(c.fetched, ['/images/a'])
   assert.deepEqual(c.messages, ['refreshCompleted'])
 })
