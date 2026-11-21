@@ -255,6 +255,7 @@ export const zhHans = {
   imageViewSaved: '视图已保存',
   imageViewUpdated: '视图已更新',
   imageViewTagMissing: '无法打开视图：保存的标签已不存在。',
+  searchHistoryTagDeleted: '此搜索使用的标签已被删除。',
   showSearchFilters: '展开筛选',
   hideSearchFilters: '收起筛选',
   refreshImageView: '重新执行该视图的查询',

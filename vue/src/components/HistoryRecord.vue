@@ -6,10 +6,14 @@
           <slot :record="record"></slot>
         </div>
         <div class="rec-actions">
-          <a-button @click="$emit('reuseRecord', record)" type="primary">{{ $t('restore') }}</a-button>
+          <span v-if="disabledReason?.(record)" class="disabled-reason">{{ disabledReason(record) }}</span>
+          <a-button @click="$emit('reuseRecord', record)" type="primary" :disabled="!!disabledReason?.(record)">
+            {{ $t('restore') }}
+          </a-button>
           <div class="pin" @click="records.switchPin(record)">
             <PushpinFilled /> {{ records.isPinned(record) ? $t('unpin') : $t('pin') }}
           </div>
+          <div class="pin" @click="records.remove(record)">{{ $t('delete') }}</div>
         </div>
       </li>
     </ul>
@@ -20,6 +24,8 @@ import { PushpinFilled } from '@/icon'
 import { HistoryRecord } from '@/util/HistoryRecord'
 defineProps<{
   records: HistoryRecord<any>
+  /** When it returns a text for a record, Restore is disabled for it and the text says why. */
+  disabledReason?: (record: any) => string | undefined
 }>()
 
 
@@ -60,7 +66,12 @@ defineEmits<{
   .rec-actions {
     user-select: none;
     display: flex;
+    align-items: center;
     gap: 8px;
+  }
+
+  .disabled-reason {
+    color: var(--zp-secondary);
   }
 
   .pin {
