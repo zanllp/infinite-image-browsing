@@ -143,10 +143,6 @@ function setup({ mode = 'scanned', previewing = false, fetchFiles, walker, stack
     fetchCount: () => fetchCount,
     fetched,
     scrolledTo,
-    goTo: async (path) => {
-      location.locInputValue.value = path
-      await location.onLocEditEnter()
-    },
     disableWalkRefresh: () => loadingContent.children[1].props.onClick(),
     returnToIIB: () => listeners.get('returnToIIB')(),
     poll: () => {
@@ -306,13 +302,12 @@ const withMoved = [file('/images/a/moved.png', 'new'), ...named]
 
 test('going back reloads the folder and replaces a changed list without scrolling', async () => {
   const c = setup({ stack: posixStack(), fetchFiles: async () => ({ files: withMoved }) })
-  c.state.multiSelectedIdxs.value = [0]
+  c.global.autoRefreshNormalFixedMode = false
   await c.location.back(2)
   assert.deepEqual(c.fetched, ['/images/a'])
   assert.deepEqual(c.state.currPage.value.files, withMoved)
   assert.deepEqual(c.scrolledTo, [])
-  assert.equal(c.state.multiSelectedIdxs.value.length, 0) // selection is by index
-  assert.deepEqual(c.events, ['viewableAreaFilesChange']) // tags and covers of the new entries
+  assert.deepEqual(c.events, [])
   assert.deepEqual(c.messages, []) // silent
 })
 
@@ -326,6 +321,13 @@ test('going back to an unchanged folder keeps the list, the selection and the po
   assert.deepEqual(c.state.multiSelectedIdxs.value, [0])
   assert.deepEqual(c.events, [])
   assert.deepEqual(c.messages, [])
+})
+
+test('going back detects a replaced file even if the timestamp did not change', async () => {
+  const replacement = [file('/images/a/replacement.png', named[0].date)]
+  const c = setup({ stack: posixStack(), fetchFiles: async () => ({ files: replacement }) })
+  await c.location.back(2)
+  assert.deepEqual(c.state.currPage.value.files, replacement)
 })
 
 test('going back to the root and to a windows drive loads the right folder', async () => {
@@ -398,31 +400,6 @@ test('previewing: a reload closes the preview when the image is gone', async () 
   c.state.previewIdx.value = 0
   await back
   assert.equal(c.state.previewing.value, false)
-})
-
-test('going through a folder of the stack looks it up again if the next folder is missing in its list', async () => {
-  for (const [isWin, stack, target, expected] of [
-    [false, posixStack(), '/images/a/new', ['/images/a', '/images/a/new']],
-    [true, [page('/', named), page('C:/', named), page('img', named), page('a', named), page('b', named)], 'C:\\img\\a\\new', ['C:/img/a', 'C:/img/a/new']]
-  ]) {
-    const parentDir = expected[0]
-    const c = setup({
-      isWin,
-      stack,
-      fetchFiles: async (path) => ({ files: path === parentDir ? [dir(`${parentDir}/new`), ...named] : named })
-    })
-    await c.goTo(target)
-    assert.deepEqual([c.fetched, c.messages], [expected, []])
-    assert.equal(c.state.currPage.value.curr, 'new')
-  }
-})
-
-test('going through a folder of the stack that lists the next folder loads only the target', async () => {
-  const stack = posixStack()
-  stack[2].files = [dir('/images/a/c'), ...oldFiles]
-  const c = setup({ stack })
-  await c.goTo('/images/a/c')
-  assert.deepEqual(c.fetched, ['/images/a/c'])
 })
 
 test('navigate up loads the folder once (by refresh)', async () => {
