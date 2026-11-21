@@ -1,4 +1,12 @@
 export const zhHans = {
+  desktopUpdate: {
+    title: '更新到 {version}',
+    available: '有新版本可用，更新完成后应用会自动重启。',
+    install: '立即更新',
+    working: '正在下载并安装更新…',
+    download: '去 GitHub 下载安装包',
+    failed: '更新未完成，你可以继续使用当前版本。'
+  },
   startingLocalService: '正在启动本地服务…',
   startingLocalServiceHint: '首次启动需要解压内置后端，通常 5–10 秒，请稍等',
   startingLocalServiceElapsed: '已等待 {n} 秒',

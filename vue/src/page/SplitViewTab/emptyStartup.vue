@@ -12,6 +12,7 @@ import { addToExtraPath, onAliasExtraPathClick, onRemoveExtraPathClick } from '.
 import actionContextMenu from './actionContextMenu.vue'
 import { ExtraPathType } from '@/api/db'
 import { onMounted, onUnmounted } from 'vue'
+import { desktopUpdateVersion, offerDesktopUpdate, releasesUrl } from '@/desktopUpdate'
 import { hasNewRelease, version, latestCommit } from '@/util/versionManager'
 import { isTauri } from '@/util/env'
 import { message, Modal } from 'ant-design-vue'
@@ -41,6 +42,7 @@ onMounted(() => {
 
 const sync = useSettingSync()
 
+const showReleaseBadge = computed(() => Boolean(desktopUpdateVersion.value || hasNewRelease.value))
 const helpModalOpen = ref(false)
 const FAQ_URL = 'https://github.com/zanllp/sd-webui-infinite-image-browsing/issues/90'
 const ISSUES_SEARCH_URL = 'https://github.com/zanllp/sd-webui-infinite-image-browsing/issues?q='
@@ -335,9 +337,13 @@ const modes = computed(() => {
         class="quick-action">Github</a>
       <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/blob/main/.env.example" target="_blank"
         class="quick-action">{{ $t('privacyAndSecurity') }}</a>
-      <a-badge :count="hasNewRelease ? 'new' : null" :offset="[2,0]" color="geekblue">
-        <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/releases" target="_blank"
-          class="quick-action">Releases</a>
+      <a-badge :count="showReleaseBadge ? 'new' : null" :class="{ 'release-badge': showReleaseBadge }"
+        :offset="[-12, -6]" color="geekblue">
+        <a v-if="isTauri && desktopUpdateVersion" :href="releasesUrl" class="quick-action"
+          data-desktop-update @click.prevent="offerDesktopUpdate">
+          {{ $t('desktopUpdate.title', { version: desktopUpdateVersion }) }}
+        </a>
+        <a v-else :href="releasesUrl" target="_blank" rel="noopener noreferrer" class="quick-action">Releases</a>
       </a-badge>
       <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/blob/main/CHANGELOG.md" target="_blank"
         class="quick-action">{{ $t('changlog') }}</a>
@@ -676,6 +682,10 @@ const modes = computed(() => {
   font-weight: bold;
   color: var(--zp-primary);
   margin: 0;
+}
+
+.release-badge {
+  margin-right: 10px;
 }
 
 .quick-action {
