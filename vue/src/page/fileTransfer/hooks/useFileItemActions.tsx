@@ -16,7 +16,7 @@ import { t } from '@/i18n'
 import { batchUpdateImageTag, toggleCustomTagToImg } from '@/api/db'
 import { downloadFileInfoJSON, downloadFiles, toRawFileUrl } from '@/util/file'
 import { getShortcutStrFromEvent } from '@/util/shortcut'
-import { MultiSelectTips, openAddNewTagModal, openRenameFileModal } from '@/components/functionalCallableComp'
+import { MultiSelectTips, openAddNewTagModal, openRenameFileModal, openTransferToFolderModal } from '@/components/functionalCallableComp'
 import { batchDownload, events, imgTransferBus, stackCache, tagStore, useEventListen, useHookShareState, global } from '.'
 import { openTiktokViewWithFiles } from '@/util/tiktokHelper'
 import { copyFilesAndUpdateViews, moveFilesAndUpdateViews } from './transferResult'
@@ -92,7 +92,7 @@ export function useFileItemActions (
     }
   }
 
-  const onContextMenuClick = async (e: MenuInfo, file: FileNodeInfo, idx: number) => {
+  const onContextMenuClick = async (e: MenuInfo & { folder?: string }, file: FileNodeInfo, idx: number): Promise<unknown> => {
     const url = toRawFileUrl(file)
     const path = currLocation.value
     const preset = { IIB_container_id: parent.IIB_container_id } 
@@ -154,7 +154,7 @@ export function useFileItemActions (
       message.success(t(action === 'add' ? 'addCompleted' : 'removeCompleted'))
       return 
     } else if (key.startsWith('copy-to-')){
-      const targetPath = key.split('copy-to-')[1]
+      const targetPath = key.slice('copy-to-'.length)
       const selectedFiles = getSelectedImg()
       await copyFilesAndUpdateViews({
         paths: selectedFiles.map((v) => v.fullpath),
@@ -165,7 +165,7 @@ export function useFileItemActions (
       })
       return
     } else if (key.startsWith('move-to-')){
-      const targetPath = key.split('move-to-')[1]
+      const targetPath = key.slice('move-to-'.length)
       const selectedFiles = getSelectedImg()
       await moveFilesAndUpdateViews({
         paths: selectedFiles.map((v) => v.fullpath),
@@ -178,6 +178,17 @@ export function useFileItemActions (
     }
 
     switch (e.key) {
+      case 'moveToOtherFolder':
+      case 'copyToOtherFolder': {
+        const mode = e.key === 'moveToOtherFolder' ? 'move' : 'copy'
+        const paths = getSelectedImg().map(v => v.fullpath)
+        const dest = await openTransferToFolderModal(mode, Path.getParentDirectory(file.fullpath), e.folder)
+        if (dest) {
+          const transfer = mode === 'move' ? moveFilesAndUpdateViews : copyFilesAndUpdateViews
+          await transfer({ paths, from: path, dest, createDestFolder: true, continueOnError: true })
+        }
+        return
+      }
       case 'previewInNewWindow':
         return window.open(url)
       case 'copyFilePath':

@@ -1,13 +1,16 @@
-import { Button, Input, Modal, message, Spin } from 'ant-design-vue'
+import { Button, Input, Modal, message, Spin, Tree } from 'ant-design-vue'
 import { StyleValue, ref } from 'vue'
+import { debounce } from 'lodash-es'
+import 'ant-design-vue/es/tree/style'
+import type { TreeProps } from 'ant-design-vue/es/tree'
 import * as Path from '@/util/path'
-import { FileNodeInfo, mkdirs } from '@/api/files'
-import { setTargetFrameAsCover, getImageGenerationInfo, openWithDefaultApp } from '@/api'
+import { FileNodeInfo, getTargetFolderFiles, mkdirs } from '@/api/files'
+import { checkPathExists, setTargetFrameAsCover, getImageGenerationInfo, openWithDefaultApp } from '@/api'
 import { parse } from '@/util/stable-diffusion-image-metadata'
 import { t } from '@/i18n'
 import { downloadFiles, formatDuration, globalEvents, toRawFileUrl, toStreamVideoUrl, toStreamAudioUrl } from '@/util'
 import { getCachedVideoDuration } from '@/util/videoDuration'
-import { DownloadOutlined, FileTextOutlined, EditOutlined } from '@/icon'
+import { DownloadOutlined, FileTextOutlined, EditOutlined, FolderOutlined } from '@/icon'
 import { isStandalone } from '@/util/env'
 import { addCustomTag, getDbBasicInfo, rebuildImageIndex, renameFile } from '@/api/db'
 import { useTagStore } from '@/store/useTagStore'
@@ -29,6 +32,75 @@ export const openCreateFlodersModal = (base: string) => {
         await mkdirs(dest)
         resolve()
       }
+    })
+  })
+}
+
+export const openTransferToFolderModal = (mode: 'move' | 'copy', base: string, folder?: string) => {
+  const global = useGlobalStore()
+  let id = 0
+  const node = (path: string, title = path) => ({
+    key: ++id, path, title, selectable: !(global.conf?.is_win && path === '/')
+  })
+  const aliases = new Map(global.quickMovePaths.map(p => [p.dir, p.zh]))
+  const roots = folder ? [folder] : [...new Set([base, ...aliases.keys()])].filter(Boolean)
+  const folders = ref(roots.map(path => node(path, aliases.get(path) || Path.basename(Path.normalize(path)) || path)))
+  const defaultExpandedKeys = folders.value.length ? [folders.value[0].key] : []
+  const loadFolders: NonNullable<TreeProps['loadData']> = async ({ dataRef }) => {
+    if (!dataRef) return
+    const { files } = await getTargetFolderFiles(dataRef.path)
+    dataRef.children = files.filter(f => f.type === 'dir').map(f => node(f.fullpath, f.name))
+    dataRef.isLeaf = !dataRef.children.length
+    folders.value = [...folders.value]
+  }
+  return new Promise<string | undefined>(resolve => {
+    const start = folder || base || '/'
+    const input = ref(start)
+    const selectedKeys = ref<number[]>([])
+    const missing = ref(false)
+    const valid = (path: string) => !!path && Path.normalize(path) !== Path.normalize(base || '/') && !(global.conf?.is_win && Path.normalize(path) === '/')
+    let dest = start
+    const check = debounce(async (path: string) => {
+      try {
+        const exists = await checkPathExists([path])
+        if (dest === path) missing.value = exists[path] === false
+      } catch (e) {
+        console.error(e)
+      }
+    }, 300)
+    const setPath = (value: string, key?: number) => {
+      input.value = value
+      selectedKeys.value = key === undefined ? [] : [key]
+      const path = key === undefined ? value.trim() : value
+      dest = Path.isAbsolute(path) ? path : ''
+      missing.value = false
+      check.cancel()
+      if (key === undefined && valid(dest)) check(dest)
+      modal.update({ okButtonProps: { disabled: !valid(dest) } })
+    }
+    const modal = Modal.confirm({
+      title: t(mode === 'move' ? 'moveTo' : 'copyTo'),
+      width: 'min(800px, calc(100vw - 32px))',
+      centered: true,
+      icon: () => null,
+      okText: t(mode),
+      cancelText: t('cancel'),
+      okButtonProps: { disabled: !valid(dest) },
+      content: () => <div>
+        <Input value={input.value} aria-label={t('destFolder')} placeholder={t('inputTargetFolderPath')}
+          onUpdate:value={value => setPath(value)}
+          onPressEnter={e => {
+            if (valid(dest) && !e.isComposing) { resolve(dest); modal.destroy() }
+          }} />
+        {input.value.trim() && !dest && <small>{t('inputTargetFolderPath')}</small>}
+        {missing.value && <small>{t('destFolderWillBeCreated')}</small>}
+        <Tree style={{ marginTop: '12px' }} selectedKeys={selectedKeys.value} treeData={folders.value} loadData={loadFolders} defaultExpandedKeys={defaultExpandedKeys} height={Math.min(640, Math.floor(window.innerHeight * 0.6))} blockNode
+        showIcon v-slots={{ icon: () => <FolderOutlined />, title: ({ title, path }: ReturnType<typeof node>) => <span title={path}>{title}</span> }}
+        onSelect={(keys, { node }) => setPath(keys.length ? node.path : '', keys.length ? Number(node.key) : undefined)} />
+      </div>,
+      onOk: () => resolve(dest),
+      onCancel: () => resolve(undefined),
+      afterClose: () => { check.cancel(); resolve(undefined) }
     })
   })
 }

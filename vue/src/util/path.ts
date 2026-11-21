@@ -91,3 +91,16 @@ export function basename(filePath: string) {
   }
   return filePath.substring(lastSeparatorIndex + 1);
 }
+
+export function getMoveUpDest(file: string, roots: { dir: string }[]) {
+  const folder = getParentDirectory(file)
+  if (!folder || folder === '.' || /^[a-z]:$/i.test(folder)) return ''
+  const parent = getParentDirectory(folder)
+  const up = normalize(parent || '/')
+  const managed = roots.some(({ dir }) => {
+    const root = normalize(dir)
+    return root && (up === root || up.startsWith(root.endsWith('/') ? root : root + '/'))
+  })
+  if (!managed || parent === '.') return ''
+  return /^[a-z]:$/i.test(parent) ? parent + '/' : parent || '/'
+}
