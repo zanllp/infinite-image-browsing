@@ -6,6 +6,7 @@ export const zhHant: Partial<IIBI18nMap> = {
     available: '有新版本可用，更新完成後應用程式會自動重新啟動。',
     install: '立即更新',
     working: '正在下載並安裝更新…',
+    download: '前往 GitHub 下載安裝程式',
     failed: '更新未完成，你可以繼續使用目前版本。'
   },
   startingLocalService: '正在啟動本地服務…',

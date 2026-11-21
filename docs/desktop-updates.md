@@ -6,6 +6,11 @@ Drafts are not offered. The WebUI extension and standalone server do not check
 for app updates. An older desktop app without the updater must be upgraded
 manually once. On macOS, install the app in a writable location, not on the DMG.
 
+Desktop startup checks silently. When an update is available, the welcome page
+shows a `new` badge on **Update to {version}**. Clicking it opens a confirmation; only
+confirming starts installation. If installation fails, the dialog links to
+GitHub Releases for manual download.
+
 ## One-time release setup
 
 1. Generate a Tauri v1 signing key **outside the checkout**, using the CLI

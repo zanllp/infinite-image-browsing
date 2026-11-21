@@ -4,6 +4,7 @@ export const zhHans = {
     available: '有新版本可用，更新完成后应用会自动重启。',
     install: '立即更新',
     working: '正在下载并安装更新…',
+    download: '去 GitHub 下载安装包',
     failed: '更新未完成，你可以继续使用当前版本。'
   },
   startingLocalService: '正在启动本地服务…',

@@ -6,6 +6,7 @@ export const en: IIBI18nMap = {
     available: 'A new version is available. The app will restart after the update.',
     install: 'Update now',
     working: 'Downloading and installing the update…',
+    download: 'Download the installer from GitHub',
     failed: 'Could not update. You can keep using this version.'
   },
   startingLocalService: 'Starting the local service…',
