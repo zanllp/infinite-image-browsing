@@ -1,4 +1,5 @@
 import base64
+import errno
 from datetime import datetime, timedelta
 import io
 import json
@@ -33,6 +34,7 @@ from scripts.iib.tool import (
     create_zip_file,
     normalize_paths,
     to_abs_path,
+    is_same_or_parent,
     is_secret_key_required,
     open_file_with_default_app,
     is_exe_ver,
@@ -561,29 +563,159 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
 
     class DeleteFilesReq(BaseModel):
         file_paths: List[str]
+        # delete a folder that is not empty, with everything in it
+        recursive: bool = False
+
+    def folder_error(status: int, en: str, zh: str):
+        return HTTPException(status, detail=en if locale == "en" else zh)
+
+    def check_folder_path(path: str) -> str:
+        """
+        The path of a folder to delete, normalized. rmtree, isdir and listdir
+        resolve a ".." after a link in the file system, the database rows are
+        found by the text of the path: with a ".." the two can differ. A link
+        is not deleted as a folder: rmtree refuses it, and a trailing slash
+        makes it delete what the link points to.
+        """
+        if ".." in Path(path).parts:
+            raise folder_error(
+                400,
+                f'The path of a folder must not contain "..": {path}',
+                f'文件夹路径不能包含 "..": {path}',
+            )
+        path = os.path.normpath(path)
+        if os.path.islink(path):
+            raise folder_error(
+                400,
+                f"{path} is a link to a folder, a link is not deleted as a folder.",
+                f"{path} 是指向文件夹的链接，不能作为文件夹删除。",
+            )
+        return path
+
+    def folder_has_entries(path: str) -> bool:
+        try:
+            with os.scandir(path) as it:
+                return next(it, None) is not None
+        except OSError:
+            # cannot be read: treat it like a folder with content
+            return True
+
+    def check_recursive_delete(path: str):
+        """
+        A folder is only deleted with its content from inside the library:
+        below a scanned path, and neither a scanned path itself nor a folder
+        that holds one. The path has to be written like the folders are named,
+        a file system that ignores case would reach the folder but not its
+        database rows, which are found by the exact text of the path.
+        """
+        real = to_abs_path(path)
+        scanned = [os.path.realpath(p) for p in mem["all_scanned_paths"]]
+        inside = any(real != p and safe_commonpath([real, p]) == p for p in scanned)
+        if not inside or any(is_same_or_parent(real, p) for p in scanned):
+            raise folder_error(
+                403,
+                "A folder is only deleted with its content inside a scanned path, not a scanned path itself.",
+                "只能删除扫描路径内的文件夹及其内容，不能删除扫描路径本身。",
+            )
+        roots = {os.path.normpath(p) for p in mem["all_scanned_paths"]} | set(scanned)
+        current = os.path.abspath(path)
+        while current not in roots and os.path.dirname(current) != current:
+            parent, name = os.path.split(current)
+            try:
+                if name not in os.listdir(parent):
+                    raise folder_error(
+                        400,
+                        f"{path}: the name of a folder differs in case from the folder in the file system.",
+                        f"{path}: 文件夹名称的大小写与文件系统中的不一致。",
+                    )
+            except OSError:
+                pass
+            current = parent
+        try:
+            os.scandir(path).close()
+        except OSError as e:
+            # rmtree would fail on it anyway, and what is inside could not be told apart from what is gone
+            raise folder_error(
+                400,
+                f"{path} cannot be read: {e.strerror}",
+                f"无法读取 {path}: {e.strerror}",
+            )
+
+    def count_folder_tree(path: str):
+        files = folders = 0
+        for root, dirnames, filenames in os.walk(path):
+            # os.walk lists a link to a folder with the folders but does not follow it
+            links = sum(1 for d in dirnames if os.path.islink(os.path.join(root, d)))
+            folders += len(dirnames) - links
+            files += len(filenames) + links
+        return files, folders
+
+    class FolderContentReq(BaseModel):
+        folder_paths: List[str]
+
+    @app.post(
+        api_base + "/folder_content",
+        dependencies=[Depends(verify_secret), Depends(write_permission_required)],
+    )
+    def folder_content(req: FolderContentReq):
+        """What deleting these folders with delete_files(recursive) would remove."""
+        for path in req.folder_paths:
+            check_write_trust(path)
+        folders = []
+        for path in req.folder_paths:
+            files = subfolders = 0
+            if os.path.isdir(path):
+                normalized = check_folder_path(path)
+                if folder_has_entries(normalized):
+                    check_recursive_delete(normalized)
+                    files, subfolders = count_folder_tree(normalized)
+            folders.append({"path": path, "files": files, "folders": subfolders})
+        return {"folders": folders}
+
+    def remove_missing_rows(conn, folder_path: str):
+        """The rows of what is gone below a deleted folder, also under the path the file system resolved."""
+        for path in {folder_path, to_abs_path(folder_path)}:
+            DbImg.remove_missing_under(conn, path)
+            Folder.remove_missing_under(conn, path)
 
     @app.post(
         api_base + "/delete_files",
         dependencies=[Depends(verify_secret), Depends(write_permission_required)],
     )
-    async def delete_files(req: DeleteFilesReq):
+    def delete_files(req: DeleteFilesReq):
         # Check all paths before deleting anything.
+        paths = []
         for path in req.file_paths:
             check_write_trust(path)
+            if os.path.isdir(path):
+                path = check_folder_path(path)
+                if req.recursive and folder_has_entries(path):
+                    check_recursive_delete(path)
+            paths.append(path)
 
         conn = DataBase.get_conn()
 
-        for path in req.file_paths:
+        for path in paths:
             try:
                 if os.path.isdir(path):
-                    if len(os.listdir(path)):
-                        error_msg = (
-                            "When a folder is not empty, it is not allowed to be deleted."
-                            if locale == "en"
-                            else "文件夹不为空时不允许删除。"
-                        )
-                        raise HTTPException(400, detail=error_msg)
-                    shutil.rmtree(path)
+                    try:
+                        # atomic: a folder that got a file since the check above is not emptied
+                        os.rmdir(path)
+                    except OSError as e:
+                        if e.errno not in (errno.ENOTEMPTY, errno.EEXIST):
+                            raise
+                        if not req.recursive:
+                            raise folder_error(
+                                400,
+                                "When a folder is not empty, it is not allowed to be deleted.",
+                                "文件夹不为空时不允许删除。",
+                            )
+                        check_recursive_delete(path)
+                        try:
+                            shutil.rmtree(path)
+                        finally:
+                            # rows of files that are left stay, with their tags
+                            remove_missing_rows(conn, path)
                 else:
                     close_video_file_reader(path)
                     txt_path = get_img_geninfo_txt_path(path)

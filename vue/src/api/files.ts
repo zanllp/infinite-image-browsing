@@ -28,9 +28,21 @@ export const getTargetFolderFiles = async (folder_path: string) => {
 }
 
 
-export const deleteFiles = async (file_paths: string[]) => {
-  const resp = await axiosInst.value.post('/delete_files', { file_paths })
+export const deleteFiles = async (file_paths: string[], recursive?: boolean) => {
+  const resp = await axiosInst.value.post('/delete_files', { file_paths, recursive })
   return resp.data as { ok: true }
+}
+
+export interface FolderContent {
+  path: string
+  files: number
+  folders: number
+}
+
+/** Number of files and subfolders below each folder, i.e. what `deleteFiles(paths, true)` would remove. */
+export const getFolderContent = async (folder_paths: string[]) => {
+  const resp = await axiosInst.value.post('/folder_content', { folder_paths })
+  return resp.data as { folders: FolderContent[] }
 }
 
 export const moveFiles = async (

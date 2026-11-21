@@ -150,6 +150,23 @@ def commit_with_retry(conn: Connection, retries: int = 5) -> None:
             delay *= 2
 
 
+def is_gone(path: str) -> bool:
+    """Is there no such file any more? Anything else than "not found" (no permission, I/O error) says nothing."""
+    try:
+        os.lstat(path)
+    except (FileNotFoundError, NotADirectoryError):
+        return True
+    except OSError:
+        return False
+    return False
+
+
+def tree_bounds(folder_path: str):
+    """Range [low, high) of the paths below a folder, in the binary order of the path columns."""
+    prefix = os.path.normpath(folder_path).rstrip(os.sep) + os.sep
+    return prefix, prefix[:-1] + chr(ord(os.sep) + 1)
+
+
 class Image:
     def __init__(self, path, exif=None, size=0, date="", exif_edited=False, id=None):
         self.path = path
@@ -331,6 +348,17 @@ class Image:
                 print(e)
             finally:
                 conn.commit()
+
+    @classmethod
+    def remove_missing_under(cls, conn: Connection, folder_path: str) -> None:
+        """Remove the rows (with tags and embeddings) of the files below a folder that no longer exist."""
+        low, high = tree_bounds(folder_path)
+        with closing(conn.cursor()) as cur:
+            cur.execute("SELECT id, path FROM image WHERE path >= ? AND path < ?", (low, high))
+            ids = [i for i, p in cur.fetchall() if is_gone(p)]
+        # SQLite limits the number of variables in a statement
+        for i in range(0, len(ids), 500):
+            cls.safe_batch_remove(conn, ids[i : i + 500])
 
     @classmethod
     def find_by_substring(
@@ -1341,6 +1369,19 @@ class Folder:
     def remove_all(cls, conn: Connection):
         with closing(conn.cursor()) as cur:
             cur.execute("DELETE FROM folders")
+            conn.commit()
+
+    @classmethod
+    def remove_missing_under(cls, conn: Connection, folder_path: str):
+        """Remove the scan marks of a folder and the folders below it that no longer exist."""
+        low, high = tree_bounds(folder_path)
+        with closing(conn.cursor()) as cur:
+            cur.execute(
+                "SELECT id, path FROM folders WHERE path = ? OR (path >= ? AND path < ?)",
+                (os.path.normpath(folder_path), low, high),
+            )
+            ids = [(i,) for i, p in cur.fetchall() if is_gone(p)]
+            cur.executemany("DELETE FROM folders WHERE id = ?", ids)
             conn.commit()
 
 
