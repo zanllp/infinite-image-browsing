@@ -2,7 +2,7 @@ import { Modal, message } from 'ant-design-vue'
 import { checkPathExists } from '@/api'
 import { copyFiles, moveFiles } from '@/api/files'
 import { t } from '@/i18n'
-import { events } from '.'
+import { events, tagStore } from '.'
 
 interface TransferArgs {
   paths: string[]
@@ -44,6 +44,7 @@ export const moveFilesAndUpdateViews = async ({ paths, from, dest, createDestFol
   }
   if (!errors.length) {
     events.emit('removeFiles', { paths, loc: from })
+    tagStore.invalidateTagCache()
     events.emit('refreshLocation', { loc: dest })
     message.success(t('moveSuccess'))
     return
@@ -66,6 +67,7 @@ const syncViewsAfterPartialMove = async (paths: string[], from: string, dest: st
     console.error('check_path_exists failed', error)
     events.emit('refreshLocation', { loc: from })
   }
+  if (moved === undefined || moved.length > 0) tagStore.invalidateTagCache()
   events.emit('refreshLocation', { loc: dest })
   return moved
 }

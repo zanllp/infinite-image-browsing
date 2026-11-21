@@ -80,6 +80,11 @@ export const useTagStore = defineStore('useTagStore', () => {
     tagMap.set(path, normalizedTags)
   }
 
+  const invalidateTagCache = () => {
+    tagMap.clear()
+    globalEvents.emit('tagsInvalidated')
+  }
+
   /**
    * 其他浏览器标签页改了标签：删掉对应路径的缓存，再交给已有的补拉链路。
    *
@@ -93,9 +98,7 @@ export const useTagStore = defineStore('useTagStore', () => {
     const bulk = !!msg.all || !msg.paths?.length
     if (bulk) {
       // 标签库本身变了（新增 / 删除 / 改名 / 改色）
-      tagMap.clear()
-      // 让各网格立刻补拉可视区（否则要等用户滚动才恢复）
-      globalEvents.emit('tagsInvalidated')
+      invalidateTagCache()
       // TagSearch / SubstrSearch 靠这个事件重拉 getDbBasicInfo，标签计数才能跟上
       globalEvents.emit('backgroundMaintenanceUpdated')
       return
@@ -110,6 +113,7 @@ export const useTagStore = defineStore('useTagStore', () => {
     tagMap,
     getColor,
     fetchImageTags,
+    invalidateTagCache,
     refreshTags,
     tagConvert,
     notifyCacheUpdate
