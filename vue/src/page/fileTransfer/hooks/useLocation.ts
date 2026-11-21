@@ -6,7 +6,7 @@ import { DatabaseOutlined } from '@/icon'
 import { TagSearchTabPane, FuzzySearchTabPane, FileTransferTabPane, EmptyStartTabPane } from '@/store/useGlobalStore'
 import { copy2clipboardI18n, makeAsyncFunctionSingle, useGlobalEventListen } from '@/util'
 import { message, Modal } from 'ant-design-vue'
-import { ref, watch, onMounted, h, computed, onUnmounted } from 'vue'
+import { ref, watch, onMounted, h, computed, onUnmounted, nextTick } from 'vue'
 import { delay, ok, Task, useWatchDocument } from 'vue3-ts-util'
 import { useHookShareState, stackCache, global } from '.'
 import NumInput from '@/components/numInput.vue'
@@ -42,7 +42,8 @@ export function useLocation () {
     sortedFiles,
     previewing,
     previewIdx,
-    sortMethod
+    sortMethod,
+    multiSelectedIdxs
   } = useHookShareState().toRefs()
 
   watch(
@@ -142,12 +143,13 @@ export function useLocation () {
   }
 
   const back = (idx: number) => {
-    if (props.value.mode == 'walk') {
+    if (props.value.mode == 'walk' || idx >= stack.value.length - 1) {
       return
     }
     while (idx < stack.value.length - 1) {
       stack.value.pop()
     }
+    return reloadAfterBack()
   }
 
   const backToLastUseTo = () => {
@@ -204,7 +206,13 @@ export function useLocation () {
         return refresh()
       }
       for (const frag of frags) {
-        const target = currPage.value?.files.find((v) => isDirNameEqual(v.name, frag))
+        let target = currPage.value?.files.find((v) => isDirNameEqual(v.name, frag))
+        if (!target && currPage.value) {
+          // the list of a folder further up the stack may be older than the folder we are looking for
+          const { files } = await getTargetFolderFiles(currLocation.value)
+          currPage.value.files = files
+          target = files.find((v) => isDirNameEqual(v.name, frag))
+        }
         if (!target) {
           console.error({ frags, frag, stack: cloneDeep(stack.value) })
           throw new Error(`${frag} not found`)
@@ -262,6 +270,31 @@ export function useLocation () {
       previewing.value = false
     }
   }
+  /**
+   * Going back shows the list the folder had when it was opened; files moved, copied or deleted since then
+   * (from here or from another pane) are missing from it. Reload it like an auto refresh: without scrolling,
+   * the list is only replaced if it changed, and an answer that arrives after a newer refresh or after leaving
+   * the folder is dropped.
+   */
+  const reloadAfterBack = async () => {
+    await nextTick() // the folder change invalidates older auto refreshes first, see below
+    const version = ++autoRefreshVersion
+    const page = last(stack.value)!
+    try {
+      const { files } = await getTargetFolderFiles(currLocation.value)
+      const key = (v: FileNodeInfo[]) => v.map((f) => f.fullpath + f.date).join()
+      if (key(page.files) === key(files)) {
+        return
+      }
+      applyAutoRefresh(version, nextPreviewIndexAfterListUpdate(files), () => {
+        page.files = files
+        multiSelectedIdxs.value = [] // the selection is by index
+        eventEmitter.value.emit('viewableAreaFilesChange') // tags and folder covers of new entries
+      })
+    } catch (error) {
+      console.error('reloading the folder failed', error)
+    }
+  }
   // 切换目录、翻页、模式切换后，丢弃还在路上的旧请求结果
   watch([currLocation, currPage, walker, () => props.value.mode], invalidateAutoRefresh)
   onUnmounted(invalidateAutoRefresh)
@@ -275,8 +308,13 @@ export function useLocation () {
         eventEmitter.value.emit('loadNextDir')
       } else {
 
+        // the folder this refresh started for, even if the user went elsewhere in the meantime
+        const page = last(stack.value)!
         const { files } = await getTargetFolderFiles(currLocation.value)
-        last(stack.value)!.files = files
+        page.files = files
+        if (page !== last(stack.value)) {
+          return
+        }
       }
 
       deletedFiles.value.clear()
