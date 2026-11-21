@@ -225,11 +225,14 @@ ul.ant-dropdown-menu  {
   justify-content: space-between;
   z-index: 11111;
   pointer-events: none;
+  // size the arrows by the width left for the image, so they never reach into the side-by-side info panel
+  container-type: inline-size;
+  overflow: hidden;
 
   &>* {
     color: white;
-    margin: 16px;
-    font-size: 4em;
+    margin: clamp(4px, 2cqi, 16px);
+    font-size: clamp(24px, 10cqi, 4em);
     pointer-events: all;
     cursor: pointer;
 
