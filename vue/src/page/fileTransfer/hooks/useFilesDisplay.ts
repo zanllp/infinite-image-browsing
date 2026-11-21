@@ -176,6 +176,8 @@ export function useFilesDisplay ({ fetchNext }: {fetchNext?: () => Promise<any>}
 
   const onViewableAreaChangeDebounced = debounce(() => state.eventEmitter.emit('viewableAreaFilesChange'), 300)
   watch(currLocation, onViewableAreaChangeDebounced)
+  // a changed list (refresh, auto refresh, polling, removed files, sorting, filter) may show files whose tags are not cached
+  watch(sortedFiles, onViewableAreaChangeDebounced)
 
   const onScroll = debounce(async () => {
     const s = scroller.value

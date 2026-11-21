@@ -2,7 +2,8 @@ import { Modal, message } from 'ant-design-vue'
 import { checkPathExists } from '@/api'
 import { copyFiles, moveFiles } from '@/api/files'
 import { t } from '@/i18n'
-import { events } from '.'
+import { normalize, join, basename } from '@/util/path'
+import { events, tagStore } from '.'
 
 interface TransferArgs {
   paths: string[]
@@ -29,6 +30,29 @@ const showFailures = (action: 'move' | 'copy', total: number, done: number, erro
 }
 
 /**
+ * Forgets the cached tags of moved files, at the old and at the new path (for a folder, of the files
+ * in it). The tags follow the file in the database; a cached entry at the new path may be left from
+ * an earlier stay of the file there, so the grid and the preview would show outdated tags. They are
+ * fetched again the next time the path is shown.
+ */
+export const invalidateMovedTags = (moved: string[], dest: string) => {
+  const roots = new Set(moved.flatMap((v) => [normalize(v), normalize(join(dest, basename(v)))]))
+  for (const key of Array.from(tagStore.tagMap.keys())) {
+    // the entry is for a moved path itself or for a file in a moved folder: look at the path and its parents
+    let path = normalize(key)
+    for (;;) {
+      if (roots.has(path)) {
+        tagStore.tagMap.delete(key)
+        break
+      }
+      const i = path.lastIndexOf('/')
+      if (i <= 0) break
+      path = path.slice(0, i)
+    }
+  }
+}
+
+/**
  * Moves the files, then updates the views: the moved files leave the source view, and views that
  * show the target folder are reloaded. Files that could not be moved (e.g. name conflicts) stay where
  * they are and are listed at the end. If the request fails (e.g. it stops at the first error), files
@@ -44,6 +68,7 @@ export const moveFilesAndUpdateViews = async ({ paths, from, dest, createDestFol
   }
   if (!errors.length) {
     events.emit('removeFiles', { paths, loc: from })
+    invalidateMovedTags(paths, dest)
     events.emit('refreshLocation', { loc: dest })
     message.success(t('moveSuccess'))
     return
@@ -66,6 +91,8 @@ const syncViewsAfterPartialMove = async (paths: string[], from: string, dest: st
     console.error('check_path_exists failed', error)
     events.emit('refreshLocation', { loc: from })
   }
+  // if the check failed, the files that were moved are unknown: forget them all, it only costs a request
+  invalidateMovedTags(moved ?? paths, dest)
   events.emit('refreshLocation', { loc: dest })
   return moved
 }
