@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import socket
 import sqlite3
 import ssl
@@ -55,7 +56,7 @@ def verify(root, feed_dir):
         ca.issue_cert("127.0.0.1").configure_cert(tls)
         public = work / "www"
         public.mkdir()
-        os.link(archive, public / archive.name)
+        shutil.copyfile(archive, public / archive.name)
         handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=public)
         with http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler) as server:
             server.socket = tls.wrap_socket(server.socket, server_side=True)
@@ -111,15 +112,20 @@ def run_upgrade(exe, root, feed_dir, origin, version, target_hash):
     with sync_playwright() as pw:
         browser = pw.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
         page = browser.contexts[0].pages[0]
-        page.get_by_role("button", name="Update now", exact=True).click(timeout=150_000)
+        button = page.get_by_role("button", name="Update now", exact=True)
+        button.wait_for(timeout=150_000)
+        log_offset = startup_log.stat().st_size
+        button.click(timeout=30_000)
         print("Clicked Update now in the baseline app", flush=True)
     first.wait(timeout=180)
     second = wait_for(lambda: app_process(exe), "automatic relaunch")
     assert second.pid != first.pid and hashlib.sha256(exe.read_bytes()).digest() == target_hash
     def restarted():
-        log = startup_log.read_text(encoding="utf-8", errors="replace")
+        with startup_log.open("rb") as log_file:
+            log_file.seek(log_offset)
+            log = log_file.read().decode("utf-8", errors="replace")
         launches = log.split("event=app_start")
-        if len(launches) >= 3 and "name=fe_loaded" in launches[-1]:
+        if len(launches) >= 2 and "name=fe_loaded" in launches[-1]:
             return re.search(r"event=launch_app port=(\d+)", launches[-1])[1]
     port = wait_for(restarted, "updated WebView and sidecar")
     with urlopen(f"http://127.0.0.1:{port}/infinite_image_browsing/global_setting", timeout=10) as r:
