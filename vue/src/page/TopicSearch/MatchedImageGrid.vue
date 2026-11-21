@@ -246,12 +246,6 @@ const onTiktokViewClick = () => {
 }
 
 .preview-switch {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  display: flex;
-  gap: 8px;
-  font-size: 36px;
   user-select: none;
 }
 
