@@ -10,6 +10,8 @@ from scripts.iib.db.datamodel import (
     DataBase,
     Folder,
     commit_with_retry,
+    is_gone,
+    tree_bounds,
 )
 from scripts.iib.tool import (
     is_valid_media_path,
@@ -230,6 +232,24 @@ def build_single_img_idx(conn, file_path, is_rebuild, safe_save_img_tag, on_new_
     return True
 
 
+def _collect_missing_children(conn, folder_path: str, filenames: List[str]) -> List[tuple]:
+    """Rows (id, path) of direct children of folder_path that are not in the listing and gone from disk.
+
+    The listing is a snapshot: a file created after it, or one that exists under another spelling on a
+    case-insensitive file system, is not gone. The caller guarantees filenames is not empty.
+    """
+    low, high = tree_bounds(folder_path)
+    present = set(filenames)
+    with closing(conn.cursor()) as cur:
+        # the path column is ordered binary, so the range query uses the index; instr keeps direct children only
+        cur.execute(
+            "SELECT id, path FROM image WHERE path >= ? AND path < ? AND instr(substr(path, ?), ?) = 0",
+            (low, high, len(low) + 1, os.sep),
+        )
+        rows = cur.fetchall()
+    return [(i, p) for i, p in rows if p[len(low) :] not in present and is_gone(p)]
+
+
 def _scan_folder(
     conn,
     folder_path: str,
@@ -239,6 +259,7 @@ def _scan_folder(
     on_progress: Optional[Callable[[dict], None]] = None,
     should_pause: Optional[Callable[[], bool]] = None,
     batch_commit_size: int = 50,
+    missing_files: Optional[list] = None,
 ) -> dict:
     """单层扫描实现（scan_folder_incremental / update_image_data 共用）。"""
     stats = {
@@ -289,6 +310,13 @@ def _scan_folder(
         return stats
 
     stats["folders"] = 1
+    # Rows of files that vanished from this folder are only reported, the caller decides when to remove them.
+    # An empty listing may be an unmounted volume, so it reports nothing.
+    if missing_files is not None and filenames:
+        try:
+            missing_files.extend(_collect_missing_children(conn, folder_path, filenames))
+        except Exception as e:
+            logger.error("Failed to look for missing files of %s: %s", folder_path, e)
     commit_interval_sec = 1.0
     batch_size = max(1, int(batch_commit_size))
     pending = 0
@@ -373,6 +401,7 @@ def scan_folder_incremental(
     on_progress: Optional[Callable[[dict], None]] = None,
     should_pause: Optional[Callable[[], bool]] = None,
     batch_commit_size: int = 50,
+    missing_files: Optional[list] = None,
 ) -> dict:
     """增量扫描一个目录的直接子项（不递归），分片提交并回调进度。
 
@@ -385,6 +414,7 @@ def scan_folder_incremental(
         on_progress: 每次 batch commit 后回调 stats 快照。
         should_pause: 每张图处理前调用；返回 True 则立即停止（不写目录水位）。
         batch_commit_size: 每 N 张图或约 1s commit 一次。
+        missing_files: if given, the rows (id, path) of this folder's files that are gone from disk are appended (nothing is deleted).
 
     Returns:
         dict: {"folders", "files_indexed", "files_skipped", "files_failed", "paused"}
@@ -396,6 +426,7 @@ def scan_folder_incremental(
         on_progress=on_progress,
         should_pause=should_pause,
         batch_commit_size=batch_commit_size,
+        missing_files=missing_files,
     )
 
 
