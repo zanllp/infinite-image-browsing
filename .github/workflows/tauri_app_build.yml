@@ -153,6 +153,7 @@ jobs:
           ./tests/desktop/verify_windows_update.ps1 -Archive $zip
 
       - name: Click Update now and verify the restarted app
+        timeout-minutes: 18
         if: inputs.mode == 'verify-windows'
         run: |
           python -m pip install playwright trustme psutil
@@ -273,6 +274,7 @@ jobs:
           ./tests/desktop/verify_windows_update.ps1 -Archive $zip
 
       - name: Click Update now and verify the restarted app
+        timeout-minutes: 18
         if: inputs.mode == 'verify-windows'
         run: |
           python -m pip install playwright trustme psutil
