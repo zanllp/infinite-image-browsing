@@ -262,6 +262,7 @@ export const zhHant: Partial<IIBI18nMap> = {
   imageViewSaved: '檢視已儲存',
   imageViewUpdated: '檢視已更新',
   imageViewTagMissing: '無法開啟檢視：儲存的標籤已不存在。',
+  searchHistoryTagDeleted: '此搜尋使用的標籤已被刪除。',
   showSearchFilters: '展開篩選',
   hideSearchFilters: '收起篩選',
   refreshImageView: '重新執行此檢視的查詢',

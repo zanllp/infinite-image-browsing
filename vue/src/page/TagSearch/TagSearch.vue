@@ -188,11 +188,17 @@ const onAddTagBtnSubmit = async () => {
   addTagName.value = ''
   addInputing.value = false
 }
+const removeFromFilters = (tagId: TagId) => {
+  matchIds.value.and_tags = matchIds.value.and_tags.filter((v) => v !== tagId)
+  matchIds.value.or_tags = matchIds.value.or_tags.filter((v) => v !== tagId)
+  matchIds.value.not_tags = matchIds.value.not_tags.filter((v) => v !== tagId)
+}
 const onTagRemoveClick = (tagId: TagId) => {
   Modal.confirm({
     title: t('confirmDelete'),
     async onOk () {
       await removeCustomTag({ tag_id: tagId })
+      removeFromFilters(tagId)
       const idx = info.value?.tags.findIndex((v) => v.id === tagId) ?? -1
       info.value?.tags.splice(idx, 1)
       global.conf?.all_custom_tags.splice(
@@ -207,9 +213,7 @@ const selectedTagIds = computed(
 )
 const onTagClick = (tag: Tag) => {
   if (selectedTagIds.value.has(tag.id)) {
-    matchIds.value.and_tags = matchIds.value.and_tags.filter((v) => v !== tag.id)
-    matchIds.value.or_tags = matchIds.value.or_tags.filter((v) => v !== tag.id)
-    matchIds.value.not_tags = matchIds.value.not_tags.filter((v) => v !== tag.id)
+    removeFromFilters(tag.id)
   } else {
     matchIds.value.and_tags.push(tag.id)
   }
@@ -247,6 +251,16 @@ const tagListFilter = (list: Tag[], name: string) => {
   return list.slice(0, max)
 }
 
+/** A history record that refers to a deleted tag cannot be restored; the user can delete it. */
+const historyDisabledReason = (record: MatchImageByTagsReq) => {
+  if (!info.value) {
+    return
+  }
+  const known = new Set(info.value.tags.map((v) => v.id))
+  const ids = [...record.and_tags, ...record.or_tags, ...record.not_tags]
+  return ids.some((id) => !known.has(id)) ? t('searchHistoryTagDeleted') : undefined
+}
+
 const tagIdsToString = (tagIds: TagId[]) => {
   return tagIds.map((id) => tags.value.find((v) => v.id === id)?.name).join(', ')
 }
@@ -277,7 +291,7 @@ const saveImageView = (name: string) => {
   <div class="container">
     
   <a-modal v-model:visible="showHistoryRecord" width="70vw" mask-closable @ok="showHistoryRecord = false">
-    <HistoryRecord :records="tagSearchHistory" @reuse-record="reuse">
+    <HistoryRecord :records="tagSearchHistory" :disabled-reason="historyDisabledReason" @reuse-record="reuse">
       <template #default="{ record }">
         <div style="padding-right: 16px;">
           <a-row v-if="record.and_tags.length">

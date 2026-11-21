@@ -58,4 +58,14 @@ export class HistoryRecord<F extends Dict, T extends { id: string; time: string 
   getPinnedValues () {
     return this.pinnedValues as readonly T[]
   }
+
+  /** Remove a record, pinned or not. */
+  remove (value: T) {
+    for (const list of [this.records, this.pinnedValues]) {
+      const index = list.findIndex(item => item.id === value.id)
+      if (index !== -1) {
+        list.splice(index, 1)
+      }
+    }
+  }
 }
