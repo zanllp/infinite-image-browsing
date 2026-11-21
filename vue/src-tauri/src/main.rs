@@ -9,11 +9,17 @@ use std::io::Error;
 use std::io::Write;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+
 use std::time::{Duration, Instant};
 use tauri::api::process::Command;
 use tauri::api::process::CommandEvent;
 use tauri::WindowEvent;
+#[cfg(feature = "desktop-updater")]
+use tauri::Manager;
+
+#[cfg(feature = "desktop-updater")]
+mod desktop_update;
 use chrono::Local;
 use chrono::format::{DelayedFormat, StrftimeItems};
 
@@ -43,14 +49,22 @@ fn greet(name: &str) -> String {
 }
 struct AppState {
     port: u16,
+    #[cfg(feature = "desktop-updater")]
+    exited: Arc<AtomicBool>,
+    #[cfg(feature = "desktop-updater")]
+    restart_gate: Arc<Mutex<bool>>,
 }
 #[derive(serde::Serialize)]
 struct AppConf {
     port: u16,
+    updater: bool,
 }
 #[tauri::command]
 fn get_tauri_conf(state: tauri::State<'_, AppState>) -> AppConf {
-    AppConf { port: state.port }
+    AppConf {
+        port: state.port,
+        updater: cfg!(feature = "desktop-updater"),
+    }
 }
 
 #[derive(Deserialize, Default, Debug)]
@@ -112,14 +126,17 @@ fn kill_process_by_pid(pid: u32) {
     }
 }
 
-/// 先优雅退出，最多等 GRACEFUL_EXIT_WAIT；没退再强杀
-fn shutdown_sidecar(port: u16, child_pid: u32, exited: &AtomicBool, log_file: &File) {
-    request_shutdown(port);
-    let deadline = Instant::now() + GRACEFUL_EXIT_WAIT;
+fn wait_for_exit(exited: &AtomicBool, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
     while !exited.load(Ordering::SeqCst) && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(100));
     }
-    if exited.load(Ordering::SeqCst) {
+    exited.load(Ordering::SeqCst)
+}
+
+fn shutdown_sidecar(port: u16, child_pid: u32, exited: &AtomicBool, log_file: &File) {
+    request_shutdown(port);
+    if wait_for_exit(exited, GRACEFUL_EXIT_WAIT) {
         log_line(log_file, "INFO", "[TIMELINE] event=sidecar_exited_gracefully");
     } else {
         log_line(log_file, "INFO", "[TIMELINE] event=sidecar_force_killed");
@@ -271,12 +288,14 @@ fn main() {
     let child_pid_state = Arc::new(AtomicU32::new(child_pid));
     let exited = Arc::new(AtomicBool::new(false));
     let shutting_down = Arc::new(AtomicBool::new(false));
+    let restart_gate = Arc::new(Mutex::new(false));
 
     {
         let log_file = log_file.clone();
         let child_pid_state = child_pid_state.clone();
         let exited = exited.clone();
         let shutting_down = shutting_down.clone();
+        let restart_gate = restart_gate.clone();
         // 阻塞式 recv 跑在普通线程里：sidecar 意外退出时能按退避重启
         std::thread::spawn(move || {
             let mut attempts = 0u32;
@@ -300,25 +319,31 @@ fn main() {
                     }
                 }
 
+                let mut restart = restart_gate.lock().unwrap();
                 if shutting_down.load(Ordering::SeqCst) {
                     break;
                 }
-                if attempts >= MAX_SIDECAR_RESTARTS {
-                    log_line(&log_file, "INFO", "[TIMELINE] event=sidecar_restart_giveup");
+                if !std::mem::take(&mut *restart) {
+                    if attempts >= MAX_SIDECAR_RESTARTS {
+                        log_line(&log_file, "INFO", "[TIMELINE] event=sidecar_restart_giveup");
+                        break;
+                    }
+                    attempts += 1;
+                    let wait = Duration::from_secs(1u64 << (attempts - 1).min(3));
+                    log_line(
+                        &log_file,
+                        "INFO",
+                        &format!(
+                            "[TIMELINE] event=sidecar_restarting attempt={} wait={}s",
+                            attempts,
+                            wait.as_secs()
+                        ),
+                    );
+                    std::thread::sleep(wait);
+                }
+                if shutting_down.load(Ordering::SeqCst) {
                     break;
                 }
-                attempts += 1;
-                let wait = Duration::from_secs(1u64 << (attempts - 1).min(3));
-                log_line(
-                    &log_file,
-                    "INFO",
-                    &format!(
-                        "[TIMELINE] event=sidecar_restarting attempt={} wait={}s",
-                        attempts,
-                        wait.as_secs()
-                    ),
-                );
-                std::thread::sleep(wait);
 
                 match Command::new_sidecar("iib_api_server") {
                     Ok(command) => match command.args(sidecar_args(port)).spawn() {
@@ -362,15 +387,32 @@ fn main() {
         });
     }
 
-    tauri::Builder::default()
-        .manage(AppState { port })
+    let builder = tauri::Builder::default()
+        .manage(AppState {
+            port,
+            #[cfg(feature = "desktop-updater")]
+            exited: exited.clone(),
+            #[cfg(feature = "desktop-updater")]
+            restart_gate,
+        });
+    #[cfg(feature = "desktop-updater")]
+    let builder = builder.manage(desktop_update::PendingUpdate::default())
         .invoke_handler(tauri::generate_handler![
-            greet,
-            get_tauri_conf,
-            shutdown_api_server_command
-        ])
+            greet, get_tauri_conf, shutdown_api_server_command,
+            desktop_update::check_desktop_update, desktop_update::install_desktop_update
+        ]);
+    #[cfg(not(feature = "desktop-updater"))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        greet, get_tauri_conf, shutdown_api_server_command
+    ]);
+    builder
         .on_window_event(move |event| match event.event() {
-            WindowEvent::CloseRequested { .. } => {
+            WindowEvent::CloseRequested { api: _api, .. } => {
+                #[cfg(feature = "desktop-updater")]
+                if event.window().state::<desktop_update::PendingUpdate>().installing.load(Ordering::SeqCst) {
+                    _api.prevent_close();
+                    return;
+                }
                 log_line(&log_file, "INFO", "[TIMELINE] event=window_close_requested");
                 shutting_down.store(true, Ordering::SeqCst);
                 shutdown_sidecar(

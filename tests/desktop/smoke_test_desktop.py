@@ -133,14 +133,14 @@ def smoke_test(executable):
                     ("video_cover", {"path": str(video_path), "mt": "smoke"}),
                 ):
                     assert get(f"/infinite_image_browsing/{endpoint}?{urlencode(query)}")
+                expected = 0
                 try:
                     with urlopen(Request(base + "/infinite_image_browsing/shutdown", method="POST"), timeout=5):
                         pass
                 except (RemoteDisconnected, ConnectionResetError):
-                    # The existing shutdown endpoint sends SIGKILL before responding.
-                    pass
+                    # Historical draft verification also exercises pre-updater releases.
+                    expected = 9 if sys.platform == "win32" else -signal.SIGKILL
                 code = process.wait(timeout=15)
-                expected = 9 if sys.platform == "win32" else -signal.SIGKILL
                 assert code == expected, f"Unexpected shutdown exit code: {code}"
                 print("PASS: packaged sidecar, HTML/JS, database, image thumbnail, video cover, shutdown")
             except BaseException:

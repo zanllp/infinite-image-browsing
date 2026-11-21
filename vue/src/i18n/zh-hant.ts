@@ -1,6 +1,13 @@
 import type { IIBI18nMap } from '.'
 
 export const zhHant: Partial<IIBI18nMap> = {
+  desktopUpdate: {
+    title: '更新至 {version}',
+    available: '有新版本可用，更新完成後應用程式會自動重新啟動。',
+    install: '立即更新',
+    working: '正在下載並安裝更新…',
+    failed: '更新未完成，你可以繼續使用目前版本。'
+  },
   startingLocalService: '正在啟動本地服務…',
   startingLocalServiceHint: '首次啟動需要解壓內置後端，通常 5–10 秒，請稍候',
   startingLocalServiceElapsed: '已等待 {n} 秒',

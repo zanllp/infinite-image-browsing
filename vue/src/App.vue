@@ -15,6 +15,7 @@ import PromptEditorModal from '@/components/PromptEditorModal.vue'
 import { Dict, createReactiveQueue, globalEvents, useGlobalEventListen } from './util'
 import { resolveQueryActions } from './queryActions'
 import { refreshTauriConf, tauriConf } from './util/tauriAppConf'
+import { checkDesktopUpdateOnStartup } from './desktopUpdate'
 import { openModal } from './taurilaunchModal'
 import { isTauri } from './util/env'
 import { delay } from 'vue3-ts-util'
@@ -190,6 +191,7 @@ useGlobalEventListen('updateGlobalSetting', async () => {
   })
   globalStore.conf = resp
   bootFinish()
+  if (isTauri && tauriConf.value?.updater) void checkDesktopUpdateOnStartup()
   const r = await getQuickMovePaths(resp)
   globalStore.quickMovePaths = r.filter((v) => v?.dir?.trim?.())
 

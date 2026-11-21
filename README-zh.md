@@ -133,6 +133,8 @@ exe版本同样支持ComfyUI/Fooocus/NovelAI
 
 从仓库页面右侧的`releases`部分下载并安装程序。如果提示检测到病毒忽略即可这是误报。在windows下的编译有两个版本, pyinstaller版本拥有比较低的误报率。
 
+Windows 和 macOS 桌面版发现新版本时，点「立即更新」即可安装并重启。没有内置更新功能的旧版仍需手动安装一次。
+
 ### macOS（未公证预览版）
 
 Apple Silicon（M 系列）下载 `aarch64-unsigned.dmg`，Intel 下载 `x64-unsigned.dmg`，需要 macOS 14 或更新版本。将 **Infinite Image Browsing** 拖入「应用程序」后再打开，不要直接从磁盘映像运行。

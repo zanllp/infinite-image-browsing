@@ -1164,7 +1164,11 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         # This API endpoint is mainly used as a sidecar in Tauri applications to shut down the application
         if not kwargs.get("enable_shutdown"):
             raise HTTPException(status_code=403, detail="Shutdown is disabled.")
-        os.kill(os.getpid(), 9)
+        server = getattr(app.state, "iib_server", None)
+        if server is None:  # An externally hosted app explicitly enabled the shutdown API.
+            os.kill(os.getpid(), 9)
+        else:
+            server.should_exit = True
         return {"message": "Application is shutting down."}
 
 

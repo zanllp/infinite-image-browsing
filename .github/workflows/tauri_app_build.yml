@@ -5,7 +5,7 @@ on:
     inputs:
       mode:
         type: choice
-        options: [build, build-macos, stage-macos-draft, verify-draft]
+        options: [build, verify-windows, build-macos, stage-macos-draft, verify-draft]
         default: build
       draft_tag:
         type: string
@@ -19,9 +19,12 @@ on:
     branches:    
       - 'releases/**'
 
+env:
+  IIB_UPDATER_PUBLIC_KEY: ${{ vars.IIB_UPDATER_PUBLIC_KEY }}
+
 jobs:
   build:
-    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'build'
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'build' || inputs.mode == 'verify-windows'
     strategy:
       matrix:
         os: [windows-latest]
@@ -29,7 +32,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Check-out repository
         uses: actions/checkout@v4
@@ -76,6 +79,7 @@ jobs:
         if: matrix.os == 'windows-latest'
       
       - name: Upload Server Artifacts
+        if: inputs.mode != 'verify-windows'
         uses: actions/upload-artifact@v4
         with:
           name: iib_app_cli_${{ runner.os }}
@@ -84,6 +88,7 @@ jobs:
             out/iib_app_cli-${{ env.VERSION }}-${{ runner.os }}.exe
 
       - name: Upload Server Artifacts
+        if: inputs.mode != 'verify-windows'
         uses: actions/upload-artifact@v4
         with:
           name: iib_api_server-${{ env.VERSION }}-${{ runner.os }}
@@ -121,14 +126,37 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev webkit2gtk-4.0 libayatana-appindicator3-dev librsvg2-dev patchelf
 
-      - name: Build the app
-        run: |
-          yarn tauri-build
+      - name: Build the updatable NSIS installer
+        shell: bash
         working-directory: vue
+        run: |
+          python ../tools/release/desktop_update.py config windows-x86_64 updater.json
+          yarn tauri-build --features desktop-updater --bundles nsis --config updater.json
 
       - name: Verify Windows installer before attaching to a draft
         shell: bash
         run: python tests/desktop/verify_draft_asset.py "vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${VERSION}_x64-setup.exe" verification
+
+      - name: Package the verified installer for in-app updates
+        shell: bash
+        env:
+          IIB_UPDATER_PRIVATE_KEY: ${{ secrets.IIB_UPDATER_PRIVATE_KEY }}
+          IIB_UPDATER_KEY_PASSWORD: ${{ secrets.IIB_UPDATER_KEY_PASSWORD }}
+        run: |
+          dir=vue/src-tauri/target/release/bundle/nsis
+          python tools/release/desktop_update.py pack windows-x86_64 "$dir/Infinite Image Browsing_${VERSION}_x64-setup.exe" "$dir"
+
+      - name: Verify unattended Windows update and relaunch
+        shell: pwsh
+        run: |
+          $zip = (Get-ChildItem vue/src-tauri/target/release/bundle/nsis/IIB-*.nsis.zip).FullName
+          ./tests/desktop/verify_windows_update.ps1 -Archive $zip
+
+      - name: Click Update now and verify the restarted app
+        if: inputs.mode == 'verify-windows'
+        run: |
+          python -m pip install playwright trustme psutil
+          python tests/desktop/verify_windows_in_app_update.py
 
       - name: Upload Windows verification evidence
         if: always()
@@ -140,16 +168,19 @@ jobs:
             verification/*.log
       
       - name: Upload Artifacts
+        if: inputs.mode != 'verify-windows'
         uses: actions/upload-artifact@v4
         with:
           name: bundle-${{ env.VERSION }}-${{ runner.os }}
           path: |
             vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${{ env.VERSION }}_x64-setup.exe
+            vue/src-tauri/target/release/bundle/nsis/IIB-*.nsis.zip*
+            vue/src-tauri/target/release/bundle/nsis/latest-*.json
             vue/src-tauri/target/release/bundle/deb/infinite-image-browsing_${{ env.VERSION }}_amd64.deb
 
 
   build-by-pyinstaller:
-    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'build'
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'build' || inputs.mode == 'verify-windows'
     strategy:
       matrix:
         os: [windows-latest]
@@ -157,7 +188,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Check-out repository
         uses: actions/checkout@v4
@@ -183,7 +214,7 @@ jobs:
       - uses: sayyid5416/pyinstaller@v1
         with:
             spec: 'app.py'
-            upload_exe_with_name: 'My executable'
+            upload_exe_with_name: ${{ inputs.mode != 'verify-windows' && 'My executable' || '' }}
             options: --onefile --additional-hooks-dir=pyinstaller_hooks --add-data "vue/dist;vue/dist"
 
       - run: mv dist/app.exe vue/src-tauri/iib_api_server-x86_64-pc-windows-msvc.exe
@@ -211,10 +242,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev webkit2gtk-4.0 libayatana-appindicator3-dev librsvg2-dev patchelf
 
-      - name: Build the app
-        run: |
-          yarn tauri-build
+      - name: Build the updatable NSIS installer
+        shell: bash
         working-directory: vue
+        run: |
+          python ../tools/release/desktop_update.py config windows-x86_64-pyinstaller updater.json
+          yarn tauri-build --features desktop-updater --bundles nsis --config updater.json
       
       - run: |
          cd vue/src-tauri/target/release/bundle/nsis
@@ -223,6 +256,27 @@ jobs:
       - name: Verify alternative Windows installer before attaching to a draft
         shell: bash
         run: python tests/desktop/verify_draft_asset.py "vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${VERSION}_x64-setup-pyinstaller.exe" verification
+
+      - name: Package the verified installer for in-app updates
+        shell: bash
+        env:
+          IIB_UPDATER_PRIVATE_KEY: ${{ secrets.IIB_UPDATER_PRIVATE_KEY }}
+          IIB_UPDATER_KEY_PASSWORD: ${{ secrets.IIB_UPDATER_KEY_PASSWORD }}
+        run: |
+          dir=vue/src-tauri/target/release/bundle/nsis
+          python tools/release/desktop_update.py pack windows-x86_64-pyinstaller "$dir/Infinite Image Browsing_${VERSION}_x64-setup-pyinstaller.exe" "$dir"
+
+      - name: Verify unattended Windows update and relaunch
+        shell: pwsh
+        run: |
+          $zip = (Get-ChildItem vue/src-tauri/target/release/bundle/nsis/IIB-*.nsis.zip).FullName
+          ./tests/desktop/verify_windows_update.ps1 -Archive $zip
+
+      - name: Click Update now and verify the restarted app
+        if: inputs.mode == 'verify-windows'
+        run: |
+          python -m pip install playwright trustme psutil
+          python tests/desktop/verify_windows_in_app_update.py
 
       - name: Upload Windows verification evidence
         if: always()
@@ -233,11 +287,14 @@ jobs:
             verification/*.json
             verification/*.log
       - name: Upload Artifacts
+        if: inputs.mode != 'verify-windows'
         uses: actions/upload-artifact@v4
         with:
           name: bundle-${{ env.VERSION }}-${{ runner.os }}-pre
           path: |
             vue/src-tauri/target/release/bundle/nsis/Infinite Image Browsing_${{ env.VERSION }}_x64-setup-pyinstaller.exe
+            vue/src-tauri/target/release/bundle/nsis/IIB-*.nsis.zip*
+            vue/src-tauri/target/release/bundle/nsis/latest-*.json
             
   build-macos:
     if: github.event_name != 'workflow_dispatch' || inputs.mode == 'build' || inputs.mode == 'build-macos'
@@ -300,7 +357,9 @@ jobs:
           workspaces: './vue/src-tauri -> target'
 
       - name: Build application bundle
-        run: yarn tauri-build --bundles app
+        run: |
+          python ../tools/release/desktop_update.py config darwin-${{ matrix.arch }} updater.json
+          yarn tauri-build --features desktop-updater --bundles app --config updater.json
         working-directory: vue
 
       - name: Package and verify ad-hoc signed application
@@ -316,10 +375,21 @@ jobs:
           python tests/desktop/smoke_test_desktop.py \
             "vue/src-tauri/target/release/bundle/macos/Infinite Image Browsing.app/Contents/MacOS/iib_api_server"
 
+      - name: Package the final ad-hoc signed app for in-app updates
+        env:
+          IIB_UPDATER_PRIVATE_KEY: ${{ secrets.IIB_UPDATER_PRIVATE_KEY }}
+          IIB_UPDATER_KEY_PASSWORD: ${{ secrets.IIB_UPDATER_KEY_PASSWORD }}
+        run: |
+          python tools/release/desktop_update.py pack darwin-${{ matrix.arch }} \
+            "vue/src-tauri/target/release/bundle/macos/Infinite Image Browsing.app" out
+
       - uses: actions/upload-artifact@v4
         with:
           name: bundle-${{ env.VERSION }}-macOS-${{ matrix.arch }}
-          path: out/*-unsigned.dmg
+          path: |
+            out/*-unsigned.dmg
+            out/IIB-*.app.tar.gz*
+            out/latest-*.json
           if-no-files-found: error
 
   release:
@@ -387,7 +457,11 @@ jobs:
           path: artifacts
           merge-multiple: true
       - name: Attach verified macOS installers without publishing
-        run: gh release upload "$DRAFT_TAG" artifacts/*.dmg --repo "$GITHUB_REPOSITORY" --clobber
+        run: |
+          for channel in darwin-x64 darwin-aarch64; do
+            jq -e --arg tag "$DRAFT_TAG" '("v" + .version) == $tag' "artifacts/latest-$channel.json"
+          done
+          gh release upload "$DRAFT_TAG" artifacts/*.dmg artifacts/*.app.tar.gz{,.sig} artifacts/latest-*.json --repo "$GITHUB_REPOSITORY" --clobber
 
   verify-draft:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'verify-draft'

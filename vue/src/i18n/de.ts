@@ -1,6 +1,13 @@
 import type { IIBI18nMap } from '.'
 
 export const de: Partial<IIBI18nMap> = {
+  desktopUpdate: {
+    title: 'Update auf {version}',
+    available: 'Eine neue Version ist verfügbar. Nach dem Update startet die App neu.',
+    install: 'Jetzt aktualisieren',
+    working: 'Das Update wird heruntergeladen und installiert…',
+    failed: 'Das Update ist fehlgeschlagen. Du kannst diese Version weiter verwenden.'
+  },
   blockVisibilitySettings: 'Panel-Einstellungen',
   blockName_actionBar: 'Aktionsschaltflächen',
   blockName_infoTags: 'Datei-Info-Tags',

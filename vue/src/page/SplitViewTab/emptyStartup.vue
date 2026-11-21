@@ -12,6 +12,7 @@ import { addToExtraPath, onAliasExtraPathClick, onRemoveExtraPathClick } from '.
 import actionContextMenu from './actionContextMenu.vue'
 import { ExtraPathType } from '@/api/db'
 import { onMounted, onUnmounted } from 'vue'
+import { desktopUpdateVersion, offerDesktopUpdate } from '@/desktopUpdate'
 import { hasNewRelease, version, latestCommit } from '@/util/versionManager'
 import { isTauri } from '@/util/env'
 import { message, Modal } from 'ant-design-vue'
@@ -335,7 +336,10 @@ const modes = computed(() => {
         class="quick-action">Github</a>
       <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/blob/main/.env.example" target="_blank"
         class="quick-action">{{ $t('privacyAndSecurity') }}</a>
-      <a-badge :count="hasNewRelease ? 'new' : null" :offset="[2,0]" color="geekblue">
+      <a v-if="isTauri && desktopUpdateVersion" href="#" class="quick-action" @click.prevent="offerDesktopUpdate">
+        {{ $t('desktopUpdate.title', { version: desktopUpdateVersion }) }}
+      </a>
+      <a-badge v-else :count="hasNewRelease ? 'new' : null" :offset="[2,0]" color="geekblue">
         <a href="https://github.com/zanllp/sd-webui-infinite-image-browsing/releases" target="_blank"
           class="quick-action">Releases</a>
       </a-badge>
