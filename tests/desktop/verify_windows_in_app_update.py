@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import socket
 import sqlite3
 import ssl
 import subprocess
@@ -17,7 +16,6 @@ import time
 from urllib.request import urlopen
 
 import psutil
-from playwright.sync_api import sync_playwright
 import trustme
 
 
@@ -83,7 +81,27 @@ def run_upgrade(exe, root, feed_dir, origin, version, target_hash):
     vue = Path("vue").resolve()
     old = "0.0.1"
     config = json.loads((vue / "updater.json").read_text())
-    config.update(package={"version": old}, build={"beforeBuildCommand": ""})
+    # Only baseline A gets this UI driver. The signed target B, already built
+    # and hashed above, contains neither test code nor a desktop debugging port.
+    dist = vue / "baseline-dist"
+    shutil.copytree(vue / "dist", dist)
+    index = dist / "index.html"
+    html = index.read_text(encoding="utf-8")
+    assert "</body>" in html
+    index.write_text(html.replace("</body>", '<script defer src="/click-update.js"></script></body>'),
+                     encoding="utf-8")
+    (dist / "click-update.js").write_text("""
+        const timer = setInterval(() => {
+            const update = Array.from(document.querySelectorAll('button'))
+                .find(button => button.textContent.trim() === 'Update now');
+            if (update && !update.disabled) {
+                clearInterval(timer);
+                update.click();
+            }
+        }, 250);
+    """, encoding="utf-8")
+    config.update(package={"version": old},
+                  build={"beforeBuildCommand": "", "distDir": "../baseline-dist"})
     config["tauri"]["updater"]["endpoints"] = [origin + "/feed.json"]
     (vue / "baseline.json").write_text(json.dumps(config))
     subprocess.run(["node", "node_modules/@tauri-apps/cli/tauri.js", "build", "--features",
@@ -98,31 +116,14 @@ def run_upgrade(exe, root, feed_dir, origin, version, target_hash):
         db.execute("CREATE TABLE updater_test (marker TEXT)")
         db.execute("INSERT INTO updater_test VALUES ('keep my library')")
     startup_log = exe.parent / "iib_api_server.log"
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-    env = {**os.environ, "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS": f"--remote-debugging-port={port}"}
+    log_offset = startup_log.stat().st_size if startup_log.exists() else 0
     print(f"Starting baseline {old} to update to {version}", flush=True)
-    first = subprocess.Popen([str(exe)], cwd=exe.parent, env=env)
-    def debugger_ready():
-        if first.poll() is not None:
-            raise RuntimeError(f"Baseline exited before update: {first.returncode}")
-        try:
-            with urlopen(f"http://127.0.0.1:{port}/json/list", timeout=2) as r:
-                return any(p.get("type") == "page" for p in json.load(r))
-        except OSError:
-            return False
-    wait_for(debugger_ready, "baseline WebView2")
-    with sync_playwright() as pw:
-        browser = pw.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
-        page = browser.contexts[0].pages[0]
-        page.on("console", lambda msg: print("WebView:", msg.text, flush=True) if "update" in msg.text.lower() and len(msg.text) < 500 else None)
-        button = page.get_by_role("button", name="Update now", exact=True)
-        button.wait_for(timeout=150_000)
-        log_offset = startup_log.stat().st_size
-        button.click(timeout=30_000)
-        print("Clicked Update now in the baseline app", flush=True)
-    first.wait(timeout=180)
+    first = subprocess.Popen([str(exe)], cwd=exe.parent)
+    try:
+        first.wait(timeout=180)
+    except subprocess.TimeoutExpired:
+        print(startup_log.read_text(encoding="utf-8", errors="replace")[-8000:], flush=True)
+        raise
     second = wait_for(lambda: app_process(exe), "automatic relaunch")
     assert second.pid != first.pid and hashlib.sha256(exe.read_bytes()).digest() == target_hash
     def restarted():
@@ -130,7 +131,7 @@ def run_upgrade(exe, root, feed_dir, origin, version, target_hash):
             log_file.seek(log_offset)
             log = log_file.read().decode("utf-8", errors="replace")
         launches = log.split("event=app_start")
-        if len(launches) >= 2 and "name=fe_loaded" in launches[-1]:
+        if len(launches) >= 3 and "name=fe_loaded" in launches[-1]:
             return re.search(r"event=launch_app port=(\d+)", launches[-1])[1]
     port = wait_for(restarted, "updated WebView and sidecar")
     with urlopen(f"http://127.0.0.1:{port}/infinite_image_browsing/global_setting", timeout=10) as r:
