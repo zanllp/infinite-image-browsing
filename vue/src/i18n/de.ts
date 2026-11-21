@@ -194,6 +194,8 @@ export const de: Partial<IIBI18nMap> = {
   sortingMethod: 'Sortiermethode',
   copyPath: 'Pfad kopieren',
   deleteSelected: 'Löschen',
+  folderContent: 'Dateien: {files}, Unterordner: {folders}',
+  deleteFoldersWithContent: 'Die Ordner werden mit allem, was darin liegt, gelöscht. Das kann nicht rückgängig gemacht werden.',
   previewInNewWindow: 'In neuem Fenster öffnen',
   copySourceFilePreviewLink: 'Kopiere Dateilink aus dem Verzeichnis',
   viewGenerationInfo: 'Anzeige von Generierungsinformationen (Prompt, etc.)',

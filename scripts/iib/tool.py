@@ -222,6 +222,33 @@ def to_abs_path(path):
     return os.path.realpath(path)
 
 
+def is_same_or_parent(folder: str, path: str) -> bool:
+    """
+    Is path the folder or inside it? Compared by the text of the paths and by
+    what the file system says (a link, another case); the file system alone is
+    not enough where inodes are not reliable (FUSE, SMB, NFS).
+    """
+    try:
+        if os.path.commonpath([folder, path]) == folder:
+            return True
+    except ValueError:
+        pass
+    try:
+        folder_stat = os.stat(folder)
+    except OSError:
+        return False
+    while True:
+        try:
+            if os.path.samestat(os.stat(path), folder_stat):
+                return True
+        except OSError:
+            pass
+        parent = os.path.dirname(path)
+        if parent == path:
+            return False
+        path = parent
+
+
 def get_valid_img_dirs(
     conf,
     keys=sd_img_dirs,

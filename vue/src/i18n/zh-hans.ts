@@ -229,6 +229,8 @@ export const zhHans = {
   sortingMethod: '排序方法',
   copyPath: '复制路径',
   deleteSelected: '删除',
+  folderContent: '{files} 个文件，{folders} 个子文件夹',
+  deleteFoldersWithContent: '文件夹及其中的所有内容将被删除，且无法撤销。',
   previewInNewWindow: '在新窗口预览',
   copySourceFilePreviewLink: '复制源文件预览链接',
   viewGenerationInfo: '查看生成信息(prompt等)',

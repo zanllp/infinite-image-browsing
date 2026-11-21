@@ -419,6 +419,8 @@ You can specify which snapshot to restore to when starting IIB in the global set
   sortingMethod: 'Sorting method',
   copyPath: 'Copy path',
   deleteSelected: 'Delete',
+  folderContent: 'files: {files}, subfolders: {folders}',
+  deleteFoldersWithContent: 'The folders are deleted with everything in them. This cannot be undone.',
   previewInNewWindow: 'Open in new window',
   copySourceFilePreviewLink: 'Copy source file preview link',
   viewGenerationInfo: 'View generation information (prompt, etc.)',

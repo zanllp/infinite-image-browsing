@@ -13,6 +13,7 @@ Run from the repository root::
     python -m pytest tests/unit/test_api_file_write.py
 """
 import os
+import contextlib
 import shutil
 import tempfile
 import unittest
@@ -37,7 +38,7 @@ from fastapi.testclient import TestClient
 
 from scripts.iib import api as iib_api
 from scripts.iib import organize_files
-from scripts.iib.db.datamodel import DataBase, ExtraPath, Image as DbImg
+from scripts.iib.db.datamodel import DataBase, ExtraPath, Folder, Image as DbImg, ImageTag, Tag
 
 API = "/infinite_image_browsing"
 DB_API = API + "/db"
@@ -216,6 +217,365 @@ class DeleteFilesTest(_FileWriteTestCase):
     def test_parent_of_the_scanned_root_is_refused(self):
         r = self.client.post(f"{API}/delete_files", json={"file_paths": [self.workdir]})
         self.assertStatus(r, 403)
+
+
+class DeleteFolderTest(_FileWriteTestCase):
+    """A folder that is not empty is deleted with its content, only when asked to."""
+
+    def indexed(self, name, tag=None):
+        """A file with a row in the database, optionally carrying a tag of the user."""
+        path = self.inside(name)
+        self.assertStatus(
+            self.client.post(f"{API}/update_exif", json={"path": path, "exif": "{}"}), 200
+        )
+        conn = DataBase.get_conn()
+        row = DbImg.get(conn, path)
+        if tag:
+            ImageTag(row.id, Tag.get_or_create(conn, name=tag, type="custom").id).save(conn)
+        conn.execute(
+            "INSERT INTO image_embedding (image_id, model, dim, text_hash, vec, updated_at)"
+            " VALUES (?, 'm', 1, 'h', x'00', '')",
+            (row.id,),
+        )
+        conn.commit()
+        return path
+
+    def count_rows(self, table, where="1", params=()):
+        return DataBase.get_conn().execute(
+            f"SELECT COUNT(*) FROM {table} WHERE {where}", params
+        ).fetchone()[0]
+
+    def rows_under(self, folder):
+        """All rows left for images below the folder, in the tables that hang on an image."""
+        prefix = folder + os.sep
+        under = "substr(path, 1, ?) = ?"
+        ids = f"(SELECT id FROM image WHERE {under})"
+        args = (len(prefix), prefix)
+        return (
+            self.count_rows("image", under, args),
+            self.count_rows("image_tag", f"image_id IN {ids}", args),
+            self.count_rows("image_embedding", f"image_id IN {ids}", args),
+        )
+
+    def post_delete(self, paths, recursive=None):
+        body = {"file_paths": paths}
+        if recursive is not None:
+            body["recursive"] = recursive
+        return self.client.post(f"{API}/delete_files", json=body)
+
+    def test_empty_folder_is_deleted_without_recursive(self):
+        folder = os.path.join(self.scan, "empty")
+        os.makedirs(folder)
+        self.assertStatus(self.post_delete([folder]), 200)
+        self.assertFalse(os.path.exists(folder))
+
+    def test_folder_with_content_is_refused_without_recursive(self):
+        keep = self.indexed(os.path.join("full", "a.jpg"))
+        folder = os.path.dirname(keep)
+        for recursive in (None, False):
+            self.assertStatus(self.post_delete([folder], recursive), 400)
+        self.assertTrue(os.path.exists(keep))
+        self.assertIsNotNone(self.db_row(keep))
+
+    def test_deletes_files_subfolders_sidecars_and_all_rows(self):
+        folder = os.path.join(self.scan, "full")
+        liked = self.indexed(os.path.join("full", "a.jpg"), tag="like")
+        deep = self.indexed(os.path.join("full", "x", "y", "b.jpg"), tag="mine")
+        self.touch(os.path.join(folder, "a.txt"))
+        os.makedirs(os.path.join(folder, "empty-sub"))
+        sibling = self.indexed(os.path.join("full2", "c.jpg"), tag="like")
+        for p in (liked, deep):
+            self.assertIsNotNone(self.db_row(p), "precondition: the row exists")
+        # the scan mark of the folders, as the indexer writes it
+        Folder.update_modified_date_or_create(DataBase.get_conn(), folder)
+        Folder.update_modified_date_or_create(DataBase.get_conn(), os.path.dirname(deep))
+        Folder.update_modified_date_or_create(DataBase.get_conn(), os.path.dirname(sibling))
+        DataBase.get_conn().commit()
+
+        self.assertStatus(self.post_delete([folder], True), 200)
+
+        self.assertFalse(os.path.exists(folder))
+        self.assertEqual(self.rows_under(folder), (0, 0, 0))
+        self.assertEqual(
+            self.count_rows("folders", "path = ? OR substr(path, 1, ?) = ?", (folder, len(folder) + 1, folder + os.sep)),
+            0,
+        )
+        # neighbours with a similar name keep their rows
+        self.assertTrue(os.path.exists(sibling))
+        self.assertIsNotNone(self.db_row(sibling))
+        self.assertEqual(self.rows_under(os.path.dirname(sibling)), (1, 1, 1))
+        self.assertEqual(self.count_rows("folders", "path = ?", (os.path.dirname(sibling),)), 1)
+
+    def test_wildcards_in_the_folder_name_do_not_match_other_folders(self):
+        victim = self.indexed(os.path.join("a_b", "x.jpg"))
+        neighbour = self.indexed(os.path.join("aXb", "x.jpg"))
+        percent = self.indexed(os.path.join("100%", "x.jpg"))
+        neighbour2 = self.indexed(os.path.join("1000", "x.jpg"))
+        self.assertStatus(self.post_delete([os.path.dirname(victim), os.path.dirname(percent)], True), 200)
+        self.assertIsNone(self.db_row(victim))
+        self.assertIsNone(self.db_row(percent))
+        self.assertIsNotNone(self.db_row(neighbour))
+        self.assertIsNotNone(self.db_row(neighbour2))
+
+    def test_files_and_folders_in_one_request(self):
+        single = self.indexed("single.jpg")
+        inner = self.indexed(os.path.join("f", "a.jpg"))
+        self.assertStatus(self.post_delete([single, os.path.dirname(inner)], True), 200)
+        self.assertFalse(os.path.exists(single))
+        self.assertFalse(os.path.exists(os.path.dirname(inner)))
+        self.assertIsNone(self.db_row(single))
+        self.assertIsNone(self.db_row(inner))
+
+    def test_already_missing_folder_counts_as_deleted(self):
+        folder = os.path.join(self.scan, "gone")
+        self.assertStatus(self.post_delete([folder], True), 200)
+
+    def test_outside_folder_is_refused_and_nothing_is_deleted(self):
+        keep = self.indexed("keep.jpg")
+        intruder = self.outside_path("x.jpg")
+        r = self.post_delete([keep, os.path.dirname(intruder)], True)
+        self.assertStatus(r, 403)
+        self.assertTrue(os.path.exists(keep))
+        self.assertTrue(os.path.exists(intruder))
+
+    def test_scanned_path_and_its_parent_are_refused(self):
+        keep = self.indexed("keep.jpg")
+        for folder in (self.scan, self.workdir):
+            self.assertStatus(self.post_delete([folder], True), 403)
+        self.assertTrue(os.path.exists(keep))
+        self.assertIsNotNone(self.db_row(keep))
+
+    def test_folder_that_holds_a_scanned_path_is_refused(self):
+        nested = os.path.join(self.scan, "sub", "nested")
+        self.touch(os.path.join(nested, "a.jpg"))
+        iib_api.mem["all_scanned_paths"] = [self.scan, nested]
+        self.assertStatus(self.post_delete([os.path.join(self.scan, "sub")], True), 403)
+        self.assertStatus(self.post_delete([nested], True), 403)
+        self.assertTrue(os.path.exists(os.path.join(nested, "a.jpg")))
+
+    def test_empty_scanned_path_is_still_deleted_as_before(self):
+        folder = os.path.join(self.scan, "sub")  # empty, set up in setUp
+        iib_api.mem["all_scanned_paths"] = [self.scan, folder]
+        self.assertStatus(self.post_delete([folder], True), 200)
+
+    def test_without_access_control_the_library_boundary_still_holds(self):
+        self.access_control(False)
+        outside = os.path.dirname(self.outside_path("x.jpg"))
+        self.assertStatus(self.post_delete([outside], True), 403)
+        self.assertTrue(os.path.exists(os.path.join(outside, "x.jpg")))
+        inside = os.path.dirname(self.indexed(os.path.join("in", "a.jpg")))
+        self.assertStatus(self.post_delete([inside], True), 200)
+        self.assertFalse(os.path.exists(inside))
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "needs symlinks")
+    def test_links_are_removed_not_followed(self):
+        target = self.outside_path("target.jpg")
+        folder = os.path.join(self.scan, "linked")
+        os.makedirs(folder)
+        try:
+            os.symlink(os.path.dirname(target), os.path.join(folder, "dirlink"))
+            os.symlink(target, os.path.join(folder, "filelink.jpg"))
+        except OSError:
+            self.skipTest("cannot create symlinks")
+        r = self.client.post(f"{API}/folder_content", json={"folder_paths": [folder]})
+        self.assertEqual((r.json()["folders"][0]["files"], r.json()["folders"][0]["folders"]), (2, 0))
+        self.assertStatus(self.post_delete([folder], True), 200)
+        self.assertFalse(os.path.exists(folder))
+        self.assertTrue(os.path.exists(target), "what a link points to must survive")
+
+    def test_failure_halfway_keeps_the_rows_of_the_files_left(self):
+        gone = self.indexed(os.path.join("part", "a.jpg"), tag="like")
+        left = self.indexed(os.path.join("part", "b.jpg"), tag="like")
+        folder = os.path.dirname(gone)
+        os.remove(gone)
+        Folder.remove_missing_under(DataBase.get_conn(), folder)
+        DbImg.remove_missing_under(DataBase.get_conn(), folder)
+        self.assertIsNone(self.db_row(gone))
+        self.assertIsNotNone(self.db_row(left))
+        self.assertEqual(self.rows_under(folder), (1, 1, 1))
+
+    def test_failing_rmtree_removes_only_the_rows_of_what_is_gone(self):
+        gone = self.indexed(os.path.join("part", "a.jpg"))
+        left = self.indexed(os.path.join("part", "b.jpg"))
+        folder = os.path.dirname(gone)
+
+        def rmtree_that_stops(path):
+            os.remove(gone)
+            raise PermissionError("denied")
+
+        with patch.object(iib_api.shutil, "rmtree", rmtree_that_stops):
+            self.assertStatus(self.post_delete([folder], True), 400)
+        self.assertTrue(os.path.exists(left))
+        self.assertIsNone(self.db_row(gone))
+        self.assertIsNotNone(self.db_row(left))
+
+    def link_to(self, target, name):
+        link = os.path.join(self.scan, name)
+        try:
+            os.symlink(target, link)
+        except (OSError, NotImplementedError):
+            self.skipTest("cannot create symlinks")
+        return link
+
+    def test_dotdot_after_a_link_does_not_touch_rows_of_other_folders(self):
+        # on disk scan/link/../b is scan/x/b, as text it is scan/b
+        target = os.path.join(self.scan, "x", "y")
+        os.makedirs(target)
+        os.makedirs(os.path.join(self.scan, "x", "b"))
+        link = self.link_to(target, "link")
+        keep = self.indexed(os.path.join("b", "keep.jpg"), tag="like")
+        path = os.path.join(link, "..", "b")
+        for recursive in (None, True):
+            self.assertStatus(self.post_delete([path], recursive), 400)
+        r = self.client.post(f"{API}/folder_content", json={"folder_paths": [path]})
+        self.assertStatus(r, 400)
+        self.assertTrue(os.path.isdir(os.path.join(self.scan, "x", "b")))
+        self.assertTrue(os.path.exists(keep))
+        self.assertEqual(self.rows_under(os.path.join(self.scan, "b")), (1, 1, 1))
+
+    def test_rows_below_the_path_the_file_system_resolved_are_removed(self):
+        target = os.path.join(self.scan, "x", "y")
+        os.makedirs(target)
+        link = self.link_to(target, "lk")
+        victim = self.indexed(os.path.join("x", "y", "b", "f.jpg"), tag="like")
+        self.assertStatus(self.post_delete([os.path.join(link, "b")], True), 200)
+        self.assertFalse(os.path.exists(victim))
+        self.assertIsNone(self.db_row(victim))
+        self.assertEqual(self.rows_under(os.path.join(target, "b")), (0, 0, 0))
+
+    def test_link_to_a_folder_is_refused_with_or_without_a_slash(self):
+        kept = self.indexed(os.path.join("target", "k.jpg"), tag="like")
+        link = self.link_to(os.path.dirname(kept), "ln")
+        for path in (link, link + os.sep):
+            for recursive in (None, True):
+                r = self.post_delete([path], recursive)
+                self.assertStatus(r, 400)
+                self.assertIn("link", r.json()["detail"])
+        self.assertTrue(os.path.exists(kept), "what the link points to must survive")
+        self.assertIsNotNone(self.db_row(kept))
+
+    def test_folder_name_with_other_case_is_refused(self):
+        # a file system that ignores case reaches the folder with this name, the rows are found by the exact text
+        self.indexed(os.path.join("sub2", "k.jpg"))
+        wrong = os.path.join(self.scan, "SUB2")
+        real_isdir = os.path.isdir
+        with patch.object(os.path, "isdir", lambda p: real_isdir(p) or p == wrong), patch.object(
+            iib_api.shutil, "rmtree"
+        ) as rmtree:
+            self.assertStatus(self.post_delete([wrong], True), 400)
+        rmtree.assert_not_called()
+
+    def test_scanned_paths_are_compared_by_the_file_system(self):
+        sub = os.path.join(self.scan, "sub")
+        nested = os.path.join(sub, "nested")
+        os.makedirs(nested)
+        alias = self.link_to(sub, "alias")
+        # the text of alias is not a parent of nested, the folder is the same
+        self.assertTrue(iib_api.is_same_or_parent(alias, nested))
+        self.assertTrue(iib_api.is_same_or_parent(sub, sub))
+        self.assertFalse(iib_api.is_same_or_parent(nested, sub))
+        self.assertFalse(iib_api.is_same_or_parent(os.path.join(self.scan, "missing"), nested))
+        # where the file system cannot tell (inodes of FUSE, SMB, NFS), the text of the paths still does
+        missing = os.path.join(self.scan, "missing")
+        self.assertTrue(iib_api.is_same_or_parent(missing, os.path.join(missing, "x")))
+
+    def test_folder_that_got_a_file_after_the_check_is_not_deleted_as_empty(self):
+        folder = os.path.join(self.scan, "sub")  # empty, and a scanned path
+        iib_api.mem["all_scanned_paths"] = [self.scan, folder]
+        late = os.path.join(folder, "late.jpg")
+        state = {"filled": False}
+
+        def fill_after_first_look(real, wrap):
+            def look(path, *args, **kwargs):
+                if not isinstance(path, str) or path != folder or state["filled"]:
+                    return real(path, *args, **kwargs)
+                state["filled"] = True
+                seen = wrap(real(path, *args, **kwargs))  # empty
+                self.touch(late)
+                return seen
+
+            return look
+
+        real_scandir, real_listdir = os.scandir, os.listdir
+        with patch.object(
+            os, "scandir", fill_after_first_look(real_scandir, lambda it: contextlib.nullcontext(iter(list(it))))
+        ), patch.object(os, "listdir", fill_after_first_look(real_listdir, lambda names: names)):
+            r = self.post_delete([folder], True)
+        self.assertIn(r.status_code, (400, 403), r.text)
+        self.assertTrue(os.path.exists(late), "the file that came in is not deleted")
+
+    def unreadable(self, folder):
+        os.chmod(folder, 0)
+
+        def restore():
+            # tearDown has already removed the folder when the test gave the access back
+            with contextlib.suppress(FileNotFoundError):
+                os.chmod(folder, 0o755)
+
+        self.addCleanup(restore)
+
+    skip_unless_held_back = unittest.skipIf(
+        os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+        "needs a user that is held back by permissions",
+    )
+
+    @skip_unless_held_back
+    def test_unreadable_folder_is_a_400_and_keeps_its_rows(self):
+        kept = self.indexed(os.path.join("closed", "k.jpg"), tag="like")
+        folder = os.path.dirname(kept)
+        self.unreadable(folder)
+        for recursive in (None, True):
+            self.assertStatus(self.post_delete([folder], recursive), 400)
+        r = self.client.post(f"{API}/folder_content", json={"folder_paths": [folder]})
+        self.assertStatus(r, 400)
+        os.chmod(folder, 0o755)
+        self.assertTrue(os.path.exists(kept))
+        self.assertEqual(self.rows_under(folder), (1, 1, 1), "the row, the like and the embedding of a file that is there")
+
+    @skip_unless_held_back
+    def test_unreadable_subfolder_keeps_the_rows_of_the_files_in_it(self):
+        locked = self.indexed(os.path.join("outer", "locked", "b.jpg"), tag="like")
+        folder = os.path.join(self.scan, "outer")
+        self.unreadable(os.path.dirname(locked))
+        self.assertStatus(self.post_delete([folder], True), 400)
+        os.chmod(os.path.dirname(locked), 0o755)
+        self.assertTrue(os.path.exists(locked), "rmtree could not get into it")
+        self.assertEqual(self.rows_under(os.path.dirname(locked)), (1, 1, 1))
+
+    def test_folder_content_checks_before_it_counts(self):
+        self.access_control(False)
+        outside = os.path.dirname(self.outside_path("x.jpg"))
+        with patch.object(os, "walk", side_effect=AssertionError("counted before the check")):
+            r = self.client.post(f"{API}/folder_content", json={"folder_paths": [outside]})
+        self.assertStatus(r, 403)
+
+    def test_folder_content_counts_files_and_subfolders(self):
+        self.indexed(os.path.join("c", "a.jpg"), tag="like")
+        self.indexed(os.path.join("c", "s", "b.jpg"))
+        self.indexed(os.path.join("c", "s", "t", "m.jpg"))
+        self.touch(os.path.join(self.scan, "c", "a.txt"))
+        os.makedirs(os.path.join(self.scan, "c", "empty"))
+        self.indexed(os.path.join("other", "z.jpg"))
+        folder = os.path.join(self.scan, "c")
+
+        r = self.client.post(f"{API}/folder_content", json={"folder_paths": [folder]})
+        self.assertStatus(r, 200)
+        self.assertEqual(r.json()["folders"], [{"path": folder, "files": 4, "folders": 3}])
+        self.assertTrue(os.path.exists(folder), "counting deletes nothing")
+
+    def test_folder_content_of_an_empty_or_missing_folder_is_zero(self):
+        empty = os.path.join(self.scan, "sub")
+        missing = os.path.join(self.scan, "missing")
+        r = self.client.post(f"{API}/folder_content", json={"folder_paths": [empty, missing]})
+        self.assertStatus(r, 200)
+        for entry in r.json()["folders"]:
+            self.assertEqual((entry["files"], entry["folders"]), (0, 0))
+
+    def test_folder_content_is_refused_where_the_delete_would_be(self):
+        self.indexed("keep.jpg")
+        for folder in (os.path.dirname(self.outside_path("x.jpg")), self.workdir, self.scan):
+            r = self.client.post(f"{API}/folder_content", json={"folder_paths": [folder]})
+            self.assertStatus(r, 403)
 
 
 class CopyFilesTest(_FileWriteTestCase):

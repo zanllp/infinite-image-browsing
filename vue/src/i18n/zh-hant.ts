@@ -235,6 +235,8 @@ export const zhHant: Partial<IIBI18nMap> = {
   sortingMethod: '排序方法',
   copyPath: '複製路徑',
   deleteSelected: '刪除',
+  folderContent: '{files} 個檔案，{folders} 個子資料夾',
+  deleteFoldersWithContent: '資料夾及其中的所有內容將被刪除，且無法復原。',
   previewInNewWindow: '在新窗口預覽',
   copySourceFilePreviewLink: '複製源文件預覽連結',
   viewGenerationInfo: '檢視生成信息(提示等)',

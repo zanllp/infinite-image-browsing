@@ -7,7 +7,7 @@ import {
   createReactiveQueue,
   isImageFile,
   copy2clipboardI18n} from '@/util'
-import { type FileNodeInfo, deleteFiles } from '@/api/files'
+import { type FileNodeInfo, type FolderContent, deleteFiles, getFolderContent } from '@/api/files'
 import { last, range, uniqueId } from 'lodash-es'
 import * as Path from '@/util/path'
 import { Checkbox, Modal, message } from 'ant-design-vue'
@@ -330,11 +330,19 @@ export function useFileItemActions (
       }
       case 'deleteFiles': {
         const selectedFiles = getSelectedImg()
+        // a folder that is not empty is deleted with its content, after saying what is in it
+        const dirPaths = selectedFiles.filter((v) => v.type === 'dir').map((v) => v.fullpath)
+        const filled: Record<string, FolderContent> = {}
+        if (dirPaths.length) {
+          const { folders } = await getFolderContent(dirPaths)
+          folders.filter((v) => v.files || v.folders).forEach((v) => { filled[v.path] = v })
+        }
+        const recursive = Object.keys(filled).length > 0
         const removeFile = async () => {
           const paths = selectedFiles.map((v) => v.fullpath)
           // 全屏预览现在是应用级组件，删除不会把它卸载：记下正在看的图，列表更新后按 fullpath 跟住
           const previewedPath = previewing.value ? sortedFiles.value[previewIdx.value]?.fullpath : undefined
-          await deleteFiles(paths)
+          await deleteFiles(paths, recursive)
           message.success(t('deleteSuccess'))
           events.emit('removeFiles', { paths: paths, loc: currLocation.value })
           if (!previewing.value) {
@@ -352,21 +360,31 @@ export function useFileItemActions (
           // 当前图被删掉时停在原位置（列表已顺移，即下一张）；索引越界则收到最后一张
           previewIdx.value = idx >= 0 ? idx : Math.min(previewIdx.value, sortedFiles.value.length - 1)
         }
-        if (selectedFiles.length === 1 && global.ignoredConfirmActions.deleteOneOnly) {
+        if (!recursive && selectedFiles.length === 1 && global.ignoredConfirmActions.deleteOneOnly) {
           return removeFile()
         }
         await new Promise<void>((resolve) => {
           Modal.confirm({
             title: t('confirmDelete'),
-            maskClosable: true,
+            maskClosable: !recursive,
+            okType: recursive ? 'danger' : 'primary',
+            // Enter must not delete a folder with its content
+            ...(recursive ? { autoFocusButton: 'cancel' as const } : {}),
             width: '60vw',
             content:() =>
               <div>
                 <ol style={{ maxHeight: '50vh', overflow: 'auto' }}>
-                  {selectedFiles.map((v) => <li>{v.fullpath.split(/[/\\]/).pop()}</li>)}
+                  {selectedFiles.map((v) => {
+                    const content = filled[v.fullpath]
+                    return <li>
+                      {v.fullpath.split(/[/\\]/).pop()}
+                      {content && ` (${t('folderContent', { files: content.files, folders: content.folders })})`}
+                    </li>
+                  })}
                 </ol>
+                {recursive && <p><b>{t('deleteFoldersWithContent')}</b></p>}
                 <MultiSelectTips />
-                <Checkbox v-model:checked={global.ignoredConfirmActions.deleteOneOnly}>{t('deleteOneOnlySkipConfirm')} ({t('resetOnGlobalSettingsPage')})</Checkbox>
+                {!recursive && <Checkbox v-model:checked={global.ignoredConfirmActions.deleteOneOnly}>{t('deleteOneOnlySkipConfirm')} ({t('resetOnGlobalSettingsPage')})</Checkbox>}
               </div>,
             async onOk () {
               await removeFile()
