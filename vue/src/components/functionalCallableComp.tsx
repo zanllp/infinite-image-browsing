@@ -72,7 +72,7 @@ export const openTransferToFolderModal = (mode: 'move' | 'copy', base: string, f
       input.value = value
       selectedKeys.value = key === undefined ? [] : [key]
       const path = key === undefined ? value.trim() : value
-      dest = path && !Path.isAbsolute(path) ? Path.normalizeRelativePathToAbsolute(path, start) : path
+      dest = Path.isAbsolute(path) ? path : ''
       missing.value = false
       check.cancel()
       if (key === undefined && valid(dest)) check(dest)
@@ -87,11 +87,12 @@ export const openTransferToFolderModal = (mode: 'move' | 'copy', base: string, f
       cancelText: t('cancel'),
       okButtonProps: { disabled: !valid(dest) },
       content: () => <div>
-        <Input value={input.value} aria-label={t('destFolder')} placeholder={t('destFolder')}
+        <Input value={input.value} aria-label={t('destFolder')} placeholder={t('inputTargetFolderPath')}
           onUpdate:value={value => setPath(value)}
           onPressEnter={e => {
             if (valid(dest) && !e.isComposing) { resolve(dest); modal.destroy() }
           }} />
+        {input.value.trim() && !dest && <small>{t('inputTargetFolderPath')}</small>}
         {missing.value && <small>{t('destFolderWillBeCreated')}</small>}
         <Tree style={{ marginTop: '12px' }} selectedKeys={selectedKeys.value} treeData={folders.value} loadData={loadFolders} defaultExpandedKeys={defaultExpandedKeys} height={Math.min(640, Math.floor(window.innerHeight * 0.6))} blockNode
         showIcon v-slots={{ icon: () => <FolderOutlined />, title: ({ title, path }: ReturnType<typeof node>) => <span title={path}>{title}</span> }}

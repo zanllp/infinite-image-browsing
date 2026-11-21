@@ -181,9 +181,11 @@ export function useFileItemActions (
       case 'moveToOtherFolder':
       case 'copyToOtherFolder': {
         const mode = e.key === 'moveToOtherFolder' ? 'move' : 'copy'
+        const paths = getSelectedImg().map(v => v.fullpath)
         const dest = await openTransferToFolderModal(mode, Path.getParentDirectory(file.fullpath), e.folder)
         if (dest) {
-          return onContextMenuClick({ key: `${mode}-to-${dest}` } as MenuInfo, file, idx)
+          const transfer = mode === 'move' ? moveFilesAndUpdateViews : copyFilesAndUpdateViews
+          await transfer({ paths, from: path, dest, createDestFolder: true, continueOnError: true })
         }
         return
       }
