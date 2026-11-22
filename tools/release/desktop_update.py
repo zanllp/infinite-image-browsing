@@ -49,7 +49,7 @@ def archive(source, dest):
         # Tauri 1.4's ZIP reader supports stored NSIS installers.
         with zipfile.ZipFile(dest, "w", zipfile.ZIP_STORED) as bundle:
             bundle.write(source, source.name)
-    elif source.suffix == ".app" and (source / "Contents/MacOS/iib_api_server").is_file():
+    elif source.suffix == ".app" and (source / "Contents/Resources/iib-backend/iib_api_server").is_file():
         with tarfile.open(dest, "w:gz", format=tarfile.GNU_FORMAT) as bundle:
             bundle.add(source / "Contents", arcname=f"{source.name}/Contents")
     else:

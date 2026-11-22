@@ -10,7 +10,7 @@ export const en: IIBI18nMap = {
     failed: 'Could not update. You can keep using this version.'
   },
   startingLocalService: 'Starting the local service…',
-  startingLocalServiceHint: 'The first launch unpacks the bundled backend, which usually takes 5–10 seconds.',
+  startingLocalServiceHint: 'Your library will open automatically when it is ready.',
   startingLocalServiceElapsed: 'Waited {n}s',
   startupListEdit: 'Edit',
   startupListDone: 'Done',

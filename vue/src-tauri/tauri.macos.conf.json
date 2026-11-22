@@ -1,6 +1,8 @@
 {
   "tauri": {
     "bundle": {
+      "externalBin": [],
+      "resources": ["iib-backend/"],
       "macOS": {
         "minimumSystemVersion": "14.0"
       }

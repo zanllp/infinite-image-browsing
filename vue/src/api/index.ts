@@ -42,7 +42,7 @@ export const waitForServerReady = (timeoutMs = 60_000): Promise<void> => {
     for (;;) {
       try {
         // 故意不用 axiosInst：探测阶段不弹错误提示，也不触发密钥弹窗
-        await axios.get(`${apiBase.value}/version`, { timeout: 3000 })
+        await axios.get(`${apiBase.value}/hello`, { timeout: 3000 })
         return
       } catch (error) {
         if (isAxiosError(error) && error.response) {

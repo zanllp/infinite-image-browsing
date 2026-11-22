@@ -1,5 +1,6 @@
 """Exercise the packaged sidecar, not the source checkout or an installed Python."""
 
+import argparse
 import json
 from http.client import RemoteDisconnected
 import os
@@ -19,13 +20,14 @@ import av
 from PIL import Image
 
 
-def smoke_test_app(app):
+def smoke_test_app(app, max_startup_seconds=None):
     with tempfile.TemporaryDirectory(prefix="iib app smoke ") as directory:
         home = Path(directory)
         data = home / "Library/Application Support/com.zanllp.iib"
         startup_log = data / "iib_api_server.log"
         config = plistlib.loads((app / "Contents/Info.plist").read_bytes())
         with (home / "app.log").open("w+") as log:
+            started = time.monotonic()
             process = subprocess.Popen(
                 [str(app / "Contents/MacOS" / config["CFBundleExecutable"])],
                 cwd="/", env={**os.environ, "HOME": str(home)},
@@ -42,10 +44,14 @@ def smoke_test_app(app):
                         break
                     if time.monotonic() >= deadline:
                         raise RuntimeError("The app's WebView did not finish loading")
-                    time.sleep(0.5)
+                    time.sleep(0.025)
                 with urlopen(f"http://127.0.0.1:{port[1]}/infinite_image_browsing/global_setting", timeout=10) as response:
                     settings = json.load(response)
                 assert Path(settings["cwd"]).resolve() == data.resolve()
+                startup = time.monotonic() - started
+                print(f"App launch to WebView and library API ready: {startup:.3f}s", flush=True)
+                if max_startup_seconds is not None and startup >= max_startup_seconds:
+                    raise RuntimeError(f"Startup exceeded {max_startup_seconds}s budget: {startup:.3f}s")
                 assert (data / "iib.db").is_file()
                 sidecar = re.search(r"event=sidecar_spawned pid=(\d+)", text)
                 assert sidecar, "No bundled sidecar process was recorded"
@@ -161,7 +167,14 @@ def smoke_test(executable):
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "--app":
-        smoke_test_app(Path(sys.argv[2]).resolve())
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--app", action="store_true")
+    parser.add_argument("--max-startup-seconds", type=float)
+    parser.add_argument("path", type=Path)
+    args = parser.parse_args()
+    if args.app:
+        smoke_test_app(args.path.resolve(), args.max_startup_seconds)
     else:
-        smoke_test(Path(sys.argv[1]).resolve())
+        if args.max_startup_seconds is not None:
+            parser.error("--max-startup-seconds requires --app")
+        smoke_test(args.path.resolve())

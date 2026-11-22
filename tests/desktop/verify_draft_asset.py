@@ -177,7 +177,7 @@ def verify_macos(asset, root, report):
     # Explicitly test a per-app exception only, without changing system policy.
     run(["xattr", "-dr", "com.apple.quarantine", str(app)], check=True)
     smoke_test_app(app)
-    smoke_test(app / "Contents/MacOS/iib_api_server")
+    smoke_test(app / "Contents/Resources/iib-backend/iib_api_server")
     report["after_per_app_exception"] = "passed: full application and packaged sidecar"
 
 

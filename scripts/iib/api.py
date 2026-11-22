@@ -517,7 +517,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         return {"ok": True}
 
     @app.get(f"{api_base}/version", dependencies=[Depends(verify_secret)])
-    async def get_version():
+    def get_version():
         import sys
         import platform
 
