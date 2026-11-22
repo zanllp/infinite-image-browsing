@@ -150,6 +150,8 @@ The executable version also supports ComfyUI/Fooocus/NovelAI.
 Download and install the program from the [`releases`](https://github.com/zanllp/infinite-image-browsing/releases) section on the right-hand side of the repository page.
 If the antivirus detects a virus, it can be ignored as a false positive. There are two versions of the compiled version for Windows, with the pyinstaller version having a lower false positive rate.
 
+With an updater-enabled Windows or macOS build, choose **Update now** in the app to install the next release and restart. Older builds need one last manual install.
+
 ### macOS (unsigned preview)
 
 Choose the `aarch64-unsigned.dmg` download for Apple Silicon (M-series), or `x64-unsigned.dmg` for Intel. macOS 14 or later is required. Drag **Infinite Image Browsing** into Applications before opening it; do not run it directly from the disk image.
