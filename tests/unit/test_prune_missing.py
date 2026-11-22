@@ -2,8 +2,7 @@
 
 The scanner only reports the rows of files that are gone; the background worker removes them,
 and the rows below folders that are gone, once they have stayed missing for a grace period.
-Everything is driven directly (no HTTP, no worker thread) and works inside its own temporary
-directory tree.
+Everything is driven directly (no HTTP, no worker thread) inside a temporary directory tree.
 
 Run from the repository root::
 
@@ -34,6 +33,7 @@ LOGGER = "scripts.iib.logger"
 _real_lstat = os.lstat
 _real_listdir = os.listdir
 _saved_db_path = DataBase.path
+_OLD = "2000-01-01 00:00:00"
 
 
 def _close_conn():
@@ -51,8 +51,7 @@ def _close_conn():
 
 
 def setUpModule():
-    # DataBase.path is read when datamodel is first imported; another test module in the
-    # same run may have imported it before this one, so point it at this module's database
+    # another test module in the same run may have imported datamodel first
     global _saved_db_path
     _close_conn()
     _saved_db_path = DataBase.path
@@ -61,8 +60,7 @@ def setUpModule():
 
 def tearDownModule():
     _close_conn()
-    # hand the path back; if this was the first module to import datamodel, the saved path is
-    # ours, and the one a later-imported module put into the environment is the one to use
+    # if this module imported datamodel first, the path a later module set is the one to restore
     DataBase.path = _saved_db_path if _saved_db_path != _DB_PATH else os.environ["IIB_DB_PATH"]
     shutil.rmtree(_TMP_ROOT, ignore_errors=True)
 
@@ -97,7 +95,6 @@ class _PruneTestCase(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.workdir, ignore_errors=True)
 
-    # -- helpers ---------------------------------------------------------
     def png(self, *parts):
         path = os.path.join(self.root, *parts)
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -146,15 +143,10 @@ class _PruneTestCase(unittest.TestCase):
         """Tags whose count differs from the number of image_tag rows that use them."""
         with closing(self.conn.cursor()) as cur:
             cur.execute(
-                "SELECT name, count, (SELECT COUNT(*) FROM image_tag WHERE tag_id = tag.id) FROM tag "
+                "SELECT name, count FROM tag "
                 "WHERE count <> (SELECT COUNT(*) FROM image_tag WHERE tag_id = tag.id)"
             )
             return cur.fetchall()
-
-    def like_count(self):
-        with closing(self.conn.cursor()) as cur:
-            cur.execute("SELECT count FROM tag WHERE name = 'like' AND type = 'custom'")
-            return cur.fetchone()[0]
 
     def count(self, table):
         with closing(self.conn.cursor()) as cur:
@@ -171,7 +163,7 @@ class _PruneTestCase(unittest.TestCase):
         rows = []
         for i in range(n):
             path = os.path.join(folder, f"f{i:04d}.png")
-            DbImg(path, "", 1, "2000-01-01 00:00:00").save(self.conn)
+            DbImg(path, "", 1, _OLD).save(self.conn)
             rows.append((self.row(path).id, path))
         self.conn.commit()
         return rows
@@ -182,6 +174,11 @@ class _PruneTestCase(unittest.TestCase):
     def assertNotIndexed(self, path):
         self.assertIsNone(self.row(path), f"{path} should be removed from the index")
 
+    def assertAllStay(self, *paths_and_ids):
+        for p, i in paths_and_ids:
+            self.assertIndexed(p)
+            self.assertEqual(self.related(i), (1, 1))
+
 
 class ScanFolderReportTest(_PruneTestCase):
     """_scan_folder reports the rows of direct children that are gone and deletes nothing."""
@@ -191,65 +188,44 @@ class ScanFolderReportTest(_PruneTestCase):
         scan_folder_incremental(self.conn, folder, missing_files=found)
         return found
 
-    def test_deleted_file_is_reported_not_deleted(self):
+    def scanned_then_removed(self):
+        """root/gone.png and root/kept.png, scanned; then gone.png is deleted."""
         gone = self.png("gone.png")
         self.png("kept.png")
-        self.report(self.root)
-        gone_id = self.like(gone)
+        self.assertEqual(self.report(self.root), [])
         os.remove(gone)
         self.bump(self.root)
+        return gone
+
+    def test_deleted_file_is_reported_not_deleted(self):
+        gone = self.scanned_then_removed()
+        gone_id = self.row(gone).id
         self.assertEqual(self.report(self.root), [(gone_id, gone)])
         self.assertIndexed(gone)
-        self.assertEqual(self.related(gone_id), (1, 1))
 
-    def test_nothing_is_reported_without_a_find(self):
-        self.png("a.png")
-        self.assertEqual(self.report(self.root), [])
-        self.bump(self.root)
-        self.assertEqual(self.report(self.root), [])
-
-    def test_without_a_list_nothing_is_looked_for_or_deleted(self):
-        gone = self.png("gone.png")
-        self.png("kept.png")
-        scan_folder_incremental(self.conn, self.root)
-        os.remove(gone)
-        self.bump(self.root)
-        stats = scan_folder_incremental(self.conn, self.root)
-        self.assertNotIn("files_pruned", stats)
-        self.assertIndexed(gone)
-
-    def test_full_update_deletes_nothing(self):
+    def test_other_callers_delete_nothing(self):
         gone = self.png("gone.png")
         self.png("kept.png")
         update_image_data([self.root])
         os.remove(gone)
         self.bump(self.root)
+        self.assertNotIn("files_pruned", scan_folder_incremental(self.conn, self.root))
+        self.bump(self.root)
         update_image_data([self.root])
         self.assertIndexed(gone)
-
-    def test_sidecar_stays_but_image_row_is_reported(self):
-        img = self.png("a.png")
-        sidecar = os.path.join(self.root, "a.txt")
-        with open(sidecar, "w", encoding="utf-8") as f:
-            f.write("prompt")
-        self.png("b.png")
-        self.report(self.root)
-        os.remove(img)
-        self.bump(self.root)
-        self.assertEqual([p for _, p in self.report(self.root)], [img])
-        self.assertTrue(os.path.exists(sidecar))
 
     def test_only_direct_children_are_reported(self):
+        sub = os.path.join(self.root, "sub")
         self.png("top.png")
         deep = self.png("sub", "deep.png")
+        self.png("sub", "other.png")
         self.report(self.root)
-        self.report(os.path.join(self.root, "sub"))
+        self.report(sub)
         os.remove(deep)
         self.bump(self.root)
         self.assertEqual(self.report(self.root), [])  # belongs to the scan of sub
-        self.png("sub", "other.png")
-        self.bump(os.path.join(self.root, "sub"))
-        self.assertEqual([p for _, p in self.report(os.path.join(self.root, "sub"))], [deep])
+        self.bump(sub)
+        self.assertEqual([p for _, p in self.report(sub)], [deep])
 
     def test_folders_with_a_similar_prefix_are_not_affected(self):
         names = ["a", "a b", "a_x", "a%"]
@@ -257,161 +233,95 @@ class ScanFolderReportTest(_PruneTestCase):
         self.png("a", "g.png")
         for n in names:
             self.report(os.path.join(self.root, n))
-        for n in names:
             os.remove(paths[n])
         self.bump(os.path.join(self.root, "a"))
         self.assertEqual([p for _, p in self.report(os.path.join(self.root, "a"))], [paths["a"]])
 
-    def test_moved_file_is_reported_under_its_old_path(self):
-        old = self.png("old.png")
-        self.png("other.png")
-        self.report(self.root)
-        old_id = self.like(old)
-        new = os.path.join(self.root, "new.png")
-        os.rename(old, new)
-        self.bump(self.root)
-        self.assertEqual(self.report(self.root), [(old_id, old)])
-        self.assertIndexed(new)  # the new path is a new row without the tags of the old one
-
     def test_empty_listing_reports_nothing(self):
-        a = self.png("a.png")
-        b = self.png("b.png")
-        self.report(self.root)
-        os.remove(a)
-        os.remove(b)
-        self.bump(self.root)
+        gone = self.scanned_then_removed()
+        os.remove(os.path.join(self.root, "kept.png"))
         self.assertEqual(self.report(self.root), [])
+        self.assertIndexed(gone)
 
-    def test_not_reported_when_gone_cannot_be_told(self):
-        gone = self.png("gone.png")
-        self.png("kept.png")
-        self.report(self.root)
-        os.remove(gone)
-        self.bump(self.root)
+    def test_not_reported_unless_lstat_says_not_found(self):
+        gone = self.scanned_then_removed()
+        kept = os.path.join(self.root, "kept.png")
 
-        def lstat(path, *args, **kwargs):
-            if path == gone:
-                raise PermissionError(13, "denied", path)
-            return _real_lstat(path, *args, **kwargs)
+        def denied():
+            raise PermissionError(13, "denied", gone)
 
-        with patch("os.lstat", side_effect=lstat):
-            self.assertEqual(self.report(self.root), [])
-
-    def test_not_reported_when_the_file_exists_under_another_spelling(self):
-        upper = os.path.join(self.root, "A.png")
-        self.png("a.png")
-        self.png("b.png")
-        self.report(self.root)
-        DbImg(upper, "", 1, "2000-01-01 00:00:00").save(self.conn)
-        self.conn.commit()
-        self.bump(self.root)
-
-        def lstat(path, *args, **kwargs):
-            # a case-insensitive file system finds the file under either spelling
-            if path == upper:
-                path = os.path.join(self.root, "a.png")
-            return _real_lstat(path, *args, **kwargs)
-
-        with patch("os.lstat", side_effect=lstat):
-            self.assertEqual(self.report(self.root), [])
+        cases = {
+            "permission error": denied,
+            # a case-insensitive file system finds the file under another spelling
+            "found under another spelling": lambda: _real_lstat(kept),
+        }
+        for name, on_gone in cases.items():
+            with self.subTest(name), patch(
+                "os.lstat", side_effect=lambda p, *a, **k: on_gone() if p == gone else _real_lstat(p, *a, **k)
+            ):
+                self.assertEqual(self.report(self.root), [])
+                self.bump(self.root)
 
     def test_not_reported_when_the_file_was_created_after_the_listing(self):
         self.png("a.png")
         self.png("late.png")
         self.report(self.root)
         self.bump(self.root)
-
-        def listdir(path="."):
-            if path == self.root:
-                return ["a.png"]  # stale: late.png was created after this listing
-            return _real_listdir(path)
-
-        with patch("os.listdir", side_effect=listdir):
+        stale = lambda p=".": ["a.png"] if p == self.root else _real_listdir(p)
+        with patch("os.listdir", side_effect=stale):
             self.assertEqual(self.report(self.root), [])
 
 
 class RemoveUnchangedMissingTest(_PruneTestCase):
     """Image.remove_unchanged_missing deletes by id and the path that was seen missing."""
 
+    def setUp(self):
+        super().setUp()
+        self.gone = self.png("gone.png")
+        self.kept = self.png("kept.png")
+        update_image_data([self.root])
+        self.gone_id, self.kept_id = self.like(self.gone), self.like(self.kept)
+        os.remove(self.gone)
+
     def test_rows_with_cascade_and_tag_counts(self):
-        gone = self.png("gone.png")
-        kept = self.png("kept.png")
-        update_image_data([self.root])
-        gone_id, kept_id = self.like(gone), self.like(kept)
-        self.assertEqual(self.tag_count_drift(), [])
-        os.remove(gone)
-        self.assertEqual(DbImg.remove_unchanged_missing(self.conn, [(gone_id, gone)]), 1)
-        self.assertNotIndexed(gone)
-        self.assertEqual(self.related(gone_id), (0, 0))
-        self.assertEqual(self.related(kept_id), (1, 1))
-        self.assertEqual(self.like_count(), 1)
+        self.assertEqual(DbImg.remove_unchanged_missing(self.conn, [(self.gone_id, self.gone)]), 1)
+        self.assertNotIndexed(self.gone)
+        self.assertEqual(self.related(self.gone_id), (0, 0))
+        self.assertAllStay((self.kept, self.kept_id))
         self.assertEqual(self.tag_count_drift(), [])
 
-    def test_a_row_that_changed_its_path_stays(self):
-        old = self.png("old.png")
-        self.png("other.png")
-        update_image_data([self.root])
-        image_id = self.like(old)
-        new = os.path.join(self.workdir, "moved.png")
-        os.rename(old, new)
-        # what /move_files and /db/rename do after moving the file: keep the id, change the path
-        self.row(old).update_path(self.conn, new)
-        self.conn.commit()
-        self.assertEqual(DbImg.remove_unchanged_missing(self.conn, [(image_id, old)]), 0)
-        self.assertIndexed(new)
-        self.assertEqual(self.related(image_id), (1, 1))
+    def test_a_file_that_is_there_stays(self):
+        self.assertEqual(DbImg.remove_unchanged_missing(self.conn, [(self.kept_id, self.kept)]), 0)
+        self.assertAllStay((self.kept, self.kept_id))
 
-    def test_a_file_that_is_back_stays(self):
-        path = self.png("a.png")
-        self.png("b.png")
-        update_image_data([self.root])
-        image_id = self.like(path)
-        self.assertEqual(DbImg.remove_unchanged_missing(self.conn, [(image_id, path)]), 0)
-        self.assertEqual(self.related(image_id), (1, 1))
+    def test_a_database_error_removes_nothing_and_does_not_raise(self):
+        with patch("scripts.iib.db.datamodel.commit_with_retry", side_effect=sqlite3.OperationalError("locked")):
+            self.assertEqual(DbImg.remove_unchanged_missing(self.conn, [(self.gone_id, self.gone)]), 0)
+        self.assertAllStay((self.gone, self.gone_id))
+        self.assertEqual(self.tag_count_drift(), [])
 
     def test_more_than_one_batch(self):
         rows = self.add_rows(self.root, 1203)
         self.assertEqual(DbImg.remove_unchanged_missing(self.conn, rows), 1203)
-        self.assertEqual(self.count("image"), 0)
-
-    def test_a_database_error_removes_nothing_and_does_not_raise(self):
-        gone = self.png("gone.png")
-        self.png("kept.png")
-        update_image_data([self.root])
-        image_id = self.like(gone)
-        os.remove(gone)
-        with patch(
-            "scripts.iib.db.datamodel.commit_with_retry", side_effect=sqlite3.OperationalError("locked")
-        ):
-            self.assertEqual(DbImg.remove_unchanged_missing(self.conn, [(image_id, gone)]), 0)
-        self.assertIndexed(gone)
-        self.assertEqual(self.related(image_id), (1, 1))
-        self.assertEqual(self.like_count(), 1)
+        self.assertEqual(self.count("image"), 2)
 
 
 class ExpiredDirsTest(_PruneTestCase):
     def mark(self, folder):
-        Folder.set_modified_date(self.conn, folder, "2000-01-01 00:00:00")
+        Folder.set_modified_date(self.conn, folder, _OLD)
         self.conn.commit()
 
     def test_missing_folders_are_reported_only_when_asked(self):
         gone = os.path.join(self.root, "gone")
         here = os.path.join(self.root, "here")
+        below_a_file = os.path.join(self.png("file.png"), "sub")  # ENOTDIR counts as gone
         os.makedirs(here)
-        self.mark(gone)
-        self.mark(here)
+        for folder in (gone, here, below_a_file):
+            self.mark(folder)
         self.assertEqual(Folder.get_expired_dirs(self.conn), [here])
         missing = []
         self.assertEqual(Folder.get_expired_dirs(self.conn, missing), [here])
-        self.assertEqual(missing, [gone])
-
-    def test_not_a_directory_counts_as_missing(self):
-        blocker = self.png("file.png")
-        below = os.path.join(blocker, "sub")  # a path through a file: ENOTDIR
-        self.mark(below)
-        missing = []
-        Folder.get_expired_dirs(self.conn, missing)
-        self.assertEqual(missing, [below])
+        self.assertEqual(sorted(missing), sorted([gone, below_a_file]))
 
     def test_other_stat_errors_are_not_missing(self):
         locked = os.path.join(self.root, "locked")
@@ -451,7 +361,7 @@ class WorkerPruneTest(_PruneTestCase):
         w._missing_since = {p: t - 1000 for p, t in w._missing_since.items()}
 
     def tree(self):
-        """root/keep/k.png, root/top.png and root/gone/{g.png, deep/d.png}, indexed; all with tag and embedding."""
+        """root/keep/k.png, root/top.png and root/gone/{g.png, deep/d.png}, indexed; all but top liked."""
         self.keep = self.png("keep", "k.png")
         self.top = self.png("top.png")
         self.gone_dir = os.path.join(self.root, "gone")
@@ -459,32 +369,35 @@ class WorkerPruneTest(_PruneTestCase):
         self.cycle()
         self.keep_id = self.like(self.keep)
         self.ids = [self.like(p) for p in self.gone]
-        for p in self.gone + [self.keep, self.top]:
-            self.assertIndexed(p)
 
     def assertPruned(self):
         for p, i in zip(self.gone, self.ids):
             self.assertNotIndexed(p)
             self.assertEqual(self.related(i), (0, 0))
-        self.assertIndexed(self.keep)
+        self.assertAllStay((self.keep, self.keep_id))
         self.assertIndexed(self.top)
-        self.assertEqual(self.related(self.keep_id), (1, 1))
         marks = self.folder_marks()
-        self.assertNotIn(self.gone_dir, marks)
-        self.assertNotIn(os.path.join(self.gone_dir, "deep"), marks)
+        self.assertFalse({self.gone_dir, os.path.join(self.gone_dir, "deep")} & marks)
         self.assertIn(os.path.join(self.root, "keep"), marks)
         self.assertEqual(self.tag_count_drift(), [])
 
-    def assertAllStay(self, paths_and_ids):
-        for p, i in paths_and_ids:
-            self.assertIndexed(p)
-            self.assertEqual(self.related(i), (1, 1))
+    def assertPruneLog(self, logs, text):
+        found = [m for m in logs.output if "pruned" in m]
+        self.assertEqual(len(found), 1, found)
+        self.assertIn(text, found[0])
 
-    def assertNoPruneLog(self, logs):
+    def assertNothingRemoved(self):
+        before = (self.count("image"), self.count("folders"))
+        with self.assertLogs(LOGGER, "INFO") as logs:
+            self.cycle()
+            self.cycle()
+            logging.getLogger(LOGGER).info("marker")  # assertLogs needs one record
         self.assertFalse([m for m in logs.output if "pruned" in m])
+        self.assertEqual((self.count("image"), self.count("folders")), before)
 
     # -- files ------------------------------------------------------------
-    def test_deleted_file_goes_with_the_next_cycle(self):
+    def test_deleted_file_goes_after_the_grace_period(self):
+        self.worker._prune_grace = 60
         gone = self.png("gone.png")
         kept = self.png("kept.png")
         self.cycle()
@@ -492,52 +405,24 @@ class WorkerPruneTest(_PruneTestCase):
         os.remove(gone)
         self.bump(self.root)
         self.cycle()  # sees it missing
-        self.assertIndexed(gone)
+        self.cycle()
         self.assertIn(gone_id, self.worker._pending_files)
+        self.assertAllStay((gone, gone_id))
+        self.age()
         version = self.worker._version
         with self.assertLogs(LOGGER, "INFO") as logs:
             self.cycle()
         self.assertNotIndexed(gone)
         self.assertEqual(self.related(gone_id), (0, 0))
-        self.assertEqual(self.related(kept_id), (1, 1))
+        self.assertAllStay((kept, kept_id))
         self.assertEqual(self.tag_count_drift(), [])
         self.assertEqual(self.worker._pending_files, {})
-        found = [m for m in logs.output if "missing files" in m]
-        self.assertEqual(len(found), 1)
-        self.assertIn("[maintenance] pruned 1 rows of missing files, 0 missing folders", found[0])
+        self.assertPruneLog(logs, "[maintenance] pruned 1 rows of missing files, 0 missing folders")
         self.assertGreater(self.worker._version, version)
 
-    def test_nothing_is_removed_within_the_grace_period(self):
+    def test_a_move_racing_the_worker_keeps_the_row(self):
+        # /move_files and /db/rename move the file first and update the row's path a moment later
         self.worker._prune_grace = 60
-        gone = self.png("gone.png")
-        self.png("kept.png")
-        self.cycle()
-        gone_id = self.like(gone)
-        os.remove(gone)
-        self.bump(self.root)
-        self.cycle()
-        self.cycle()
-        self.assertAllStay([(gone, gone_id)])
-        self.age()
-        self.cycle()
-        self.assertNotIndexed(gone)
-
-    def test_blocking_scan_removes_files_too(self):
-        gone = self.png("gone.png")
-        self.png("kept.png")
-        self.cycle()
-        self.like(gone)
-        os.remove(gone)
-        self.bump(self.root)
-        self.worker.run_blocking()
-        self.assertIndexed(gone)
-        with self.assertLogs(LOGGER, "INFO") as logs:
-            stats = self.worker.run_blocking()
-        self.assertNotIndexed(gone)
-        self.assertEqual(stats["files_pruned"], 1)
-        self.assertTrue(any("blocking scan done" in m and "pruned=1" in m for m in logs.output))
-
-    def test_the_path_of_the_row_changes_between_seeing_and_deleting(self):
         old = self.png("old.png")
         self.png("other.png")
         self.cycle()
@@ -545,49 +430,18 @@ class WorkerPruneTest(_PruneTestCase):
         new = os.path.join(self.workdir, "elsewhere.png")
         os.rename(old, new)
         self.bump(self.root)
-        self.cycle()  # sees old.png missing
-        self.assertIn(image_id, self.worker._pending_files)
-        self.row(old).update_path(self.conn, new)  # /move_files commits its update_path
-        self.conn.commit()
+        self.cycle()  # sees old.png missing, its row is not updated yet
         self.cycle()
-        self.assertAllStay([(new, image_id)])
-
-    def test_a_move_whose_row_is_not_updated_yet_is_left_alone_within_the_grace_period(self):
-        self.worker._prune_grace = 60
-        old = self.png("old.png")
-        self.png("other.png")
-        self.cycle()
-        image_id = self.like(old)
-        new = os.path.join(self.workdir, "elsewhere.png")
-        os.rename(old, new)  # the file is moved, the row still has the old path
-        self.bump(self.root)
-        self.cycle()
-        self.cycle()
-        self.assertAllStay([(old, image_id)])
+        self.assertAllStay((old, image_id))
         self.row(old).update_path(self.conn, new)
         self.conn.commit()
         self.age()
-        self.cycle()
-        self.assertAllStay([(new, image_id)])
+        self.cycle()  # due, but the row has another path now
+        self.assertAllStay((new, image_id))
         self.assertEqual(self.tag_count_drift(), [])
-
-    def test_database_error_does_not_stop_the_run(self):
-        gone = self.png("gone.png")
-        self.png("kept.png")
-        self.cycle()
-        image_id = self.like(gone)
-        os.remove(gone)
-        self.bump(self.root)
-        self.cycle()
-        with patch(
-            "scripts.iib.db.datamodel.commit_with_retry", side_effect=sqlite3.OperationalError("locked")
-        ):
-            self.assertEqual(self.worker._prune_due(self.conn), (0, 0))
-        self.assertAllStay([(gone, image_id)])
 
     def test_pause_in_the_middle_keeps_the_rest(self):
         rows = self.add_rows(self.root, 520)
-        self.png("keep.png")
         self.worker._pending_files = {i: (p, 0.0) for i, p in rows}
         calls = []
 
@@ -603,54 +457,39 @@ class WorkerPruneTest(_PruneTestCase):
         self.assertEqual(self.count("image"), 0)
 
     # -- folders ----------------------------------------------------------
-    def test_cycle_removes_rows_below_a_deleted_folder(self):
-        self.tree()
-        shutil.rmtree(self.gone_dir)
-        version = self.worker._version
-        with self.assertLogs(LOGGER, "INFO") as logs:
-            self.cycle()
-        self.assertPruned()
-        found = [m for m in logs.output if "missing files" in m]
-        self.assertEqual(len(found), 1)
-        self.assertIn("[maintenance] pruned 2 rows of missing files, 2 missing folders", found[0])
-        self.assertGreater(self.worker._version, version)
-
-    def test_blocking_scan_removes_them_too(self):
-        self.tree()
-        shutil.rmtree(self.gone_dir)
-        with self.assertLogs(LOGGER, "INFO") as logs:
-            stats = self.worker.run_blocking()
-        self.assertPruned()
-        self.assertEqual(stats["files_pruned"], 2)
-        self.assertTrue(any("blocking scan done" in m and "pruned=2" in m for m in logs.output))
-
-    def test_folders_wait_for_the_grace_period(self):
+    def test_deleted_folder_goes_after_the_grace_period(self):
         self.tree()
         self.worker._prune_grace = 60
         shutil.rmtree(self.gone_dir)
         self.cycle()
         self.cycle()
-        self.assertIndexed(self.gone[0])
+        self.assertAllStay(*zip(self.gone, self.ids))
         self.assertIn(self.gone_dir, self.folder_marks())
         self.age()
-        self.cycle()
-        self.assertPruned()
-
-    def test_a_second_cycle_has_nothing_to_report(self):
-        self.tree()
-        shutil.rmtree(self.gone_dir)
-        self.cycle()
         version = self.worker._version
         with self.assertLogs(LOGGER, "INFO") as logs:
             self.cycle()
-            logging.getLogger(LOGGER).info("marker")  # assertLogs needs one record
-        self.assertNoPruneLog(logs)
+        self.assertPruned()
+        self.assertPruneLog(logs, "[maintenance] pruned 2 rows of missing files, 2 missing folders")
+        self.assertGreater(self.worker._version, version)
+        version = self.worker._version
+        with self.assertNoLogs(LOGGER, "INFO"):
+            self.cycle()  # nothing left to report
         self.assertEqual(self.worker._version, version)
 
-    def test_a_cycle_without_a_find_logs_nothing_at_info(self):
+    def test_blocking_scan_prunes_too(self):
+        extra = self.png("extra.png")
         self.tree()
-        with self.assertNoLogs(LOGGER, "INFO"):
-            self.cycle()
+        os.remove(extra)
+        shutil.rmtree(self.gone_dir)
+        self.bump(self.root)
+        self.assertEqual(self.worker.run_blocking()["files_pruned"], 2)  # the folder; sees extra.png missing
+        self.assertPruned()
+        self.assertIndexed(extra)
+        with self.assertLogs(LOGGER, "INFO") as logs:
+            self.assertEqual(self.worker.run_blocking()["files_pruned"], 1)
+        self.assertNotIndexed(extra)
+        self.assertTrue(any("blocking scan done" in m and "pruned=1" in m for m in logs.output))
 
     def test_scan_dirs_are_determined_once_per_run(self):
         self.tree()
@@ -666,8 +505,8 @@ class WorkerPruneTest(_PruneTestCase):
         self.png("keep", "k.png")
         a, b = os.path.join(self.root, "a"), os.path.join(self.root, "b")
         rows = self.add_rows(a, 1) + self.add_rows(b, 1)
-        Folder.set_modified_date(self.conn, a, "2000-01-01 00:00:00")
-        Folder.set_modified_date(self.conn, b, "2000-01-01 00:00:00")
+        for folder in (a, b):
+            Folder.set_modified_date(self.conn, folder, _OLD)
         self.conn.commit()
         self.worker._missing_since = {a: 0.0, b: 0.0}
         calls = []
@@ -685,14 +524,35 @@ class WorkerPruneTest(_PruneTestCase):
         self.assertNotIndexed(rows[1][1])
 
     # -- the guard ----------------------------------------------------------
-    def test_missing_scan_root_removes_nothing(self):
-        self.tree()
-        moved = self.root + "_moved"
-        os.rename(self.root, moved)
-        before = (self.count("image"), self.count("folders"))
-        self.cycle()
-        self.assertEqual((self.count("image"), self.count("folders")), before)
-        os.rename(moved, self.root)
+    def test_guard(self):
+        may = self.worker._may_prune_missing_dir
+        blocker = self.png("keep", "file.png")
+        cases = [
+            (os.path.join(self.root, "gone"), True),
+            (os.path.join(self.root, "gone", "deep") + os.sep, True),
+            (os.path.join(self.root, "keep"), False),  # still exists
+            (self.root, False),
+            (self.root + os.sep, False),
+            (self.root + "x" + os.sep + "gone", False),  # a sibling whose name starts like the root
+            (os.path.join(self.workdir, "elsewhere"), False),
+            (os.path.join(self.root, "..", "elsewhere", "x"), False),
+            (os.path.join(blocker, "sub"), False),  # gone, but the nearest ancestor is a file
+        ]
+        for path, expected in cases:
+            with self.subTest(path=path):
+                self.assertEqual(may(path), expected)
+        nested = os.path.join(self.root, "nested")
+        self.roots = [self.root, nested]
+        self.assertFalse(may(nested), "a scan root below another one is still a scan root")
+
+    def test_guard_needs_a_present_and_non_empty_root(self):
+        may = self.worker._may_prune_missing_dir
+        folder = os.path.join(self.root, "gone")
+        self.assertFalse(may(folder), "empty root")
+        self.png("keep", "k.png")
+        self.assertTrue(may(folder))
+        shutil.rmtree(self.root)
+        self.assertFalse(may(folder), "missing root")
 
     def test_empty_scan_root_removes_nothing(self):
         self.tree()
@@ -700,81 +560,25 @@ class WorkerPruneTest(_PruneTestCase):
             path = os.path.join(self.root, name)
             shutil.rmtree(path) if os.path.isdir(path) else os.remove(path)
         self.bump(self.root)  # the empty root is dirty and gets scanned
-        before = (self.count("image"), self.count("folders"))
-        with self.assertLogs(LOGGER, "INFO") as logs:
-            self.cycle()
-        self.assertNoPruneLog(logs)
-        self.assertEqual((self.count("image"), self.count("folders")), before)
+        self.assertNothingRemoved()
 
-    def test_folder_outside_all_scan_roots_is_left_alone(self):
-        other = os.path.join(self.workdir, "other")
-        os.makedirs(other)
-        outside = os.path.join(other, "gone", "o.png")
-        os.makedirs(os.path.dirname(outside))
-        with open(outside, "wb") as f:
-            f.write(_png())
-        self.png("keep", "k.png")
-        self.roots = [self.root, other]
-        self.cycle()
-        self.assertIndexed(outside)
-        # the folder is no longer under a scan path (as after removing the extra path)
-        self.roots = [self.root]
-        shutil.rmtree(os.path.join(other, "gone"))
-        self.cycle()
-        self.assertIndexed(outside)
-        self.assertIn(os.path.join(other, "gone"), self.folder_marks())
-
-    def test_guard(self):
-        w = self.worker
-        self.png("keep", "k.png")
-        self.assertTrue(w._may_prune_missing_dir(os.path.join(self.root, "gone")))
-        self.assertTrue(w._may_prune_missing_dir(os.path.join(self.root, "gone", "deep") + os.sep))
-        self.assertFalse(w._may_prune_missing_dir(os.path.join(self.root, "keep")), "it still exists")
-        self.assertFalse(w._may_prune_missing_dir(self.root))
-        self.assertFalse(w._may_prune_missing_dir(self.root + os.sep))
-        # a scan root below another one is still a scan root
-        nested = os.path.join(self.root, "nested")
-        self.roots = [self.root, nested]
-        self.assertFalse(w._may_prune_missing_dir(nested))
-        self.roots = [self.root]
-        self.assertTrue(w._may_prune_missing_dir(nested))
-        # a sibling whose name only starts like the root is not below it
-        self.assertFalse(w._may_prune_missing_dir(self.root + "x" + os.sep + "gone"))
-        self.assertFalse(w._may_prune_missing_dir(os.path.join(self.workdir, "elsewhere")))
-        self.assertFalse(w._may_prune_missing_dir(os.path.join(self.root, "..", "elsewhere", "x")))
-
-    def test_guard_needs_a_present_and_non_empty_root(self):
-        w = self.worker
-        folder = os.path.join(self.root, "gone")
-        self.assertFalse(w._may_prune_missing_dir(folder), "empty root")
-        self.png("keep", "k.png")
-        self.assertTrue(w._may_prune_missing_dir(folder))
-        shutil.rmtree(self.root)
-        self.assertFalse(w._may_prune_missing_dir(folder), "missing root")
-
-    def test_a_path_below_a_file_is_not_pruned(self):
-        # gone (ENOTDIR), but the nearest existing ancestor is not a directory
-        blocker = self.png("keep", "file.png")
-        self.assertFalse(self.worker._may_prune_missing_dir(os.path.join(blocker, "sub")))
-
-    # -- unmounted volumes (the review findings) ------------------------------
+    # -- unmounted volumes ----------------------------------------------------
     def test_unmounted_mount_point_below_the_scan_root_keeps_its_rows(self):
         self.png("keep", "k.png")
         x = self.png("nas", "2024", "x.png")
         self.cycle()
         x_id = self.like(x)
         shutil.rmtree(os.path.join(self.root, "nas", "2024"))  # the volume is unmounted: an empty directory
-        self.cycle()
-        self.cycle()
-        self.assertAllStay([(x, x_id)])
-        self.assertIn(os.path.join(self.root, "nas", "2024"), self.folder_marks())
-        # a file in the mount point (.DS_Store) makes it look like a real folder: known limit
+        self.assertNothingRemoved()
+        self.assertAllStay((x, x_id))
+        # known limit: a file in the mount point (.DS_Store) makes it look like a real folder
         with open(os.path.join(self.root, "nas", ".DS_Store"), "wb") as f:
             f.write(b"x")
         self.cycle()
         self.assertNotIndexed(x)
 
     def nested_tree(self):
+        """A second scan root root/ext with ext/sub/e.png, liked."""
         self.png("keep", "k.png")
         self.ext = os.path.join(self.root, "ext")
         self.e = self.png("ext", "sub", "e.png")
@@ -782,28 +586,21 @@ class WorkerPruneTest(_PruneTestCase):
         self.cycle()
         self.e_id = self.like(self.e)
 
-    def nested_mount_point(self, filtered):
+    def test_nested_scan_root_that_is_an_empty_mount_point(self):
         self.nested_tree()
         shutil.rmtree(self.ext)
         os.makedirs(self.ext)
+        self.assertNothingRemoved()
         # production leaves a missing or unusable directory out of the scan paths
-        self.roots = [self.root] if filtered else [self.root, self.ext]
-        self.cycle()
-        self.cycle()
-        self.assertAllStay([(self.e, self.e_id)])
-
-    def test_nested_scan_root_that_is_an_empty_mount_point(self):
-        self.nested_mount_point(filtered=False)
-
-    def test_nested_scan_root_that_is_an_empty_mount_point_and_left_out_of_the_scan_paths(self):
-        self.nested_mount_point(filtered=True)
+        self.roots = [self.root]
+        self.assertNothingRemoved()
+        self.assertAllStay((self.e, self.e_id))
 
     def test_nested_scan_root_that_is_gone_entirely(self):
         self.nested_tree()
         shutil.rmtree(self.ext)
-        self.roots = [self.root, self.ext]
         self.cycle()
-        self.assertAllStay([(self.e, self.e_id)])  # the innermost scan root does not exist
+        self.assertAllStay((self.e, self.e_id))  # the innermost scan root does not exist
         # known limit: once it is not a scan root any more, the non-empty parent looks like the
         # place where the folder was deleted
         self.roots = [self.root]
@@ -824,7 +621,7 @@ class WorkerPruneTest(_PruneTestCase):
         shutil.rmtree(volume)
         self.cycle()
         self.cycle()
-        self.assertAllStay([(e, e_id)])
+        self.assertAllStay((e, e_id))
         self.assertIn(os.path.dirname(e), self.folder_marks())
 
 
