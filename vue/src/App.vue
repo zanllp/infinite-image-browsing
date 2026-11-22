@@ -30,7 +30,7 @@ const globalStore = useGlobalStore()
 const wsStore = useWorkspeaceSnapshot()
 const queue = createReactiveQueue()
 
-// 桌面版启动时后端 sidecar 要自解压，冷启动可能要等好几秒。
+// 桌面版启动时等待本地服务和图库设置就绪。
 // 这段时间给个明确的提示（而不是让用户对着骨架屏猜是不是卡死了）。
 const booting = ref(false)
 const bootWaited = ref(0)
@@ -269,7 +269,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <!-- 桌面版首次启动：后端 sidecar 要自解压，可能要等几秒，给个明确的等待提示 -->
+  <!-- 桌面版在本地服务就绪前显示等待提示 -->
   <div v-if="booting" class="iib-booting">
     <a-spin size="large" />
     <div class="iib-booting-title">{{ t('startingLocalService') }}</div>

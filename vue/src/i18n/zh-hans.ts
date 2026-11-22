@@ -8,7 +8,7 @@ export const zhHans = {
     failed: '更新未完成，你可以继续使用当前版本。'
   },
   startingLocalService: '正在启动本地服务…',
-  startingLocalServiceHint: '首次启动需要解压内置后端，通常 5–10 秒，请稍等',
+  startingLocalServiceHint: '图库就绪后会自动打开，无需刷新。',
   startingLocalServiceElapsed: '已等待 {n} 秒',
   startupListEdit: '编辑',
   startupListDone: '完成',

@@ -34,10 +34,14 @@ class DesktopUpdateTest(unittest.TestCase):
             with self.subTest(channel=channel):
                 win = channel.startswith("windows-")
                 source = self.root / ("IIB setup.exe" if win else "IIB.app")
-                binary = source if win else source / "Contents/MacOS/iib_api_server"
+                binary = source if win else source / "Contents/Resources/iib-backend/iib_api_server"
                 binary.parent.mkdir(exist_ok=True, parents=True)
                 binary.write_bytes(b"release asset")
                 binary.chmod(0o755)
+                if not win:
+                    resource = binary.parent / "_internal/vue/dist/index.html"
+                    resource.parent.mkdir(parents=True, exist_ok=True)
+                    resource.write_bytes(b"packaged frontend")
                 out = self.root / channel
                 config = self.root / "config.json"
                 release.configure(channel, config)
@@ -61,7 +65,10 @@ class DesktopUpdateTest(unittest.TestCase):
                         self.assertEqual(archive.read(source.name), binary.read_bytes())
                 else:
                     with tarfile.open(path) as archive:
-                        sidecar = archive.getmember("IIB.app/Contents/MacOS/iib_api_server")
+                        sidecar = archive.getmember("IIB.app/Contents/Resources/iib-backend/iib_api_server")
+                        self.assertEqual(archive.extractfile(
+                            f"{source.name}/{resource.relative_to(source).as_posix()}"
+                        ).read(), b"packaged frontend")
                         self.assertTrue(sidecar.mode & 0o111)
                         self.assertEqual(archive.extractfile(sidecar).read(), binary.read_bytes())
 

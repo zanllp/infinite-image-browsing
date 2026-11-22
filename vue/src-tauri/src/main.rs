@@ -264,7 +264,17 @@ fn main() {
     let port = listener.local_addr().unwrap().port();
     drop(listener);
 
-    let (mut rx, child) = Command::new_sidecar("iib_api_server")
+    #[cfg(target_os = "macos")]
+    let new_sidecar = {
+        let path = tauri::api::path::resource_dir(context.package_info(), &tauri::Env::default())
+            .expect("Failed to locate bundled resources")
+            .join("iib-backend/iib_api_server");
+        move || -> tauri::Result<Command> { Ok(Command::new(path.to_string_lossy())) }
+    };
+    #[cfg(not(target_os = "macos"))]
+    let new_sidecar = || Command::new_sidecar("iib_api_server");
+
+    let (mut rx, child) = new_sidecar()
         .expect("failed to create `iib_api_server` binary command")
         .args(sidecar_args(port))
         .spawn()
@@ -345,7 +355,7 @@ fn main() {
                     break;
                 }
 
-                match Command::new_sidecar("iib_api_server") {
+                match new_sidecar() {
                     Ok(command) => match command.args(sidecar_args(port)).spawn() {
                         Ok((new_rx, new_child)) => {
                             let new_pid = new_child.pid();

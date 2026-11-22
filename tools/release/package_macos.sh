@@ -6,9 +6,8 @@ output="$2"
 version="$3"
 arch="$4"
 
-# PyInstaller signs the embedded Python libraries before creating its onefile
-# archive. Do not enable hardened runtime for these ad-hoc, non-notarized builds.
-codesign --force --sign - --timestamp=none --options 0 "$app/Contents/MacOS/iib_api_server"
+# PyInstaller signs the collected Python libraries. Do not enable hardened runtime for these ad-hoc, non-notarized builds.
+codesign --force --sign - --timestamp=none --options 0 "$app/Contents/Resources/iib-backend/iib_api_server"
 codesign --force --sign - --timestamp=none --options 0 "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 

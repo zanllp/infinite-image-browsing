@@ -10,7 +10,7 @@ export const zhHant: Partial<IIBI18nMap> = {
     failed: '更新未完成，你可以繼續使用目前版本。'
   },
   startingLocalService: '正在啟動本地服務…',
-  startingLocalServiceHint: '首次啟動需要解壓內置後端，通常 5–10 秒，請稍候',
+  startingLocalServiceHint: '圖庫準備好後會自動開啟，無需重新整理。',
   startingLocalServiceElapsed: '已等待 {n} 秒',
   startupListEdit: '編輯',
   startupListDone: '完成',
