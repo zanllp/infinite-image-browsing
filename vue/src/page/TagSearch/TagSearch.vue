@@ -156,7 +156,7 @@ const query = () => {
 }
 
 const reuse = (record: MatchImageByTagsReq) => {
-  matchIds.value = record
+  matchIds.value = cloneDeep(record)
   showHistoryRecord.value = false
   query()
 }
