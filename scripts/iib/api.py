@@ -2,6 +2,7 @@ import base64
 from datetime import datetime, timedelta
 import io
 import json
+import ntpath
 import os
 from pathlib import Path
 import shutil
@@ -1797,7 +1798,8 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
     async def rename_file(req: RenameFileReq):
         check_write_trust(req.path)
         name = req.name
-        if not name or name in (".", "..") or os.path.basename(name) != name:
+        # Accept a single filename on every host, including for Windows clients.
+        if not name or name in (".", "..") or ntpath.basename(name) != name:
             raise HTTPException(status_code=400, detail="Invalid file name")
         conn = DataBase.get_conn()
         try:
