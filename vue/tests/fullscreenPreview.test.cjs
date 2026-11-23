@@ -10,7 +10,7 @@ const ts = require('typescript')
 const vue = require('vue')
 
 // compile a SFC (script setup + template inlined) and evaluate it with mocked dependencies
-function loadSfc(file, modules) {
+function loadSfc(file, modules, win = { addEventListener() {}, removeEventListener() {} }) {
   const filename = join(__dirname, '../src', file)
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
   const script = compileScript(descriptor, { id: 'preview-test', inlineTemplate: true })
@@ -20,7 +20,7 @@ function loadSfc(file, modules) {
   const exportsObject = {}
   runInNewContext(source, {
     exports: exportsObject,
-    window: { addEventListener() {}, removeEventListener() {} },
+    window: win,
     require: name => {
       assert.ok(Object.hasOwn(modules, name), `Unexpected dependency: ${name}`)
       return modules[name]
@@ -108,6 +108,11 @@ test('visibleChange follows previewing (new, old) and a close request is (false,
 // ---- PreviewDialog: toolbar and markup that other parts of IIB rely on ----
 
 const icon = name => ({ render: () => vue.h('span', { 'data-icon': name }) })
+const windowListeners = {}
+const fakeWindow = {
+  addEventListener: (name, fn) => { (windowListeners[name] ??= new Set()).add(fn) },
+  removeEventListener: (name, fn) => { windowListeners[name]?.delete(fn) }
+}
 const PreviewDialog = loadSfc('page/fileTransfer/PreviewDialog.vue', {
   vue,
   'ant-design-vue/es/vc-dialog': { default: { render() { return vue.h('div', { class: 'dialog' }, this.$slots.default()) } } },
@@ -123,7 +128,7 @@ const PreviewDialog = loadSfc('page/fileTransfer/PreviewDialog.vue', {
   },
   '@/i18n': { t: key => key },
   '@/util/previewZoom': require('./helpers/previewZoomModule.cjs')
-})
+}, fakeWindow)
 
 test('the dialog keeps the antd markup and has the seven tools in row-reverse order', async () => {
   const html = await renderToString(vue.createSSRApp(PreviewDialog, { src: '/original/test.png', visible: true }))
@@ -145,4 +150,81 @@ test('the dialog keeps the antd markup and has the seven tools in row-reverse or
   assert.match(html, /<div class="ant-image-preview-img-wrapper"/)
   // fullScreenContextMenu.vue matches the image by this exact className
   assert.match(html, /<img class="ant-image-preview-img" src="\/original\/test.png"/)
+})
+
+test('switching images resets zoom, rotation and position; the same src keeps them', async () => {
+  // minimal renderer without a DOM; the image and its area get fixed layout sizes
+  const sizes = {
+    img: { offsetWidth: 400, offsetHeight: 300, naturalWidth: 800, offsetLeft: 0, offsetTop: 0 },
+    div: { clientWidth: 1000, clientHeight: 800 }
+  }
+  const el = type => ({ type, children: [], props: {}, parent: null, ...sizes[type] })
+  const { render } = createRenderer({
+    createElement: el,
+    createText: text => ({ type: '#text', text, children: [], parent: null }),
+    createComment: text => ({ type: '#comment', text, children: [], parent: null }),
+    setText: (node, text) => { node.text = text },
+    setElementText: () => {},
+    insert: (child, parent, anchor) => {
+      child.parent = parent
+      const i = anchor ? parent.children.indexOf(anchor) : -1
+      parent.children.splice(i < 0 ? parent.children.length : i, 0, child)
+    },
+    remove: child => {
+      child.parent?.children.splice(child.parent.children.indexOf(child), 1)
+    },
+    parentNode: node => node.parent,
+    nextSibling: node => node.parent?.children[node.parent.children.indexOf(node) + 1] ?? null,
+    patchProp: (node, key, _prev, next) => { node.props[key] = next }
+  })
+  const find = (node, type) =>
+    node.type === type ? node : node.children.map(c => find(c, type)).find(Boolean)
+  const findAll = (node, type) =>
+    (node.type === type ? [node] : []).concat(...node.children.map(c => findAll(c, type)))
+
+  const state = vue.reactive({ src: '/original/a.png', renders: 0 })
+  const root = el('root')
+  // `renders` makes the host re-render without changing src
+  render(vue.h({ render: () => (state.renders, vue.h(PreviewDialog, { src: state.src, visible: true })) }), root)
+  await nextTick()
+  const img = find(root, 'img')
+  const wrapper = find(root, 'div') && findAll(root, 'div').find(d => String(d.props.class).includes('img-wrapper'))
+  const tools = Object.fromEntries(findAll(root, 'li').map(li => [li.props.title, li.props.onClick]))
+  const view = () => ({
+    image: img.props.style.transform,
+    wrapper: wrapper.props.style.transform
+  })
+  const start = { image: 'scale3d(1, 1, 1) rotate(0deg)', wrapper: 'translate3d(0px, 0px, 0)' }
+  assert.deepEqual(view(), start)
+
+  // zoom in, rotate and drag
+  const move = (type, x, y) => [...windowListeners[type]].forEach(fn => fn({ pageX: x, pageY: y }))
+  tools.previewZoomIn()
+  tools.previewZoomIn()
+  tools.previewRotateRight()
+  await nextTick()
+  img.props.onMousedown({ button: 0, pageX: 0, pageY: 0, preventDefault() {}, stopPropagation() {} })
+  move('mousemove', 30, 20)
+  await nextTick()
+  assert.notDeepEqual(view(), start)
+  assert.match(img.props.style.transform, /rotate\(90deg\)/)
+
+  // the same src does not reset anything
+  state.renders++
+  await nextTick()
+  assert.match(img.props.style.transform, /rotate\(90deg\)/)
+
+  // a new src (also while dragging) goes back to the opening state
+  state.src = '/original/b.png'
+  await nextTick()
+  assert.deepEqual(view(), start)
+  // the drag ended with the switch: moving and releasing change nothing
+  move('mousemove', 90, 90)
+  move('mouseup')
+  await nextTick()
+  assert.deepEqual(view(), start)
+  // the controls keep working for the new image
+  tools.previewZoomIn()
+  await nextTick()
+  assert.notEqual(img.props.style.transform, start.image)
 })

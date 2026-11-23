@@ -123,13 +123,27 @@ const rotateBy = (deg: number) => {
 }
 const onClose = () => emit('close')
 
-const onAfterClose = () => {
+// back to the opening state: fitted by antd's max-size CSS, upright, centred
+const resetView = () => {
   scale.value = 1
   rotate.value = 0
   isMoving.value = false
   setPosition({ x: 0, y: 0 })
+}
+
+const onAfterClose = () => {
+  resetView()
   emit('afterClose')
 }
+
+// 切换图片时回到初始状态；新图异步加载，加载前旧的测量值不再适用，load 时重新测量
+watch(
+  () => props.src,
+  () => {
+    resetView()
+    baseDims.value = null
+  }
+)
 
 const onMouseDown = (e: MouseEvent) => {
   // only the main button
