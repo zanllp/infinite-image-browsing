@@ -9,6 +9,8 @@ import { useGlobalStore } from '@/store/useGlobalStore'
 import { startOrganizeFiles, getOrganizeFilesStatus } from '@/api/organize'
 import type { OrganizeFilesReq } from '@/api/organize'
 import { globalEvents } from '@/util'
+import { useTagStore } from '@/store/useTagStore'
+import { normalize } from '@/util/path'
 
 export interface SmartOrganizeConfig {
   destFolder: string
@@ -85,6 +87,21 @@ export async function startSmartOrganizeWithConfig(
 
 
 /**
+ * After an organize job moved or copied files: files left the source folders (and their subfolders, a copy
+ * leaves them) and arrived in the destination, so the cached tags under both may belong to other files now.
+ * The tag cache is dropped (the grids fetch the tags of the files they show) and the views of both folders reload;
+ * without a known folder every view reloads (an empty list).
+ * @param folderPaths - Folders that were organized
+ * @param destFolder - Destination of the job; the first folder if it was not set (like the server)
+ */
+export function finishOrganize(folderPaths: string[], destFolder?: string) {
+  // the server answers with its own path form (backslashes on Windows), the views use slashes
+  const folders = [...new Set([...folderPaths, destFolder || folderPaths[0]].filter(Boolean).map(normalize))]
+  useTagStore().invalidateTagCache()
+  globalEvents.emit('refreshFileView', { paths: folders })
+}
+
+/**
  * Poll for organize job status until completion
  * @param job_id - Job ID to poll
  * @param folderPaths - Original folder paths (for refreshing view after completion)
@@ -124,7 +141,7 @@ async function pollOrganizeStatus(job_id: string, folderPaths?: string[]) {
         } else if (status.status === 'done') {
           // Refresh file view after completion
           console.log('Organize done, emitting refresh event')
-          globalEvents.emit('refreshFileView', { paths: folderPaths })
+          finishOrganize(folderPaths ?? [], status.preview?.dest_folder ?? status.req?.dest_folder)
         }
       }
     } catch (e) {

@@ -25,6 +25,7 @@ import { message } from 'ant-design-vue'
 import { t } from './i18n'
 import type { OrganizeFilesPreviewResp } from '@/api/organize'
 import { getOrganizeFilesStatus } from '@/api/organize'
+import { finishOrganize } from '@/util/smartOrganize'
 
 const globalStore = useGlobalStore()
 const wsStore = useWorkspeaceSnapshot()
@@ -70,6 +71,7 @@ const handleOrganizePreviewConfirmed = async () => {
   showOrganizePreview.value = false
   const jobId = currentOrganizePreview.value?.job_id
   const folderPaths = globalStore.getOrganizeJob(jobId || '')?.folder_paths || []
+  const destFolder = currentOrganizePreview.value?.dest_folder
   currentOrganizePreview.value = null
 
   if (!jobId) return
@@ -94,10 +96,12 @@ const handleOrganizePreviewConfirmed = async () => {
         globalStore.removeOrganizeJob(jobId)
         message.success(t('organizeComplete'))
         // Trigger refresh
-        globalEvents.emit('refreshFileView', { paths: folderPaths })
+        finishOrganize(folderPaths, destFolder)
       } else if (status.status === 'error') {
         isMovingFiles.value = false
         message.error(`${t('organizeFailed')}: ${status.error}`)
+        // some folders may have been moved before the error
+        finishOrganize(folderPaths, destFolder)
       } else {
         // Still in other status, keep polling
         setTimeout(pollMoving, 500)

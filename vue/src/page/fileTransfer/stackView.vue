@@ -13,7 +13,8 @@ import {
   stackCache,
   useKeepMultiSelect,
   Props,
-  useGenInfoDiff
+  useGenInfoDiff,
+  tagStore
 } from './hook'
 import { SearchSelect } from 'vue3-ts-util'
 import { openTiktokViewWithFiles } from '@/util/tiktokHelper'
@@ -23,7 +24,7 @@ import FileItem from '@/components/FileItem.vue'
 import GridCellLevelSlider from '@/components/gridCellLevelSlider.vue'
 import fullScreenContextMenu from './fullScreenContextMenu.vue'
 import BaseFileListInfo from '@/components/BaseFileListInfo.vue'
-import { copy2clipboardI18n } from '@/util'
+import { copy2clipboardI18n, globalEvents } from '@/util'
 import { openFolder, flattenFolder } from '@/api'
 import { sortMethods } from './fileSort'
 import { isTauri } from '@/util/env'
@@ -158,21 +159,30 @@ const onFlattenFolderClick = async () => {
     cancelText: t('cancel'),
     onOk: async () => {
       // Step 3: Execute flatten
+      const folder = currLocation.value
+      // the server moves files even if the request fails half way (timeout) or some files fail: whatever the
+      // outcome, the files of the subfolders may have other paths now
+      const syncViews = () => {
+        // the grids load the tags of the files they show (the lists are replaced a moment later)
+        tagStore.invalidateTagCache()
+        // every pane that shows the folder, a folder in it or a folder above it, not only this one
+        globalEvents.emit('refreshFileView', { paths: [folder] })
+      }
       try {
         message.loading({ content: t('flattenFolderExecuting'), key: 'flatten', duration: 0 })
-        const result = await flattenFolder({ folder_path: currLocation.value, dry_run: false })
+        const result = await flattenFolder({ folder_path: folder, dry_run: false })
         message.destroy('flatten')
+        syncViews()
 
         if (result.success) {
           message.success(t('flattenFolderSuccess', { count: result.moved_files }))
-          // Refresh the view
-          refresh()
         } else {
           message.error(`${t('error')}: ${result.errors?.join(', ')}`)
         }
       } catch (e: any) {
         message.destroy('flatten')
         message.error(e.message || String(e))
+        syncViews()
       }
     }
   })
