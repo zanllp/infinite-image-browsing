@@ -205,13 +205,21 @@ export function useLocation () {
       if (!frags.length) {
         return refresh()
       }
+      let listIsCurrent = false
       for (const frag of frags) {
-        const target = currPage.value?.files.find((v) => isDirNameEqual(v.name, frag))
+        let target = currPage.value?.files.find((v) => isDirNameEqual(v.name, frag))
+        if (!target && currPage.value && !listIsCurrent) {
+          // the list of a folder further up the stack may be older than the folder we are looking for
+          const { files } = await getTargetFolderFiles(currLocation.value)
+          currPage.value.files = files
+          target = files.find((v) => isDirNameEqual(v.name, frag))
+        }
         if (!target) {
           console.error({ frags, frag, stack: cloneDeep(stack.value) })
           throw new Error(`${frag} not found`)
         }
         await openNext(target)
+        listIsCurrent = true // the list of a folder we just opened is fresh
       }
     } catch (error) {
       message.error(t('moveFailedCheckPath') + (error instanceof Error ? error.message : ''))
