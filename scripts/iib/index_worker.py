@@ -16,13 +16,14 @@ from __future__ import annotations
 
 import math
 import os
+import stat
 import threading
 import time
 from contextlib import closing
 from datetime import datetime
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
-from scripts.iib.db.datamodel import DataBase, Folder
+from scripts.iib.db.datamodel import DataBase, Folder, Image as DbImg, tree_bounds
 from scripts.iib.logger import logger
 from scripts.iib.maintenance_settings import DEFAULTS, load_settings
 from scripts.iib.thumb_cache import (
@@ -51,6 +52,10 @@ _INDEX_POLL_DEFAULT = 90.0
 _INDEX_DELAY_DEFAULT = 20.0
 _PROGRESS_LOG_INTERVAL = 5.0
 _BATCH_COMMIT_SIZE = 50
+# A missing file or folder is only removed from the index when it is still missing this long after it was
+# first seen: moving a file in IIB moves it on disk first and updates its row a moment later.
+_PRUNE_GRACE_SEC = 60.0
+_PRUNE_BATCH_SIZE = 500
 
 _TRACKER_UNSET = object()
 _request_tracker_cache = _TRACKER_UNSET
@@ -246,6 +251,11 @@ class IndexWorker:
         self._last_scan_dirs_error_log = 0.0
 
         self._expired_cache: Optional[tuple] = None  # (monotonic_ts, [dirs])
+        # Rows and folders that were seen missing, waiting for the grace period; touched under _scan_lock
+        # (files) or replaced as a whole (folders), kept in memory only.
+        self._prune_grace = _PRUNE_GRACE_SEC
+        self._pending_files: Dict[int, Tuple[str, float]] = {}  # image id -> (path, first seen)
+        self._missing_since: Dict[str, float] = {}  # indexed folder gone from disk -> first seen
 
         self._governor = Governor(
             target_percent=DEFAULTS["cpuLimit"],
@@ -469,6 +479,7 @@ class IndexWorker:
                 ]
             if settings.get("thumbnail"):
                 self._ensure_pending_table(conn)
+            pruned, pruned_folders = self._prune_due(conn)
             stats = self._scan_queue(
                 conn,
                 seed_dirs,
@@ -476,15 +487,22 @@ class IndexWorker:
                 update_status=False,
                 pace=False,
             )
+        stats["files_pruned"] = pruned
         self._expired_cache = None
-        if stats.get("folders") or stats.get("files_indexed"):
+        if (
+            stats.get("folders")
+            or stats.get("files_indexed")
+            or pruned
+            or pruned_folders
+        ):
             with self._lock:
                 self._version += 1
         logger.info(
-            "[maintenance] blocking scan done: dirs=%s indexed=%s failed=%s",
+            "[maintenance] blocking scan done: dirs=%s indexed=%s failed=%s pruned=%s",
             stats.get("folders"),
             stats.get("files_indexed"),
             stats.get("files_failed"),
+            pruned,
         )
         return stats
 
@@ -519,7 +537,12 @@ class IndexWorker:
 
     def _compute_dirty_dirs(self, conn) -> List[str]:
         try:
-            dirs = list(Folder.get_expired_dirs(conn))
+            missing: List[str] = []
+            dirs = list(Folder.get_expired_dirs(conn, missing))
+            now = time.monotonic()
+            self._missing_since = {
+                p: self._missing_since.get(p, now) for p in map(os.path.normpath, missing)
+            }
         except Exception as exc:
             logger.warning("[maintenance] get_expired_dirs failed: %s", exc)
             dirs = []
@@ -546,6 +569,147 @@ class IndexWorker:
             seen.add(key)
             result.append(norm)
         return result
+
+    def _prune_due(self, conn) -> Tuple[int, int]:
+        """Remove what has been missing for the grace period; returns (image rows, folders rows) removed.
+
+        Call with ``_scan_lock`` held. Only the worker removes rows of missing files and folders.
+        """
+        files = self._prune_pending_files(conn)
+        images, folders = self._prune_missing_folders(conn)
+        return files + images, folders
+
+    def _prune_pending_files(self, conn) -> int:
+        now = time.monotonic()
+        due = [
+            (image_id, path)
+            for image_id, (path, seen) in self._pending_files.items()
+            if now - seen >= self._prune_grace
+        ]
+        removed = 0
+        if not due or self._should_pause():
+            return removed
+        for start in range(0, len(due), _PRUNE_BATCH_SIZE):
+            if self._should_pause():
+                break
+            batch = due[start : start + _PRUNE_BATCH_SIZE]
+            removed += DbImg.remove_unchanged_missing(conn, batch)
+            # whoever is not missing any more, or has another path now, is done as well
+            for image_id, _path in batch:
+                self._pending_files.pop(image_id, None)
+        return removed
+
+    @staticmethod
+    def _has_entries(path: str) -> bool:
+        try:
+            with os.scandir(path) as entries:
+                return next(entries, None) is not None
+        except OSError:
+            return False
+
+    def _may_prune_missing_dir(self, path: str, scan_dirs: Optional[List[str]] = None) -> bool:
+        """May the rows below a vanished indexed folder be removed?
+
+        Only if the folder really is gone (not found), lies below a scan root that exists and is not
+        empty, and the nearest ancestor that still exists is a real, non-empty directory. An unmounted
+        volume leaves an empty mount point (or a dangling symlink) behind and must not look like a
+        deleted folder.
+        """
+
+        def key(p: str) -> str:
+            return os.path.normcase(os.path.normpath(p))
+
+        try:
+            os.lstat(path)
+            return False
+        except (FileNotFoundError, NotADirectoryError):
+            pass
+        except OSError:
+            return False
+        if scan_dirs is None:
+            scan_dirs = self._scan_dirs()
+        folder = key(path)
+        if any(folder == key(root) for root in scan_dirs):
+            return False
+        containing = [
+            root
+            for root in scan_dirs
+            if folder.startswith(key(root).rstrip(os.sep) + os.sep)
+        ]
+        if not containing:
+            return False
+        root = max(containing, key=lambda r: len(key(r)))
+        if not os.path.isdir(root) or not self._has_entries(root):
+            return False
+        ancestor = os.path.dirname(os.path.normpath(path))
+        while True:
+            if key(ancestor) == key(root):
+                return True  # checked above; a scan root may be a symlink
+            try:
+                st = os.lstat(ancestor)
+            except (FileNotFoundError, NotADirectoryError):
+                parent = os.path.dirname(ancestor)
+                if parent == ancestor:
+                    return False
+                ancestor = parent
+                continue
+            except OSError:
+                return False
+            return stat.S_ISDIR(st.st_mode) and self._has_entries(ancestor)
+
+    @staticmethod
+    def _count_folder_marks(conn, folder: str) -> int:
+        low, high = tree_bounds(folder)
+        with closing(conn.cursor()) as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM folders WHERE path = ? OR (path >= ? AND path < ?)",
+                (os.path.normpath(folder), low, high),
+            )
+            return cur.fetchone()[0]
+
+    def _prune_missing_folders(self, conn) -> Tuple[int, int]:
+        """Remove the rows of indexed folders that vanished from disk; returns (image rows, folders rows) removed."""
+        now = time.monotonic()
+        due = [p for p, seen in self._missing_since.items() if now - seen >= self._prune_grace]
+        if not due or self._should_pause():
+            return 0, 0
+        scan_dirs = self._scan_dirs()
+        images = folders = 0
+        for path in due:
+            if self._should_pause():
+                break
+            if not self._may_prune_missing_dir(path, scan_dirs):
+                continue
+            try:
+                low, high = tree_bounds(path)
+                with closing(conn.cursor()) as cur:
+                    cur.execute("SELECT id, path FROM image WHERE path >= ? AND path < ?", (low, high))
+                    rows = cur.fetchall()
+                removed = 0
+                paused = False
+                for start in range(0, len(rows), _PRUNE_BATCH_SIZE):
+                    if self._should_pause():
+                        paused = True
+                        break
+                    removed += DbImg.remove_unchanged_missing(conn, rows[start : start + _PRUNE_BATCH_SIZE])
+                if paused:
+                    images += removed
+                    break
+                marks = self._count_folder_marks(conn, path)
+                Folder.remove_missing_under(conn, path)
+                marks -= self._count_folder_marks(conn, path)
+            except Exception as exc:
+                logger.warning("[maintenance] prune missing folder failed %s: %s", path, exc)
+                continue
+            self._missing_since.pop(path, None)
+            images += removed
+            folders += marks
+            logger.debug(
+                "[maintenance] pruned missing folder %s: %s rows, %s folder marks", path, removed, marks
+            )
+        if images or folders:
+            self._expired_cache = None
+        return images, folders
 
     def _dirty_dirs(self, conn, force: bool = False) -> List[str]:
         now = time.monotonic()
@@ -663,6 +827,7 @@ class IndexWorker:
                 if pace:
                     self._governor.tick()
 
+            missing_files: List[tuple] = []
             try:
                 stats = scan_fn(
                     conn,
@@ -671,10 +836,17 @@ class IndexWorker:
                     on_progress=on_progress if update_status else None,
                     should_pause=self._should_pause,
                     batch_commit_size=_BATCH_COMMIT_SIZE,
+                    missing_files=missing_files,
                 )
             except Exception as exc:
                 logger.error("[maintenance] scan folder failed: %s: %s", dir_path, exc)
                 stats = {"folders": 0, "files_failed": 1, "paused": False}
+
+            # rows of files that vanished from this folder wait for the grace period (see _prune_due)
+            seen = time.monotonic()
+            for image_id, path in missing_files:
+                if self._pending_files.get(image_id, (None,))[0] != path:
+                    self._pending_files[image_id] = (path, seen)
 
             if isinstance(stats, dict):
                 for key in ("folders", "files_indexed", "files_skipped", "files_failed"):
@@ -844,6 +1016,11 @@ class IndexWorker:
         with self._lock:
             self._dirs_total = len(dirty_dirs)
 
+        pruned_files = pruned_folders = 0
+        if self._missing_since or self._pending_files:
+            with self._scan_lock:
+                pruned_files, pruned_folders = self._prune_due(conn)
+
         if dirty_dirs:
             with self._lock:
                 self._phase = "scanning"
@@ -873,8 +1050,15 @@ class IndexWorker:
                 self._phase = "waiting"
             # version 语义（前端契约）：每完成一轮真正有扫描工作的后台维护 +1，
             # 前端据此刷新标签列表 / 过期提示；缩略图预热不阻塞这次通知。
-            if dirty_dirs:
+            if dirty_dirs or pruned_files or pruned_folders:
                 self._version += 1
+
+        if pruned_files or pruned_folders:
+            logger.info(
+                "[maintenance] pruned %s rows of missing files, %s missing folders",
+                pruned_files,
+                pruned_folders,
+            )
 
         # 缩略图预热不占用 scan_lock：它不扫目录，且生成单张耗时较长，
         # 不应该让旧端点里的同步扫描等它。

@@ -150,6 +150,23 @@ def commit_with_retry(conn: Connection, retries: int = 5) -> None:
             delay *= 2
 
 
+def is_gone(path: str) -> bool:
+    """Is there no such file any more? Anything else than "not found" (no permission, I/O error) says nothing."""
+    try:
+        os.lstat(path)
+    except (FileNotFoundError, NotADirectoryError):
+        return True
+    except OSError:
+        return False
+    return False
+
+
+def tree_bounds(folder_path: str):
+    """Range [low, high) of the paths below a folder, in the binary order of the path columns."""
+    prefix = os.path.normpath(folder_path).rstrip(os.sep) + os.sep
+    return prefix, prefix[:-1] + chr(ord(os.sep) + 1)
+
+
 class Image:
     def __init__(self, path, exif=None, size=0, date="", exif_edited=False, id=None):
         self.path = path
@@ -302,6 +319,46 @@ class Image:
             cur.execute("DELETE FROM image_tag WHERE image_id = ?", (int(image_id),))
             cur.execute("DELETE FROM image WHERE id = ?", (image_id,))
             conn.commit()
+
+    @classmethod
+    def remove_unchanged_missing(cls, conn: Connection, rows: List[tuple]) -> int:
+        """Remove the rows (id, path) whose file is gone, unless the row has changed its path meanwhile.
+
+        Moving a file in IIB moves it on disk first and updates the row afterwards, so a row is
+        only deleted by id *and* the path that was seen missing. The cascade (tags with their
+        counts, embeddings) covers the rows that were really deleted. Returns how many were.
+        """
+        removed = 0
+        for start in range(0, len(rows), 500):
+            try:
+                with closing(conn.cursor()) as cur:
+                    ids = []
+                    for image_id, path in rows[start : start + 500]:
+                        # checked right before the delete, not when the row was picked
+                        if not is_gone(path):
+                            continue
+                        cur.execute("DELETE FROM image WHERE id = ? AND path = ?", (image_id, path))
+                        if cur.rowcount:
+                            ids.append(image_id)
+                    if ids:
+                        placeholders = ",".join("?" * len(ids))
+                        cur.execute(
+                            f"SELECT tag_id, COUNT(*) FROM image_tag WHERE image_id IN ({placeholders}) GROUP BY tag_id",
+                            ids,
+                        )
+                        for tag_id, n in cur.fetchall():
+                            Tag.add_count(conn, tag_id, -n)
+                        for table in ("image_tag", "image_embedding", "image_embedding_fail"):
+                            cur.execute(f"DELETE FROM {table} WHERE image_id IN ({placeholders})", ids)
+                commit_with_retry(conn)
+                removed += len(ids)
+            except Exception as e:
+                conn.rollback()
+                from scripts.iib.logger import logger
+
+                logger.error("Failed to remove the rows of missing files: %s", e)
+                return removed
+        return removed
 
     @classmethod
     def safe_batch_remove(cls, conn: Connection, image_ids: List[int]) -> None:
@@ -1311,7 +1368,8 @@ class Folder:
                 )
 
     @classmethod
-    def get_expired_dirs(cls, conn: Connection):
+    def get_expired_dirs(cls, conn: Connection, missing: Optional[List[str]] = None):
+        """Folders whose scan mark is outdated; the vanished ones are appended to `missing` if given."""
         dirs: List[str] = []
         with closing(conn.cursor()) as cur:
             cur.execute("SELECT * FROM folders")
@@ -1325,6 +1383,10 @@ class Folder:
                 # 一次 os.stat 同时完成存在性和 mtime 检查（原先 exists + getmtime 两次 stat）
                 try:
                     folder_stat = os.stat(folder_path)
+                except (FileNotFoundError, NotADirectoryError):
+                    if missing is not None:
+                        missing.append(folder_path)
+                    continue
                 except OSError:
                     continue
                 if get_formatted_date(folder_stat.st_mtime) != row[2]:
@@ -1341,6 +1403,19 @@ class Folder:
     def remove_all(cls, conn: Connection):
         with closing(conn.cursor()) as cur:
             cur.execute("DELETE FROM folders")
+            conn.commit()
+
+    @classmethod
+    def remove_missing_under(cls, conn: Connection, folder_path: str):
+        """Remove the scan marks of a folder and the folders below it that no longer exist."""
+        low, high = tree_bounds(folder_path)
+        with closing(conn.cursor()) as cur:
+            cur.execute(
+                "SELECT id, path FROM folders WHERE path = ? OR (path >= ? AND path < ?)",
+                (os.path.normpath(folder_path), low, high),
+            )
+            ids = [(i,) for i, p in cur.fetchall() if is_gone(p)]
+            cur.executemany("DELETE FROM folders WHERE id = ?", ids)
             conn.commit()
 
 
