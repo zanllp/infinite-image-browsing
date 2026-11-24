@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount, watch } from 'vue'
 import type { FileNodeInfo } from '@/api/files'
-import { toImageThumbnailUrl, toImageUrl } from '@/util/file'
+import { toImageUrl } from '@/util/file'
 import { registerFullscreenPreviewCloser } from '@/util/imagePreviewOperation'
+import PreviewDialog from './PreviewDialog.vue'
 
 /**
  * 应用级全屏预览宿主。
@@ -26,13 +27,13 @@ const emit = defineEmits<{
 
 const currentFile = computed(() => props.files[props.previewIdx])
 const previewSrc = computed(() => (currentFile.value ? toImageUrl(currentFile.value) : ''))
-const thumbSrc = computed(() =>
-  currentFile.value ? toImageThumbnailUrl(currentFile.value, '256x256') : ''
-)
 
-const onVisibleChange = (visible: boolean, lastVisible: boolean) => {
-  emit('visibleChange', visible, lastVisible)
-}
+// 与 antd 的 a-image 一致：visible 每次变化（包括由 prop 驱动的）都通知外部，
+// usePreview 靠它在关闭时滚动列表
+watch(
+  () => props.previewing,
+  (visible, lastVisible) => emit('visibleChange', visible, lastVisible)
+)
 
 // 全屏查看时其它入口（右键菜单、删除、快捷键）通过 util 里的注册表关闭预览
 const unregister = registerFullscreenPreviewCloser(() => {
@@ -42,21 +43,10 @@ onBeforeUnmount(unregister)
 </script>
 
 <template>
-  <div v-if="currentFile" class="iib-fullscreen-preview-host">
-    <a-image
-      :src="thumbSrc"
-      :preview="{
-        visible: previewing,
-        src: previewSrc,
-        onVisibleChange
-      }"
-    />
-  </div>
+  <PreviewDialog
+    v-if="currentFile"
+    :src="previewSrc"
+    :visible="previewing"
+    @close="emit('visibleChange', false, true)"
+  />
 </template>
-
-<style scoped>
-/* 隐藏原生容器；预览弹层通过 Teleport 挂载，不受此处影响。 */
-.iib-fullscreen-preview-host {
-  display: none;
-}
-</style>

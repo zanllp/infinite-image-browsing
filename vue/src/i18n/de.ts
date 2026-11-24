@@ -408,6 +408,14 @@ export const de: Partial<IIBI18nMap> = {
   dragImageToTransfer: 'Klicken Sie, um das Originalbild zu erhalten, greifen und ziehen Sie es zu anderen Apps',
   dragImage: 'Klicken Sie, um das Originalbild zu erhalten, greifen und ziehen Sie es zu anderen Apps',
   close: 'Schließen',
+  previewZoomIn: 'Vergrößern (+)',
+  previewZoomOut: 'Verkleinern (-)',
+  previewActualSize: 'Originalgröße (1)',
+  previewFitToWindow: 'Einpassen (0)',
+  previewRotateLeft: 'Nach links drehen',
+  previewRotateRight: 'Nach rechts drehen',
+  shortcutPresetActionFullscreenZoom: 'Vergrößern / Verkleinern',
+  shortcutPresetActionFullscreenActualFit: 'Originalgröße (100 %) / einpassen',
 
   // ===== Trend Panel =====
   trend: 'Trend',

@@ -142,6 +142,16 @@ const presetShortcutGroups = computed(() => ([
         keys: 'Esc',
         location: t('shortcutPresetLocationFullscreen'),
         action: t('shortcutPresetActionFullscreenExit')
+      },
+      {
+        keys: '+ / -',
+        location: t('shortcutPresetLocationFullscreen'),
+        action: t('shortcutPresetActionFullscreenZoom')
+      },
+      {
+        keys: '1 / 0',
+        location: t('shortcutPresetLocationFullscreen'),
+        action: t('shortcutPresetActionFullscreenActualFit')
       }
     ]
   },
