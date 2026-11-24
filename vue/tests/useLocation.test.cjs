@@ -119,7 +119,7 @@ function setup({ mode = 'scanned', previewing = false, fetchFiles, walker, stack
     '@/util/path': Path,
     '@/util/scroller': { getVisibleRange: () => ({ start: 0, end: 20 }) },
     'multi-nprogress': {},
-    'lodash-es': { last: items => items.at(-1), debounce: () => () => {} },
+    'lodash-es': { last: items => items.at(-1), debounce: () => () => {}, cloneDeep: value => JSON.parse(JSON.stringify(value)) },
     '@vueuse/core': { useLocalStorage: (_, initial) => vue.ref(initial) },
     '@/util/const': { prefix: 'test-' }
   }
@@ -143,6 +143,10 @@ function setup({ mode = 'scanned', previewing = false, fetchFiles, walker, stack
     fetchCount: () => fetchCount,
     fetched,
     scrolledTo,
+    goTo: async (path) => {
+      location.locInputValue.value = path
+      await location.onLocEditEnter()
+    },
     disableWalkRefresh: () => loadingContent.children[1].props.onClick(),
     returnToIIB: () => listeners.get('returnToIIB')(),
     poll: () => {
@@ -408,4 +412,46 @@ test('navigate up loads the folder once (by refresh)', async () => {
   await settle()
   assert.deepEqual(c.fetched, ['/images/a'])
   assert.deepEqual(c.messages, ['refreshCompleted'])
+})
+
+// ---- typing a path through a folder of the stack whose list is older than the subfolder we look for ----
+
+test('going through a folder of the stack looks it up again if the next folder is missing in its list', async () => {
+  for (const [isWin, stack, target, expected] of [
+    [false, posixStack(), '/images/a/new', ['/images/a', '/images/a/new']],
+    [true, [page('/', named), page('C:/', named), page('img', named), page('a', named), page('b', named)], 'C:\\img\\a\\new', ['C:/img/a', 'C:/img/a/new']]
+  ]) {
+    const parentDir = expected[0]
+    const c = setup({
+      isWin,
+      stack,
+      fetchFiles: async (path) => ({ files: path === parentDir ? [dir(`${parentDir}/new`), ...named] : named })
+    })
+    await c.goTo(target)
+    assert.deepEqual([c.fetched, c.messages], [expected, []])
+    assert.equal(c.state.currPage.value.curr, 'new')
+  }
+})
+
+test('going through a folder of the stack that lists the next folder loads only the target', async () => {
+  const stack = posixStack()
+  stack[2].files = [dir('/images/a/c'), ...oldFiles]
+  const c = setup({ stack })
+  await c.goTo('/images/a/c')
+  assert.deepEqual(c.fetched, ['/images/a/c'])
+})
+
+test('a folder that does not exist is looked up once, then the move fails and the stack is restored', async () => {
+  const c = setup({ stack: posixStack(), fetchFiles: async () => ({ files: named }) })
+  const before = c.state.stack.value.map(v => v.curr)
+  const originalError = console.error
+  console.error = () => {}
+  try {
+    await assert.rejects(c.goTo('/images/a/missing/deeper'), /missing not found/)
+  } finally {
+    console.error = originalError
+  }
+  assert.deepEqual(c.fetched, ['/images/a'])
+  assert.deepEqual(c.state.stack.value.map(v => v.curr), before)
+  assert.deepEqual(c.messages, ['moveFailedCheckPathmissing not found'])
 })
