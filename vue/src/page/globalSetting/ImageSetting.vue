@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
-import { useGlobalStore } from '@/store/useGlobalStore'
+import { useGlobalStore, type PreviewInitialZoom } from '@/store/useGlobalStore'
 import NumInput from '@/components/numInput.vue'
 import GridCellLevelSlider from '@/components/gridCellLevelSlider.vue'
 import { nearestGridCellLevel } from '@/util/gridCellLevel'
@@ -25,6 +25,11 @@ function reduceImageResolution (imagePath: string, scaleFactor: number) {
 }
 
 const g = useGlobalStore()
+const previewInitialZoomOptions = computed<{ label: string, value: PreviewInitialZoom }[]>(() => [
+  { value: 'shrinkToFit', label: t('previewInitialZoomShrinkToFit') },
+  { value: 'fit', label: t('previewInitialZoomFit') },
+  { value: 'oneToOne', label: t('previewInitialZoomOneToOne') }
+])
 /** 档位对应的目标像素宽，仅用于设置页的预览图 */
 const previewWidth = computed(() => nearestGridCellLevel(g.defaultGridCellWidth))
 const thuImg = ref('')
@@ -59,6 +64,9 @@ watch(() => [g.enableThumbnail, g.gridThumbnailResolution], debounce(async () =>
   </a-form-item>
   <a-form-item :label="t('previewMaskBackgroundOpacity')">
     <NumInput :min="0" :max="1" :step="0.05" v-model="g.previewBgOpacity" />
+  </a-form-item>
+  <a-form-item :label="t('previewInitialZoom')">
+    <a-select v-model:value="g.previewInitialZoom" :options="previewInitialZoomOptions" style="width: 280px" />
   </a-form-item>
 </template>
 <style lang="scss" scoped></style>

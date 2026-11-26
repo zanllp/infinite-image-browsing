@@ -12,6 +12,7 @@ import {
   ZoomOutOutlined
 } from '@/icon'
 import { t } from '@/i18n'
+import { useGlobalStore } from '@/store/useGlobalStore'
 import {
   SCALE_EPSILON,
   ZOOM_STEP,
@@ -43,6 +44,7 @@ const emit = defineEmits<{
 }>()
 
 const prefixCls = 'ant-image-preview'
+const globalStore = useGlobalStore()
 
 const scale = ref(1)
 const rotate = ref(0)
@@ -85,6 +87,8 @@ const setPosition = (p: { x: number; y: number }) => {
 }
 
 const reclamp = () => {
+  // the configured opening zoom follows layout changes (e.g. the info panel appearing) until the user takes over
+  if (followInitialZoom && globalStore.previewInitialZoom !== 'shrinkToFit') return applyInitialZoom()
   const d = measure()
   // the untouched opening state stays as antd lays it out (no shift by a few px after loading)
   const pristine = scale.value === 1 && rotate.value === 0 && position.x === 0 && position.y === 0
@@ -94,6 +98,7 @@ const reclamp = () => {
 const zoomBy = (factor: number, point = { x: 0, y: 0 }) => {
   const d = measure()
   if (!d) return
+  followInitialZoom = false
   const next = zoomAt({ scale: scale.value, position: { ...position } }, factor, point, d)
   scale.value = next.scale
   setPosition(next.position)
@@ -105,30 +110,56 @@ const onZoomIn = () => {
 const onZoomOut = () => {
   if (canZoomOut.value) zoomBy(1 / ZOOM_STEP)
 }
+const showOneToOne = (d: PreviewDims) => {
+  scale.value = oneToOneScale(d)
+  setPosition(centerPosition(d))
+}
+const showFit = (d: PreviewDims) => {
+  scale.value = fitScale(d)
+  setPosition(centerPosition(d))
+}
 const onOneToOne = () => {
   const d = measure()
   if (!d) return
-  scale.value = oneToOneScale(d)
-  setPosition(centerPosition(d))
+  followInitialZoom = false
+  showOneToOne(d)
 }
 const onFit = () => {
   const d = measure()
   if (!d) return
-  scale.value = fitScale(d)
-  setPosition(centerPosition(d))
+  followInitialZoom = false
+  showFit(d)
 }
 const rotateBy = (deg: number) => {
+  followInitialZoom = false
   rotate.value += deg
   reclamp()
 }
 const onClose = () => emit('close')
 
-// back to the opening state: fitted by antd's max-size CSS, upright, centred
+// the view is in the configured opening zoom (global setting) and nobody has zoomed, dragged or rotated since: it is
+// applied again whenever the image loads or the layout changes. `shrinkToFit` needs nothing, antd's max-size CSS
+// already follows the layout.
+let followInitialZoom = true
+
+// back to the opening state: by default fitted by antd's max-size CSS, upright, centred
 const resetView = () => {
   scale.value = 1
   rotate.value = 0
   isMoving.value = false
   setPosition({ x: 0, y: 0 })
+  followInitialZoom = true
+}
+
+// the other modes are the state of the fit / actual size buttons; without a measurable image it waits for the load
+const applyInitialZoom = () => {
+  const mode = globalStore.previewInitialZoom
+  // while a switched image is loading, the old one may still be measured
+  if (mode === 'shrinkToFit' || !imgRef.value?.complete) return
+  const d = measure()
+  if (!d) return
+  if (mode === 'fit') showFit(d)
+  else showOneToOne(d)
 }
 
 const onAfterClose = () => {
@@ -157,6 +188,7 @@ const onMouseDown = (e: MouseEvent) => {
 
 const onMouseMove = (e: MouseEvent) => {
   if (props.visible && isMoving.value) {
+    followInitialZoom = false
     setPosition({ x: e.pageX - dragStart.x, y: e.pageY - dragStart.y })
   }
 }
@@ -193,8 +225,11 @@ const onKeyDown = (e: KeyboardEvent) => {
 
 const onDoubleClick = () => {
   if (!props.visible) return
+  // back to the opening zoom (rotation stays); fit / actual size follow layout changes again
+  followInitialZoom = true
   scale.value = 1
   setPosition({ x: 0, y: 0 })
+  applyInitialZoom()
 }
 
 // 与 antd 一样，监听器绑在 window 上并随 visible 开关
@@ -213,7 +248,8 @@ watch(
     if (!visible) return
     listeners.forEach(([name, fn, opt]) => window.addEventListener(name, fn, opt))
     removeListeners = () => listeners.forEach(([name, fn, opt]) => window.removeEventListener(name, fn, opt))
-    nextTick(measure)
+    // reopened with the same, already loaded image: no load event will come, reclamp applies the opening zoom
+    nextTick(reclamp)
   },
   { immediate: true }
 )
