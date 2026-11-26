@@ -4,7 +4,7 @@ import { useTiktokStore, type TiktokMediaItem } from '@/store/useTiktokStore'
 import { useTagStore } from '@/store/useTagStore'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { useLocalStorage, onLongPress } from '@vueuse/core'
-import { copy2clipboardI18n, isVideoFile, isAudioFile } from '@/util'
+import { copy2clipboardI18n, isVideoFile, isAudioFile, useGlobalEventListen } from '@/util'
 import { openAddNewTagModal, openEditPromptModal } from '@/components/functionalCallableComp'
 import { toggleCustomTagToImg } from '@/api/db'
 import { deleteFiles } from '@/api/files'
@@ -988,6 +988,13 @@ watch(() => tiktokStore.mediaList, () => {
     loadCurrentItemPrompt()
   })
 }, { deep: true })
+
+// the tag cache was invalidated (e.g. tags changed in another browser tab): refetch the tags of the current item
+useGlobalEventListen('tagsInvalidated', () => {
+  if (tiktokStore.visible) {
+    loadCurrentItemTags()
+  }
+})
 
 // 监听组件可见性变化
 watch(() => tiktokStore.visible, (visible) => {
