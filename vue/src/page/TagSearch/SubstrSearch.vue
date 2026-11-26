@@ -4,7 +4,7 @@ import fileItemCell from '@/components/FileItem.vue'
 import { RecycleScroller } from '@/components/recycleScroller'
 import FullscreenPreview from '@/page/fileTransfer/FullscreenPreview.vue'
 import { getDbBasicInfo, getExpiredDirs, getImagesBySubstr, updateImageData, type DataBaseBasicInfo, type Tag, type TagId, SearchBySubstrReq } from '@/api/db'
-import { copy2clipboardI18n,  makeAsyncFunctionSingle, useGlobalEventListen, globalEvents } from '@/util'
+import { copy2clipboardI18n,  makeAsyncFunctionSingle, useGlobalEventListen } from '@/util'
 import fullScreenContextMenu from '@/page/fileTransfer/fullScreenContextMenu.vue'
 import { LeftCircleOutlined, RightCircleOutlined, regex, AimOutlined, HistoryOutlined, SaveOutlined, FilterOutlined, ReloadOutlined } from '@/icon'
 import { message } from 'ant-design-vue'
@@ -26,14 +26,9 @@ import { toImageViewTagRefs, useImageViewStore, type ImageViewMediaType } from '
 const tagStore = useTagStore()
 const bg = useBackgroundMaintenance()
 
-/**
- * 索引更新后标签缓存可能已过期：清空缓存并通知各网格立即补拉当前可视区标签。
- * 不能只 clear 就完事，否则要等用户滚动触发 viewableAreaFilesChange 才会补拉，
- * 表现为「切回来标签没了，滚一下又好了」。
- */
+/** 索引更新后标签缓存可能已过期：标为过期（旧值保持可见）并通知各网格立即补拉当前可视区标签 */
 const invalidateTagCache = () => {
-  tagStore.tagMap.clear()
-  globalEvents.emit('tagsInvalidated')
+  tagStore.invalidateTagCache()
 }
 /** 实验功能开启且后台未报错时，过期交给后台静默处理，不再显示黄色提示/手动更新按钮 */
 const hideExpiredAlert = computed(() => bg.enabled.value && !bg.backgroundFailed.value)

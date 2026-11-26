@@ -211,6 +211,8 @@ export function useFileItemActions (
         const map = tagStore.tagMap
         map.set(newPath, map.get(file.fullpath) ?? [])
         map.delete(file.fullpath)
+        // the copied value may be outdated or still loading, refetch it for the new path
+        tagStore.refreshTags([newPath])
         file.fullpath = newPath
         file.name =  newPath.split(/[\\/]/).pop() ?? ''
         return 

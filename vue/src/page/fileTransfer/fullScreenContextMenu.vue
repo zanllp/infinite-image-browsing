@@ -422,7 +422,8 @@ Please return only tag names, do not include any other content.`
     )
 
     // 过滤掉已经添加到图像上的标签
-    const existingTagIds = new Set(selectedTag.value.map((t: Tag) => t.id))
+    // getTags rejects when the tags are unknown, so a failed fetch cannot toggle set tags off
+    const existingTagIds = new Set((await tagStore.getTags(props.file.fullpath)).map((t: Tag) => t.id))
     const tagsToAdd = matchedTags.filter((tag: Tag) => !existingTagIds.has(tag.id))
 
     if (tagsToAdd.length === 0) {

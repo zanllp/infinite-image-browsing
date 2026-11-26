@@ -22,21 +22,88 @@ function generateColors() {
 const tagColors = generateColors()
 
 export const useTagStore = defineStore('useTagStore', () => {
+  // tagMap only holds data that came from the server (or from `set`), never a placeholder
   const tagMap = reactive(new Map<string, Tag[]>())
-  const fetchImageTags = async (paths: string[]) => {
-    paths = paths.filter((v) => !tagMap.has(v))
-    if (!paths.length) {
-      return
+  // requests in flight per path, kept out of tagMap so a loading image does not look untagged
+  const inflight = new Map<string, { done: Promise<void> }>()
+  // paths whose cached value is outdated: it stays visible until the refetch replaces it
+  const stale = new Set<string>()
+
+  // the running request for the path is dropped, so its response is discarded
+  const markStale = (path: string) => {
+    if (tagMap.has(path)) {
+      stale.add(path)
     }
+    inflight.delete(path)
+  }
+
+  // a response only writes the paths it is still the current request for
+  const requestTags = async (paths: string[], req: { done: Promise<void> }) => {
     try {
-      paths.forEach((v) => tagMap.set(v, []))
       const res = await batchGetTagsByPath(paths)
-      for (const path in res) {
-        tagMap.set(path, res[path])
+      for (const path of paths) {
+        if (inflight.get(path) === req) {
+          inflight.delete(path)
+          // the server omits images without tags
+          tagMap.set(path, res[path] ?? [])
+        }
       }
-    } catch {
-      paths.forEach((v) => tagMap.delete(v))
+    } catch (e) {
+      for (const path of paths) {
+        if (inflight.get(path) === req) {
+          inflight.delete(path)
+          if (tagMap.has(path)) {
+            stale.add(path)
+          }
+        }
+      }
+      throw e
     }
+  }
+
+  // resolves when every path is cached and fresh, rejects if a request failed
+  const load = async (paths: string[]) => {
+    const waits: Promise<void>[] = []
+    const todo: string[] = []
+    for (const path of new Set(paths)) {
+      const running = inflight.get(path)
+      if (running) {
+        waits.push(running.done)
+      } else if (!tagMap.has(path) || stale.has(path)) {
+        todo.push(path)
+      }
+    }
+    if (todo.length) {
+      const req = { done: Promise.resolve() }
+      todo.forEach((v) => {
+        inflight.set(v, req)
+        stale.delete(v)
+      })
+      req.done = requestTags(todo, req)
+      waits.push(req.done)
+    }
+    await Promise.all(waits)
+  }
+
+  const fetchImageTags = async (paths: string[]) => {
+    try {
+      await load(paths)
+    } catch {
+      // the old value (if any) stays and the next call retries
+    }
+  }
+
+  /** Tags of the image as the server has them now. Rejects instead of returning [] when they are unknown. */
+  const getTags = async (path: string) => {
+    // an invalidation or a newer request can land while waiting, so check again
+    for (let i = 0; i < 3; i++) {
+      await load([path])
+      const tags = tagMap.get(path)
+      if (tags && !stale.has(path) && !inflight.has(path)) {
+        return tags
+      }
+    }
+    throw new Error(`Failed to load tags: ${path}`)
   }
   const colorCache = ref(new Map<string, string>())
   const notifyCacheUpdate = (updateTag?: Tag) => {
@@ -64,7 +131,7 @@ export const useTagStore = defineStore('useTagStore', () => {
     return color
   }
   const refreshTags = async (paths: string[]) => {
-    paths.forEach((v) => tagMap.delete(v))
+    paths.forEach(markStale)
     await fetchImageTags(paths)
   }
   const tagConvert = (tag: GridViewFileTag): Tag => ({
@@ -78,18 +145,24 @@ export const useTagStore = defineStore('useTagStore', () => {
   const set = (path: string, tags: (string|Tag| GridViewFileTag)[]) => {
     const normalizedTags = tags.map(v => tagConvert(typeof v === 'string' ? { name: v } : v))
     tagMap.set(path, normalizedTags)
+    inflight.delete(path)
+    stale.delete(path)
   }
 
   const invalidateTagCache = () => {
-    tagMap.clear()
+    // keep the values visible, the listeners of tagsInvalidated refetch what is on screen
+    for (const path of tagMap.keys()) {
+      stale.add(path)
+    }
+    inflight.clear()
     globalEvents.emit('tagsInvalidated')
   }
 
   /**
-   * 其他浏览器标签页改了标签：删掉对应路径的缓存，再交给已有的补拉链路。
+   * 其他浏览器标签页改了标签：把对应路径的缓存标为过期，再交给已有的补拉链路。
    *
-   * 只删「变化的那几个路径」而不是整个 clear：clear 会让每个 tab 都把整屏可视区
-   * 重新拉一遍（几十个请求），而 fetchImageTags 本身只拉缓存里没有的路径。
+   * 只处理「变化的那几个路径」而不是整个失效：那会让每个 tab 都把整屏可视区
+   * 重新拉一遍（几十个请求），而 fetchImageTags 本身只拉缓存里没有或已过期的路径。
    */
   onCrossTab((msg) => {
     if (msg.type !== 'tagsChanged') {
@@ -103,7 +176,7 @@ export const useTagStore = defineStore('useTagStore', () => {
       globalEvents.emit('backgroundMaintenanceUpdated')
       return
     }
-    msg.paths!.forEach((path) => tagMap.delete(path))
+    msg.paths!.forEach(markStale)
     globalEvents.emit('tagsInvalidated')
   })
 
@@ -113,6 +186,7 @@ export const useTagStore = defineStore('useTagStore', () => {
     tagMap,
     getColor,
     fetchImageTags,
+    getTags,
     invalidateTagCache,
     refreshTags,
     tagConvert,
