@@ -170,6 +170,9 @@ export interface Tab {
 
 export type Shortcut = Record<`toggle_tag_${string}` | 'delete' | 'download' | `copy_to_${string}`| `move_to_${string}`, string | undefined>
 
+/** zoom state the fullscreen preview opens in (and returns to on image switch / double click) */
+export type PreviewInitialZoom = 'shrinkToFit' | 'fit' | 'oneToOne'
+
 export type DefaultInitinalPage = `workspace_snapshot_${string}` | 'empty' | 'last-workspace-state'
 
 export type FullscreenMenuBlockVisibility = {
@@ -229,6 +232,7 @@ export const presistKeys = [
   'shortcut',
   'ignoredConfirmActions',
   'previewBgOpacity',
+  'previewInitialZoom',
   'defaultInitinalPage',
   'autoRefreshWalkMode',
   'autoRefreshWalkModePosLimit',
@@ -482,6 +486,7 @@ export const useGlobalStore = defineStore(
       getShortPath,
       extraPathAliasMap,
       previewBgOpacity,
+      previewInitialZoom: ref<PreviewInitialZoom>('shrinkToFit'),
       defaultInitinalPage: ref<DefaultInitinalPage>('empty'),
       autoRefreshWalkMode: ref(true),
       autoRefreshWalkModePosLimit: ref(128),

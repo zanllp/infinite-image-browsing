@@ -414,6 +414,10 @@ export const de: Partial<IIBI18nMap> = {
   previewFitToWindow: 'Einpassen (0)',
   previewRotateLeft: 'Nach links drehen',
   previewRotateRight: 'Nach rechts drehen',
+  previewInitialZoom: 'Zoom beim Öffnen der Vorschau',
+  previewInitialZoomShrinkToFit: 'Einpassen, nicht vergrößern (Standard)',
+  previewInitialZoomFit: 'Einpassen',
+  previewInitialZoomOneToOne: 'Originalgröße (100 %)',
   shortcutPresetActionFullscreenZoom: 'Vergrößern / Verkleinern',
   shortcutPresetActionFullscreenActualFit: 'Originalgröße (100 %) / einpassen',
 
