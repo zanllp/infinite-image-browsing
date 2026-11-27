@@ -1874,7 +1874,7 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         ai_model=AI_MODEL,
     )
 
-    # ===== Image groups (pixel and near duplicates by image hash) =====
+    # ===== Image groups (duplicates by image hash, variants by metadata) =====
     mount_image_groups_routes(
         app=app,
         db_api_base=db_api_base,

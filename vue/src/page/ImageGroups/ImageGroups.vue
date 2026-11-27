@@ -4,20 +4,25 @@ import {
   getImageGroups,
   getImageGroupsJobStatus,
   getImageGroupsState,
+  getImageVariants,
   startImageGroupsJob,
   type ImageGroup,
   type ImageGroupKind,
   type ImageGroupsJobStatusResp,
-  type ImageGroupsStateResp
+  type ImageGroupsStateResp,
+  type ImageVariantKind
 } from '@/api/db'
 import { t } from '@/i18n'
-import { useGlobalStore } from '@/store/useGlobalStore'
+import { useGlobalStore, type TabPane } from '@/store/useGlobalStore'
 import { toImageThumbnailUrl } from '@/util/file'
 import { debounce, uniqueId } from 'lodash-es'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
+  DEFAULT_MIN_SEEDS,
   DEFAULT_THRESHOLD,
+  MAX_MIN_SEEDS,
   MAX_THRESHOLD,
+  clampMinSeeds,
   clampThreshold,
   createGeneration,
   decideJobAction,
@@ -28,16 +33,32 @@ import {
   shouldPartialRefresh,
   statusErrorPlan,
   unreadableCounts,
+  type FetchPage,
   type LoadMode,
   type Pager
 } from './imageGroupsLogic'
 
-const props = defineProps<{ tabIdx: number; paneIdx: number; paneKey?: string }>()
+const props = defineProps<{ tabIdx: number; paneIdx: number; paneKey?: string; type?: TabPane['type'] }>()
 const g = useGlobalStore()
+// SplitViewTab binds the whole pane, so its type arrives as a prop; it selects the view and never changes.
+const viewMode: 'duplicates' | 'variants' = props.type === 'image-variants' ? 'variants' : 'duplicates'
 
 // View state lives in this component; the pane stays mounted while the tab is open.
 const kind = ref<ImageGroupKind>('pixel')
 const threshold = ref(DEFAULT_THRESHOLD)
+const variantKind = ref<ImageVariantKind>('seed')
+const minSeeds = ref(DEFAULT_MIN_SEEDS)
+const folders = ref<string[]>([])
+const multiFolder = ref(false)
+// the library folders as suggestions (as in the topic search scope); any other path can be typed
+const folderOptions = computed(() =>
+  ((g.quickMovePaths ?? []) as any[])
+    .filter((v) => {
+      const types = (v?.types ?? []) as string[]
+      return !(types.includes('preset') && ['cwd', 'home', 'desktop'].includes(String(v?.key ?? '')))
+    })
+    .map((v) => ({ value: String(v.dir), label: String(v.zh || v.dir) }))
+)
 
 const state = ref<ImageGroupsStateResp | null>(null)
 const pager = ref<Pager>(emptyPager())
@@ -63,6 +84,12 @@ const summary = computed(() =>
     total: state.value?.total ?? 0
   })
 )
+const variantSummary = computed(() =>
+  t('imageVariantsSummary', {
+    groups: t('imageGroupsNGroups', pager.value.groupCount),
+    images: t('imageGroupsSummaryImages', pager.value.imageCount)
+  })
+)
 
 const errText = (e: any) => {
   const detail = e?.response?.data?.detail
@@ -82,14 +109,25 @@ const restoreScroll = async () => {
 }
 
 // ---- groups ----
+const fetchPage: FetchPage = (offset, limit) =>
+  viewMode === 'variants'
+    ? getImageVariants({
+        kind: variantKind.value,
+        min_seeds: minSeeds.value,
+        folder_paths: folders.value,
+        multi_folder: multiFolder.value,
+        offset,
+        limit
+      })
+    : getImageGroups({ kind: kind.value, threshold: threshold.value, min_size: 2, offset, limit })
+
 let loadSeq = 0
 const loadGroups = async (mode: LoadMode = 'first') => {
   const seq = ++loadSeq
   loading.value = true
   try {
     const next = await loadPager(
-      (offset, limit) =>
-        getImageGroups({ kind: kind.value, threshold: threshold.value, min_size: 2, offset, limit }),
+      fetchPage,
       mode,
       pager.value,
       () => seq !== loadSeq // a newer request owns the list now
@@ -263,6 +301,12 @@ const cancelJob = async () => {
 }
 
 const activate = async () => {
+  if (viewMode === 'variants') {
+    // no hashes and no job: the groups come from the metadata
+    await loadGroups('keep')
+    await restoreScroll()
+    return
+  }
   await refreshState()
   if (!alive || !isActive.value) return // left again while the state request was running
   if (activeJobId) {
@@ -279,6 +323,7 @@ const activate = async () => {
 
 /** Refresh: reload state and the shown groups, attach to a running job; never starts one. */
 const refresh = async () => {
+  if (viewMode === 'variants') return loadGroups('keep')
   jobError.value = ''
   await refreshState()
   void ensureJob({ attachOnly: true })
@@ -310,6 +355,14 @@ watch(threshold, (v) => {
   if (c !== v) threshold.value = c
   else if (kind.value === 'near') reload()
 })
+watch(variantKind, () => reload())
+watch(minSeeds, (v) => {
+  const c = clampMinSeeds(v)
+  if (c !== v) minSeeds.value = c
+  else if (variantKind.value === 'seed') reload()
+})
+watch(folders, () => reload(), { deep: true })
+watch(multiFolder, () => reload())
 
 onMounted(() => {
   if (isActive.value) void activate()
@@ -321,16 +374,34 @@ onBeforeUnmount(() => {
 })
 
 // ---- tiles; a click opens the group in the shared grid (same pane type as the topic clusters) ----
-const kindText = (grp: ImageGroup) =>
-  t(grp.kind === 'near' ? 'imageGroupsKindNear' : 'imageGroupsKindPixel')
+const KIND_TEXT: Record<ImageGroup['kind'], string> = {
+  pixel: 'imageGroupsKindPixel',
+  near: 'imageGroupsKindNear',
+  seed: 'imageVariantsKindSeed',
+  params: 'imageVariantsKindParams'
+}
+const TITLE_TEXT: Record<ImageGroup['kind'], string> = {
+  pixel: 'imageGroupsCardPixel',
+  near: 'imageGroupsCardNear',
+  seed: 'imageVariantsCardSeed',
+  params: 'imageVariantsCardParam'
+}
+const kindText = (grp: ImageGroup) => t(KIND_TEXT[grp.kind])
 const countText = (grp: ImageGroup) => t('imageGroupsCardCount', grp.size)
 const distanceText = (grp: ImageGroup) =>
-  grp.kind === 'near' ? t('imageGroupsCardDistance', { distance: grp.max_distance }) : ''
-const groupTitle = (grp: ImageGroup) =>
-  t(grp.kind === 'near' ? 'imageGroupsCardNear' : 'imageGroupsCardPixel', grp.size)
+  grp.kind === 'near' ? t('imageGroupsCardDistance', { distance: grp.max_distance ?? 0 }) : ''
+const variantText = (grp: ImageGroup) =>
+  grp.kind === 'seed'
+    ? t('imageVariantsCardSeeds', grp.variant_count ?? 0)
+    : grp.kind === 'params'
+      ? t('imageVariantsCardParams', grp.variant_count ?? 0)
+      : ''
+/** Second part of the subtitle: the largest distance (near) or the number of seeds / parameter sets (variants). */
+const detailText = (grp: ImageGroup) => distanceText(grp) || variantText(grp)
+const groupTitle = (grp: ImageGroup) => t(TITLE_TEXT[grp.kind], grp.size)
 // the full texts of a tile, then the first file name (which the tile does not show)
 const tileTooltip = (grp: ImageGroup) =>
-  [kindText(grp), [countText(grp), distanceText(grp)].filter(Boolean).join(' · '), grp.images[0]?.name]
+  [kindText(grp), [countText(grp), detailText(grp)].filter(Boolean).join(' · '), grp.prompt, grp.images[0]?.name]
     .filter(Boolean)
     .join('\n')
 
@@ -342,7 +413,7 @@ const openGroup = (grp: ImageGroup) => {
     key: Date.now() + uniqueId(),
     id: uniqueId(),
     title,
-    subtitle: distanceText(grp) || undefined,
+    subtitle: [detailText(grp), grp.prompt].filter(Boolean).join(' · ') || undefined,
     paths: grp.paths // all members in backend order (medoid first), not only the preview
   }
   const tab = g.tabList[props.tabIdx]
@@ -355,46 +426,80 @@ const cellWidth = computed(() => Math.max(120, Math.min(480, Number(g.defaultGri
 </script>
 
 <template>
-  <div ref="rootEl" class="ig-root" data-testid="image-groups" @scroll.passive="onScroll">
+  <div ref="rootEl" class="ig-root" data-testid="image-groups" :data-mode="viewMode" @scroll.passive="onScroll">
     <div class="ig-toolbar">
       <div class="ig-row">
         <div class="ig-title-bar">
-          <span class="icon">🧬</span>
-          <span>{{ $t('imageGroups') }}</span>
+          <span class="icon">{{ viewMode === 'variants' ? '🎲' : '🧬' }}</span>
+          <span>{{ viewMode === 'variants' ? $t('imageVariants') : $t('imageGroups') }}</span>
         </div>
-        <a-radio-group v-model:value="kind" button-style="solid" data-testid="kind">
-          <a-radio-button value="pixel">{{ $t('imageGroupsKindPixel') }}</a-radio-button>
-          <a-radio-button value="near">{{ $t('imageGroupsKindNear') }}</a-radio-button>
-        </a-radio-group>
-        <div v-if="kind === 'near'" class="ig-threshold">
-          <span class="ig-label">{{ $t('imageGroupsThreshold') }}</span>
-          <a-slider
-            v-model:value="threshold"
-            :min="0"
-            :max="MAX_THRESHOLD"
-            :step="1"
-            class="ig-slider"
-            data-testid="threshold-slider"
+        <template v-if="viewMode === 'duplicates'">
+          <a-radio-group v-model:value="kind" button-style="solid" data-testid="kind">
+            <a-radio-button value="pixel">{{ $t('imageGroupsKindPixel') }}</a-radio-button>
+            <a-radio-button value="near">{{ $t('imageGroupsKindNear') }}</a-radio-button>
+          </a-radio-group>
+          <div v-if="kind === 'near'" class="ig-threshold">
+            <span class="ig-label">{{ $t('imageGroupsThreshold') }}</span>
+            <a-slider
+              v-model:value="threshold"
+              :min="0"
+              :max="MAX_THRESHOLD"
+              :step="1"
+              class="ig-slider"
+              data-testid="threshold-slider"
+            />
+            <a-input-number
+              v-model:value="threshold"
+              :min="0"
+              :max="MAX_THRESHOLD"
+              :step="1"
+              style="width: 70px"
+              data-testid="threshold-input"
+            />
+          </div>
+        </template>
+        <template v-else>
+          <a-radio-group v-model:value="variantKind" button-style="solid" data-testid="variant-kind">
+            <a-radio-button value="seed">{{ $t('imageVariantsKindSeed') }}</a-radio-button>
+            <a-radio-button value="params">{{ $t('imageVariantsKindParams') }}</a-radio-button>
+          </a-radio-group>
+          <div v-if="variantKind === 'seed'" class="ig-threshold">
+            <span class="ig-label">{{ $t('imageVariantsMinSeeds') }}</span>
+            <a-input-number
+              v-model:value="minSeeds"
+              :min="2"
+              :max="MAX_MIN_SEEDS"
+              :step="1"
+              style="width: 70px"
+              data-testid="min-seeds"
+            />
+          </div>
+          <a-select
+            v-model:value="folders"
+            mode="tags"
+            allow-clear
+            class="ig-folders"
+            :options="folderOptions"
+            :placeholder="$t('imageVariantsFolders')"
+            :max-tag-count="2"
+            :getPopupContainer="(trigger: HTMLElement) => trigger.parentElement || trigger"
+            data-testid="folders"
           />
-          <a-input-number
-            v-model:value="threshold"
-            :min="0"
-            :max="MAX_THRESHOLD"
-            :step="1"
-            style="width: 70px"
-            data-testid="threshold-input"
-          />
-        </div>
+          <a-checkbox v-model:checked="multiFolder" data-testid="multi-folder">{{ $t('imageVariantsMultiFolder') }}</a-checkbox>
+        </template>
         <div class="ig-spacer" />
         <a-button type="primary" ghost :loading="loading" @click="refresh" data-testid="refresh">
           {{ $t('imageGroupsRefresh') }}
         </a-button>
       </div>
       <!-- own class: a global ".hint" elsewhere in IIB positions itself absolutely-ish and covered the controls -->
-      <div v-if="kind === 'near'" class="ig-help" data-testid="threshold-help">
+      <div v-if="viewMode === 'duplicates' && kind === 'near'" class="ig-help" data-testid="threshold-help">
         {{ $t('imageGroupsThresholdHint') }}
       </div>
-      <div class="ig-summary" data-testid="summary" v-if="state || pager.groupCount">
+      <div v-if="viewMode === 'variants'" class="ig-help" data-testid="variants-help">
+        {{ $t('imageVariantsHint') }}
+      </div>
+      <div class="ig-summary" data-testid="summary" v-if="viewMode === 'duplicates' && (state || pager.groupCount)">
         {{ summary }}
         <template v-if="shownPending > 0 && !jobRunning">
           <span class="ig-note" data-testid="pending">· {{ $t('imageGroupsPendingNote', shownPending) }}</span>
@@ -409,6 +514,14 @@ const cellWidth = computed(() => Math.max(120, Math.min(480, Number(g.defaultGri
           :title="$t('imageGroupsUnreadableDetail', { skipped: unreadable.skipped, failed: unreadable.failed })"
           data-testid="unreadable"
         >· {{ $t('imageGroupsUnreadable', unreadable.total) }}</span>
+      </div>
+      <div v-if="viewMode === 'variants' && pager.noPrompt !== null" class="ig-summary" data-testid="summary">
+        {{ variantSummary }}
+        <span
+          v-if="(pager.noPrompt ?? 0) > 0"
+          class="ig-note"
+          data-testid="no-prompt"
+        >· {{ $t('imageVariantsNoPrompt', pager.noPrompt ?? 0) }}</span>
       </div>
     </div>
 
@@ -461,8 +574,9 @@ const cellWidth = computed(() => Math.max(120, Math.min(480, Number(g.defaultGri
             <div class="ig-name-title" data-testid="tile-title">{{ kindText(grp) }}</div>
             <div class="ig-sub" data-testid="tile-sub">
               <span class="ig-count">{{ countText(grp) }}</span>
-              <span v-if="grp.kind === 'near'" class="ig-dist" data-testid="distance">{{ distanceText(grp) }}</span>
+              <span v-if="detailText(grp)" class="ig-dist" data-testid="distance">{{ detailText(grp) }}</span>
             </div>
+            <div v-if="grp.prompt" class="ig-prompt" data-testid="tile-prompt">{{ grp.prompt }}</div>
           </div>
         </div>
       </div>
@@ -677,5 +791,20 @@ const cellWidth = computed(() => Math.max(120, Math.min(480, Number(g.defaultGri
 .ig-more {
   margin: 16px 0;
   text-align: center;
+}
+.ig-folders {
+  min-width: 200px;
+  max-width: 360px;
+}
+
+// the prompt of a variant group: two lines at most, the tooltip holds the (server-shortened) text
+.ig-prompt {
+  font-size: 0.7em;
+  opacity: 0.7;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 </style>

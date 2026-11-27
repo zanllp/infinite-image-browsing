@@ -566,6 +566,7 @@ export const importUserData = async (req: {
 // ===== Image groups (pixel / near duplicates from the image hash) =====
 // The view shows errors itself, so these calls are silent (no interceptor toast on top).
 export type ImageGroupKind = 'pixel' | 'near'
+export type ImageVariantKind = 'seed' | 'params'
 
 export interface ImageGroupsJobInfo {
   job_id: string
@@ -595,13 +596,18 @@ export interface ImageGroupsStateResp {
 
 export interface ImageGroup {
   id: string
-  kind: ImageGroupKind
+  kind: ImageGroupKind | ImageVariantKind
   /** Number of all members (images only holds the preview). */
   size: number
-  max_distance: number
+  /** Duplicate Images: largest Hamming distance in the group. */
+  max_distance?: number
+  /** Image Variants: different seeds (seed) or parameter sets (params) among the members. */
+  variant_count?: number
+  /** Image Variants: the positive prompt, shortened by the server. */
+  prompt?: string
   /** Preview: the first few members as file infos. */
   images: FileNodeInfo[]
-  /** All member paths, same order (medoid first). */
+  /** All member paths, same order (most typical first). */
   paths: string[]
 }
 
@@ -655,4 +661,33 @@ export const getImageGroups = async (req: {
 }) => {
   const resp = await axiosInst.value.post('/db/image_groups', req, { silent: true })
   return resp.data as ImageGroupsResp
+}
+
+// ===== Image variants (seed / parameter variants from the metadata) =====
+export interface ImageVariantsResp {
+  kind: ImageVariantKind
+  min_seeds: number
+  group_count: number
+  image_count: number
+  offset: number
+  /** Raw offset for the next page, as in ImageGroupsResp. */
+  next_offset: number
+  has_more: boolean
+  /** Images looked at (no videos or audio). */
+  total: number
+  /** Images without a positive prompt; they take no part. */
+  no_prompt: number
+  groups: ImageGroup[]
+}
+
+export const getImageVariants = async (req: {
+  kind: ImageVariantKind
+  min_seeds: number
+  folder_paths: string[]
+  multi_folder: boolean
+  offset: number
+  limit: number
+}) => {
+  const resp = await axiosInst.value.post('/db/image_variants', req, { silent: true })
+  return resp.data as ImageVariantsResp
 }

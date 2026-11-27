@@ -2,7 +2,6 @@ import type {
   ImageGroup,
   ImageGroupKind,
   ImageGroupsJobStatusResp,
-  ImageGroupsResp,
   ImageGroupsStateResp
 } from '@/api/db'
 
@@ -22,6 +21,14 @@ export const AUTO_START_MAX_PENDING = 20000
 export const STATUS_RETRY_DELAYS_MS = [2000, 2000, 4000, 4000, 6000, 6000, 8000, 8000, 10000, 10000]
 /** A job the server does not know (404, e.g. after a restart) is looked up again at most this often in a row. */
 export const MAX_JOB_RECOVERIES = 2
+export const DEFAULT_MIN_SEEDS = 3
+export const MAX_MIN_SEEDS = 100
+
+/** Minimum number of seeds of a seed variant group as an integer in 2..100; anything unusable falls back to 3. */
+export const clampMinSeeds = (v: unknown): number => {
+  const n = v === null || v === undefined || v === '' ? NaN : Math.round(Number(v))
+  return Number.isFinite(n) ? Math.max(2, Math.min(MAX_MIN_SEEDS, n)) : DEFAULT_MIN_SEEDS
+}
 
 /** Hamming distance threshold as an integer in 0..12; anything unusable falls back to the default. */
 export const clampThreshold = (v: unknown): number => {
@@ -81,7 +88,17 @@ export const shouldPartialRefresh = (now: number, last: number, kind: ImageGroup
 // The server pages over a raw offset; groups with missing files are left out of a page, so the
 // number of shown groups says nothing about the next offset. Only next_offset / has_more do.
 
-export type GroupPage = Omit<ImageGroupsResp, 'kind' | 'threshold' | 'offset'>
+/** A page of either view: the hash counts come from Duplicate Images, no_prompt from Image Variants. */
+export type GroupPage = {
+  groups: ImageGroup[]
+  group_count: number
+  image_count: number
+  next_offset: number
+  has_more: boolean
+  hashed?: number
+  pending?: number
+  no_prompt?: number
+}
 
 export type Pager = {
   groups: ImageGroup[]
@@ -89,9 +106,10 @@ export type Pager = {
   hasMore: boolean
   groupCount: number
   imageCount: number
-  /** Counts reported with the last page (null before the first one). */
+  /** Counts reported with the last page (null before the first one or when the view has none). */
   hashed: number | null
   pending: number | null
+  noPrompt: number | null
 }
 
 export const emptyPager = (): Pager => ({
@@ -101,7 +119,8 @@ export const emptyPager = (): Pager => ({
   groupCount: 0,
   imageCount: 0,
   hashed: null,
-  pending: null
+  pending: null,
+  noPrompt: null
 })
 
 /** Add a page: replace = it starts at offset 0 (the list is rebuilt), else it is appended without duplicates. */
@@ -113,8 +132,9 @@ const applyPage = (pager: Pager, page: GroupPage, replace: boolean): Pager => {
     hasMore: page.has_more,
     groupCount: page.group_count,
     imageCount: page.image_count,
-    hashed: page.hashed,
-    pending: page.pending
+    hashed: page.hashed ?? null,
+    pending: page.pending ?? null,
+    noPrompt: page.no_prompt ?? null
   }
 }
 

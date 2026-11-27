@@ -815,5 +815,18 @@ You can specify which snapshot to restore to when starting IIB in the global set
   imageGroupsSummaryImages: '{n} image | {n} images',
   imageGroupsUnreadable: '{n} image unreadable | {n} images unreadable',
   imageGroupsUnreadableDetail: 'Skipped in this session: {skipped}, saved as failed: {failed}',
-  imageGroupsReadonly: 'Read-only: computing is not possible'
+  imageGroupsReadonly: 'Read-only: computing is not possible',
+  imageVariants: 'Image Variants',
+  imageVariantsKindSeed: 'Seed variants',
+  imageVariantsKindParams: 'Parameter variants',
+  imageVariantsHint: 'Seed variants: same prompt, different seeds. Parameter variants: same prompt and seed, different model, sampler, steps, CFG or other settings.',
+  imageVariantsMinSeeds: 'Min. seeds',
+  imageVariantsFolders: 'All folders',
+  imageVariantsMultiFolder: 'Only groups across several folders',
+  imageVariantsSummary: '{groups} with {images}',
+  imageVariantsNoPrompt: '{n} image without prompt | {n} images without prompt',
+  imageVariantsCardSeeds: '{n} seed | {n} seeds',
+  imageVariantsCardParams: '{n} parameter set | {n} parameter sets',
+  imageVariantsCardSeed: 'Seed variants · {n} Image | Seed variants · {n} Images',
+  imageVariantsCardParam: 'Parameter variants · {n} Image | Parameter variants · {n} Images'
 }

@@ -548,5 +548,18 @@ export const de: Partial<IIBI18nMap> = {
   imageGroupsSummaryImages: '{n} Bild | {n} Bildern',
   imageGroupsUnreadable: '{n} Bild nicht lesbar | {n} Bilder nicht lesbar',
   imageGroupsUnreadableDetail: 'In dieser Sitzung übersprungen: {skipped}, als fehlgeschlagen gespeichert: {failed}',
-  imageGroupsReadonly: 'Schreibgeschützt: Berechnung nicht möglich'
+  imageGroupsReadonly: 'Schreibgeschützt: Berechnung nicht möglich',
+  imageVariants: 'Bildvarianten',
+  imageVariantsKindSeed: 'Seed-Varianten',
+  imageVariantsKindParams: 'Parameter-Varianten',
+  imageVariantsHint: 'Seed-Varianten: gleicher Prompt, verschiedene Seeds. Parameter-Varianten: gleicher Prompt und Seed, anderes Modell, Sampler, Steps, CFG oder andere Einstellungen.',
+  imageVariantsMinSeeds: 'Min. Seeds',
+  imageVariantsFolders: 'Alle Ordner',
+  imageVariantsMultiFolder: 'Nur Gruppen über mehrere Ordner',
+  imageVariantsSummary: '{groups} mit {images}',
+  imageVariantsNoPrompt: '{n} Bild ohne Prompt | {n} Bilder ohne Prompt',
+  imageVariantsCardSeeds: '{n} Seed | {n} Seeds',
+  imageVariantsCardParams: '{n} Parametersatz | {n} Parametersätze',
+  imageVariantsCardSeed: 'Seed-Varianten · {n} Bild | Seed-Varianten · {n} Bilder',
+  imageVariantsCardParam: 'Parameter-Varianten · {n} Bild | Parameter-Varianten · {n} Bilder'
 }

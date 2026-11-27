@@ -102,6 +102,18 @@ Find duplicate and near-duplicate images by their content, independent of file n
 >
 > 📸 See [Duplicate Images Preview](#duplicate-images) below for a screenshot and details.
 
+### 🎲 Image Variants
+Find images generated from the same prompt, grouped from their metadata.
+
+- **Seed variants**: same prompt, different seeds (batch runs, re-rolls, the same prompt on another day)
+- **Parameter variants**: same prompt and seed, different model, sampler, steps, CFG or other settings (model and sampler tests, X/Y/Z plots, runs with and without hires fix)
+- **Tiles like Duplicate Images**: each group shows its number of images, of seeds or parameter sets, and the prompt; a click opens it in the grid
+- **Filters**: minimum number of seeds, folders, and only groups that span several folders
+
+> **Requirements**: Python dependency `numpy`
+>
+> 📸 See [Image Variants Preview](#image-variants) below for screenshots and details.
+
 ### 🗂️ Smart Organize
 AI-powered automatic file organization
 
@@ -291,6 +303,34 @@ All routes are below `/infinite_image_browsing/db/`.
 - **Start / cancel the job**: `POST image_groups_job_start` (returns `job_id`, joins a running job) and `POST image_groups_job_cancel`; both need write permission
 - **Job status**: `GET image_groups_job_status?job_id=...` (`queued`, `running`, `done`, `cancelled`, `error`, with `done`, `total`, `skipped`)
 - **Groups**: `POST image_groups` with `kind` (`pixel` or `near`), `threshold`, `min_size`, `offset`, and `limit` (at most 1000); each group has `id`, `size`, `max_distance`, the first four file infos in `images`, and all paths in `paths`. Continue with `next_offset` while `has_more` is true.
+
+## Image Variants
+
+<img width="800" alt="Image Variants: seed variants" src="docs/imgs/image-variants-seed.png" />
+
+<img width="800" alt="Image Variants: parameter variants" src="docs/imgs/image-variants-params.png" />
+
+Groups of **seed variants** and **parameter variants**, read from the generation metadata. Open it from the startup page (**Image Variants**).
+
+### How to Use
+
+1. Open **“Image Variants”** from the startup page. No background job is needed: the groups come from the metadata the index already holds.
+2. Switch between **Seed variants** and **Parameter variants**. For seed variants, **Min. seeds** (default 3) sets how many different seeds a group needs.
+3. Limit the groups to **folders** (pick a library folder or type a path), or show **only groups across several folders** to hide the seeds of a single batch.
+4. Each tile shows the number of images, the number of seeds or parameter sets, and the prompt. Click it to open the group in the grid. Images are ordered by similarity where the image hashes of [Duplicate Images](#duplicate-images) exist, otherwise by date.
+
+### How it Works
+
+- **Prompt**: the positive prompt as raw text without `<lora:…>` tags, the negative prompt, and the LoRAs (name and weight, sorted). Images without a positive prompt or without a parameter line take no part; the view counts them. Images without a seed take no part either (the built-in ComfyUI parser writes none).
+- **Seed variants**: images with the same prompt and at least the minimum number of different seeds.
+- **Parameter variants**: images with the same prompt, seed and size and more than one set of generation parameters: every field of the parameter line except seed, size and source, for example model, sampler, steps, CFG, clip skip, hires fix or ADetailer.
+- **Cost**: the groups are computed once per data state and cached. For 100000 images, reading and grouping takes about one second; a cached request about 0.2 s.
+
+### API Endpoints
+
+All routes are below `/infinite_image_browsing/db/`.
+
+- **Groups**: `POST image_variants` with `kind` (`seed` or `params`), `min_seeds` (2–100, default 3, seed variants only), `folder_paths`, `multi_folder`, `offset`, and `limit` (at most 1000); each group has `id`, `size`, `variant_count` (seeds or parameter sets), a shortened `prompt`, the first four file infos in `images`, and all paths in `paths`. `no_prompt` counts the images without a positive prompt or parameter line. Continue with `next_offset` while `has_more` is true.
 
 ## Natural Language Categorization & Search (Experimental)
 

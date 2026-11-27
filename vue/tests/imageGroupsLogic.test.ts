@@ -4,6 +4,7 @@ import {
   AUTO_START_MAX_PENDING,
   PARTIAL_REFRESH_MS,
   STATUS_RETRY_DELAYS_MS,
+  clampMinSeeds,
   clampThreshold,
   createGeneration,
   decideJobAction,
@@ -162,4 +163,25 @@ test('pager: a stale answer is dropped', async () => {
   const srv = fakeServer(500, () => false)
   assert.equal(await loadPager(srv.fetchPage, 'first', emptyPager(), () => true), null)
   assert.equal(await loadPager(srv.fetchPage, 'more', emptyPager(), () => true), null)
+})
+
+test('min seeds are clamped to 2..100 and fall back to 3', () => {
+  const cases: [unknown, number][] = [
+    [2, 2], [3, 3], [1, 2], [0, 2], [100, 100], [101, 100], [4.4, 4], ['7', 7],
+    [null, 3], [undefined, 3], ['', 3], ['x', 3]
+  ]
+  for (const [value, expected] of cases) assert.equal(clampMinSeeds(value), expected, String(value))
+})
+
+test('pager: variant pages carry the no-prompt count and no hash counts', async () => {
+  const fetchPage = async (): Promise<GroupPage> => ({
+    groups: [{ id: 'seed:1', kind: 'seed', size: 3, variant_count: 3, prompt: 'p', images: [], paths: [] }],
+    group_count: 1,
+    image_count: 3,
+    next_offset: 1,
+    has_more: false,
+    no_prompt: 7
+  })
+  const p = (await loadPager(fetchPage, 'first', emptyPager()))!
+  assert.deepEqual([p.groups.length, p.noPrompt, p.hashed, p.pending], [1, 7, null, null])
 })

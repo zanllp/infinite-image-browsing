@@ -2,6 +2,13 @@
 # English
 
 ## 2026-11-27
+### ✨ Image variants: seed and parameter variants from the metadata
+A second view next to Duplicate Images groups images generated from the same prompt: seed variants (same prompt, different seeds) and parameter variants (same prompt and seed, different model, sampler, steps, CFG or other settings).
+- The groups come from the metadata in the index; no background job is needed. They are computed once per data state and cached.
+- Filters: minimum number of seeds (default 3), folders, and only groups that span several folders.
+- Inside a group, images are ordered by similarity where the image hashes of Duplicate Images exist, otherwise by date. Images without a positive prompt take no part and are counted; images without a seed take no part.
+- Needs numpy, like Duplicate Images.
+
 ### ✨ Image groups: find pixel duplicates and near duplicates
 A new view groups images that are the same picture: identical pixels (even with another file name, metadata or encoding) and near duplicates (resized, re-encoded or slightly edited copies).
 - A background job computes one hash per image when the view is opened and only for new or changed images, in a few threads (`IIB_IMAGE_HASH_THREADS`, default 3, at most 8). The job can be cancelled; what is written stays. Each hash costs about 1.1 KB in the database.
@@ -958,6 +965,13 @@ Triggered under the same circumstances as above, there will be a button to updat
 # 中文
 
 ## 2026-11-27
+### ✨ 图像变体：从元数据中查找种子变体与参数变体
+在重复图像旁新增视图，把同一提示词生成的图片归为一组：种子变体（提示词相同，种子不同）和参数变体（提示词和种子相同，模型、采样器、步数、CFG 或其他设置不同）。
+- 分组来自索引中的元数据，无需后台任务；每个数据状态只计算一次并缓存。
+- 筛选：最少种子数（默认 3）、文件夹，以及仅显示跨多个文件夹的分组。
+- 组内图片在已有重复图像的图片哈希时按相似度排序，否则按日期排序。没有正向提示词的图片不参与分组，但会被计数；没有种子的图片也不参与。
+- 与重复图像一样需要 numpy。
+
 ### ✨ 图片分组：查找像素重复与近似重复
 新增视图，把同一张图的不同副本归为一组：像素完全相同的图片（即使文件名、元数据或编码不同），以及近似重复的图片（缩放、重新编码或轻微修改的副本）。
 - 打开视图时由后台任务为新增或变更的图片各计算一个哈希，使用少量线程（`IIB_IMAGE_HASH_THREADS`，默认 3，最多 8）。任务可以取消，已写入的结果会保留。每个哈希在数据库中约占 1.1 KB。

@@ -300,6 +300,33 @@ Stop a job: no new batches start, running ones finish and what is written stays 
 ```
 `group_count` and `image_count` cover all groups before `offset`/`limit`, as stored (files that are gone from disk are not subtracted). A page leaves out the members whose file is gone and the groups that fall below `min_size`, so it can hold fewer groups than it covers. Page by page: continue with `offset = next_offset` (the position in the full list: `offset` plus the groups the page covered) while `has_more` is true; every group is visited once. `images` holds the first four members (medoid first), `paths` the paths of all `size` members in the same order. Pixel groups have `max_distance` 0 and the id `pixel:<first 16 characters of the pixel hash>`; near groups have the id `near:<smallest image id of the group>`, taken before missing files are left out, so it stays the same while files disappear.
 
+### Image variants (seed and parameter variants)
+Groups of images generated from the same prompt, read from the metadata of the index (no job): `seed` = same prompt (positive prompt without `<lora:…>`, negative prompt, LoRAs with weights) with at least `min_seeds` different seeds; `params` = same prompt, seed and size with more than one set of the other generation parameters. Needs numpy (otherwise 500).
+
+#### POST /db/image_variants
+**Request body:**
+```json
+{ "kind": "seed|params", "min_seeds": 3, "folder_paths": ["/path/to/folder"], "multi_folder": false,
+  "offset": 0, "limit": 200 }
+```
+`kind` defaults to `seed`, any other value gives 422. `min_seeds` (seed only) is clamped to 2..100, `limit` to 1..1000. `folder_paths` (optional): only images below these folders are grouped. `multi_folder`: only groups whose images lie in more than one folder.
+
+**Response:**
+```json
+{
+  "kind": "seed", "min_seeds": 3,
+  "group_count": 345, "image_count": 2098, "offset": 0, "next_offset": 200, "has_more": true,
+  "total": 5117, "no_prompt": 5,
+  "groups": [{
+    "id": "seed:792e9a3313aa1a70", "kind": "seed", "size": 12, "variant_count": 11,
+    "prompt": "a red fox in the snow, …",
+    "images": [{...FileInfo...}],
+    "paths": ["/path/to/img1.png", ...]
+  }]
+}
+```
+`total` counts the images looked at (no videos or audio), `no_prompt` those of them without a positive prompt or without a parameter line (the `Steps:` line of the A1111 form). Images without a seed take no part either. `variant_count` is the number of different seeds (`seed`) or parameter sets (`params`) among the `size` members of the group; `prompt` is the positive prompt with collapsed whitespace, at most 200 characters. Counts, paging and missing files work as in `image_groups`. Inside a group the images are ordered by the grayscale correlation of the image hashes where they exist (most typical first), the rest by date. The `id` is a hash of the prompt (`seed`) or of prompt, seed and size (`params`) and stays the same while files disappear.
+
 ---
 
 ## 5. Tag Management

@@ -793,5 +793,18 @@ export const zhHant: Partial<IIBI18nMap> = {
   imageGroupsSummaryImages: '{n} 張圖',
   imageGroupsUnreadable: '{n} 張無法讀取',
   imageGroupsUnreadableDetail: '本次工作階段已略過：{skipped}，已記為失敗：{failed}',
-  imageGroupsReadonly: '唯讀模式：無法計算'
+  imageGroupsReadonly: '唯讀模式：無法計算',
+  imageVariants: '圖片變體',
+  imageVariantsKindSeed: '種子變體',
+  imageVariantsKindParams: '參數變體',
+  imageVariantsHint: '種子變體：提示詞相同，種子不同。參數變體：提示詞和種子相同，模型、取樣器、步數、CFG 或其他設定不同。',
+  imageVariantsMinSeeds: '最少種子數',
+  imageVariantsFolders: '全部資料夾',
+  imageVariantsMultiFolder: '僅顯示跨多個資料夾的分組',
+  imageVariantsSummary: '{groups}，共 {images}',
+  imageVariantsNoPrompt: '{n} 張沒有提示詞',
+  imageVariantsCardSeeds: '{n} 個種子',
+  imageVariantsCardParams: '{n} 組參數',
+  imageVariantsCardSeed: '種子變體 · {n} 張',
+  imageVariantsCardParam: '參數變體 · {n} 張'
 }

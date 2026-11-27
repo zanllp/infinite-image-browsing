@@ -791,5 +791,18 @@ export const zhHans = {
   imageGroupsSummaryImages: '{n} 张图',
   imageGroupsUnreadable: '{n} 张无法读取',
   imageGroupsUnreadableDetail: '本次会话已跳过：{skipped}，已记为失败：{failed}',
-  imageGroupsReadonly: '只读模式：无法计算'
+  imageGroupsReadonly: '只读模式：无法计算',
+  imageVariants: '图像变体',
+  imageVariantsKindSeed: '种子变体',
+  imageVariantsKindParams: '参数变体',
+  imageVariantsHint: '种子变体：提示词相同，种子不同。参数变体：提示词和种子相同，模型、采样器、步数、CFG 或其他设置不同。',
+  imageVariantsMinSeeds: '最少种子数',
+  imageVariantsFolders: '全部文件夹',
+  imageVariantsMultiFolder: '仅显示跨多个文件夹的分组',
+  imageVariantsSummary: '{groups}，共 {images}',
+  imageVariantsNoPrompt: '{n} 张没有提示词',
+  imageVariantsCardSeeds: '{n} 个种子',
+  imageVariantsCardParams: '{n} 组参数',
+  imageVariantsCardSeed: '种子变体 · {n} 张',
+  imageVariantsCardParam: '参数变体 · {n} 张'
 }

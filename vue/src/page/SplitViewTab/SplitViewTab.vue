@@ -34,6 +34,7 @@ const compMap: Record<TabPane['type'], ReturnType<typeof defineAsyncComponent>> 
   'random-image': defineAsyncComponent(() => import('@/page/randomImage/randomImage.vue')),
   'trend': defineAsyncComponent(() => import('@/page/Trend/TrendPanel.vue')),
   'image-groups': defineAsyncComponent(() => import('@/page/ImageGroups/ImageGroups.vue')),
+  'image-variants': defineAsyncComponent(() => import('@/page/ImageGroups/ImageGroups.vue')),
 }
 const onEdit = (idx: number, targetKey: any, action: string) => {
   const tab = global.tabList[idx]

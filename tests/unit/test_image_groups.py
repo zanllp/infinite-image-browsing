@@ -118,6 +118,16 @@ def clustered_hashes(seed: int, centers: int = 12, max_flips: int = 7):
     return [hashes[i] for i in rng.permutation(len(hashes))]
 
 
+def gen(prompt="a red fox", seed=1, size="512x512", steps=20, neg="", extra=""):
+    """An exif text in the A1111 form."""
+    lines = [prompt] + ([f"Negative prompt: {neg}"] if neg else [])
+    lines.append(
+        f"Steps: {steps}, Sampler: Euler, CFG scale: 7, Seed: {seed}, Size: {size}, Model: m1{extra}, "
+        "Source Identifier: ComfyUI"
+    )
+    return "\n".join(lines)
+
+
 def components(label):
     comps = {}
     for i, l in enumerate(list(label)):
@@ -436,6 +446,124 @@ class SingleFlightTest(unittest.TestCase):
 # ---------------------------------------------------------------- job, routes and database
 
 
+class VariantParseTest(unittest.TestCase):
+    def test_the_a1111_form(self):
+        exif = (
+            'a cat, <lora:fur:0.80> sitting\n<lora:Light:1>\nNegative prompt: ugly\nSteps: 20, Sampler: Euler a, '
+            'Schedule type: Karras, CFG scale: 7, Seed: 42, Size: 512x768, Model hash: abc, Model: m1, '
+            'Lora hashes: "fur: 1a2b, Light: 3c4d", Source Identifier: Stable Diffusion web UI'
+        )
+        self.assertEqual(
+            image_groups.parse_variant_meta(exif),
+            (
+                ("a cat,  sitting", "ugly", (("Light", "1"), ("fur", "0.8"))),
+                "42",
+                "512x768",
+                (("CFG scale", "7"), ("Lora hashes", "fur: 1a2b, Light: 3c4d"), ("Model", "m1"),
+                 ("Model hash", "abc"), ("Sampler", "Euler a"), ("Schedule type", "Karras"), ("Steps", "20")),
+            ),
+        )
+
+    def test_lora_weights_are_normalised(self):
+        weights = [None, "", "1.0", "0.50", "1:0.5", "abc", " 0.7 ", "-1"]
+        self.assertEqual([image_groups._lora_weight(w) for w in weights], ["1", "1", "1", "0.5", "1:0.5", "abc", "0.7", "-1"])
+        a = image_groups.parse_variant_meta(gen("p <lora:a:0.80> <lora:b>"))
+        b = image_groups.parse_variant_meta(gen("p <lora:b:1.0> <lora:a:0.8>"))
+        self.assertEqual((a.prompt, b.prompt), (("p", "", (("a", "0.8"), ("b", "1"))),) * 2)
+
+    def test_the_prompt_stays_raw_text(self):
+        self.assertEqual(image_groups.parse_variant_meta(gen("a cat\nsitting")).prompt[0], "a cat\nsitting")
+        self.assertEqual(image_groups.parse_variant_meta("a cat  \nSteps: 1").prompt[0], "a cat")
+        self.assertNotEqual(
+            image_groups.parse_variant_meta(gen("a cat\nsitting")).prompt,
+            image_groups.parse_variant_meta(gen("a cat sitting")).prompt,
+        )
+
+    def test_without_parameter_line_or_positive_prompt_there_is_none(self):
+        for exif in ("Negative prompt: bad\nSteps: 20, Seed: 1", "<lora:x:1>\nSteps: 20, Seed: 1", "just text",
+                     "", None, "p\nNegative prompt: n"):
+            self.assertIsNone(image_groups.parse_variant_meta(exif), repr(exif))
+
+    def test_extra_json_and_quoted_values(self):
+        m = image_groups.parse_variant_meta('p\nSteps: 20, Seed: 1, Size: 1x1\nextraJsonMetaInfo: {"a": 1}')
+        self.assertEqual(m, (("p", "", ()), "1", "1x1", (("Steps", "20"), ("extraJsonMetaInfo", '{"a": 1}'))))
+        m = image_groups.parse_variant_meta(gen(extra=', Hires prompt: "x, y"'))
+        self.assertIn(("Hires prompt", "x, y"), m.params)
+
+    def test_seed_and_size_in_any_case(self):
+        # NovelAI writes its own fields in lower case after "Steps"
+        m = image_groups.parse_variant_meta("p\nSteps: 28, Source Identifier: NovelAI, steps: 28, seed: 7, size: 8x8")
+        self.assertEqual((m.seed, m.size, m.params), ("7", "8x8", (("Steps", "28"), ("steps", "28"))))
+
+
+class VariantGroupingTest(unittest.TestCase):
+    @staticmethod
+    def groups(exifs, kind):
+        return image_groups.group_variants([image_groups.parse_variant_meta(e) for e in exifs], kind)
+
+    def test_seed_groups_count_seeds_and_skip_images_without_prompt(self):
+        exifs = [gen("a red fox", 1), gen("a red fox", 2), gen("a red fox", 3), gen("a red fox", 3),
+                 gen("a blue bird", 1), gen("a blue bird", 2), None, "Negative prompt: x\nSteps: 20, Seed: 9"]
+        g = self.groups(exifs, "seed")
+        self.assertEqual([(x.members, x.variant, x.prompt) for x in g],
+                         [([0, 1, 2, 3], [0, 1, 2, 2], "a red fox"), ([4, 5], [0, 1], "a blue bird")])
+        # the id is a hash of the prompt key: stable and known
+        self.assertEqual(g[0].id, "seed:792e9a3313aa1a70")
+        self.assertEqual(image_groups._group_id("seed", ("a red fox", "", ())), g[0].id)
+        self.assertRegex(g[1].id, r"^seed:[0-9a-f]{16}$")
+
+    def test_parameter_groups_need_the_same_prompt_seed_and_size(self):
+        exifs = [gen(seed=1, size="512x512", steps=20), gen(seed=1, size="512x512", steps=30),
+                 gen(seed=1, size="768x768", steps=30), gen(seed=1, size="512x512", steps=20),
+                 gen(seed=2, size="512x512", steps=20)]
+        g = self.groups(exifs, "params")
+        self.assertEqual([(x.members, x.variant) for x in g], [([0, 1, 3], [0, 1, 0])])
+        self.assertRegex(g[0].id, r"^params:[0-9a-f]{16}$")
+        # the same images as seed variants: one group with two seeds
+        self.assertEqual([(x.members, x.variant) for x in self.groups(exifs, "seed")], [([0, 1, 2, 3, 4], [0, 0, 0, 0, 1])])
+
+    def test_images_without_a_seed_take_no_part(self):
+        # the built-in ComfyUI parser writes no seed: nothing says the seeds are the same, or different
+        comfy = ["p\nSteps: 20, Sampler: euler, Model: m1, Source Identifier: ComfyUI",
+                 "p\nSteps: 30, Sampler: euler, Model: m1, Source Identifier: ComfyUI"]
+        self.assertEqual(self.groups(comfy, "params"), [])
+        g = self.groups(comfy + [gen("p", 1), gen("p", 2)], "seed")
+        self.assertEqual([(x.members, x.variant) for x in g], [([2, 3], [0, 1])])
+
+    def test_what_separates_and_what_does_not(self):
+        self.assertEqual(self.groups([gen(seed=1, neg="x"), gen(seed=2, neg="y")], "seed"), [])  # negative prompt
+        self.assertEqual(self.groups([gen("p <lora:a:0.8>", 1), gen("p", 2)], "seed"), [])  # LoRAs
+        g = self.groups([gen(seed=1), gen(seed=1, extra=", Clip skip: 2")], "params")  # any extra field
+        self.assertEqual([(x.members, x.variant) for x in g], [([0, 1], [0, 1])])
+        g = self.groups([gen("p <lora:a:0.80> <lora:b>", 1), gen("p <lora:b:1.0> <lora:a:0.8>", 2)], "seed")
+        self.assertEqual([x.members for x in g], [[0, 1]])
+
+    def test_sorting_and_prompt_preview(self):
+        exifs = [gen("q", 1), gen("q", 2), gen("p", 1), gen("p", 2), gen("p", 3), gen("r", 1), gen("r", 2)]
+        self.assertEqual([x.members[0] for x in self.groups(exifs, "seed")], [2, 0, 5])
+        g = self.groups([gen("word " * 80, 1), gen("word " * 80, 2)], "seed")[0]
+        self.assertEqual((len(g.prompt), g.prompt[-1]), (200, "…"))
+        self.assertEqual(image_groups._short_prompt("a\n  b\tc"), "a b c")
+
+    def test_order_by_gray_thumbnails_where_they_exist_else_by_date(self):
+        def row(name, second, gray=None):
+            return DbImg(f"/x/{name}.png", size=1, date=f"2000-01-01 00:00:0{second}"), gray
+
+        order = image_groups.order_variant_members
+        self.assertEqual(order([row("a", 3), row("b", 1), row("c", 2)]), [1, 2, 0])
+        self.assertEqual(order([row("c", 1), row("a", 1)]), [1, 0])  # same date: by path
+        g0 = (np.arange(1024) % 256).astype(np.uint8)
+        self.assertEqual(order([row("a", 3, g0.tobytes()), row("b", 1)]), [1, 0])  # one thumbnail: all by date
+        g1 = g0.copy()
+        g1[:16] = 0
+        g2 = 255 - g0
+        rows = [row("A", 3, g2.tobytes()), row("B", 0), row("C", 2, g0.tobytes()), row("D", 1, g1.tobytes())]
+        expected = [[0, 2, 3][o] for o in image_hash.order_group(np.stack([g2, g0, g1]), ["/x/A.png", "/x/C.png", "/x/D.png"])]
+        result = order(rows)
+        self.assertEqual(result, expected + [1])
+        self.assertEqual(result[2:], [0, 1])  # the anti-correlated one last of the thumbnails, then the one without
+
+
 class _ApiCase(unittest.TestCase):
     @staticmethod
     def make_app(write_permission_required=None, is_path_trusted=None):
@@ -453,7 +581,7 @@ class _ApiCase(unittest.TestCase):
                 cur.execute(f"DELETE FROM {table}")
         self.conn.commit()
         image_groups._ACTIVE["job_id"] = None
-        for state in (image_groups._JOBS, image_groups._GROUPS, image_groups._EDGES, image_groups._SKIPPED):
+        for state in (image_groups._JOBS, image_groups._GROUPS, image_groups._EDGES, image_groups._SKIPPED, image_groups._VARIANTS):
             state.clear()
         self.dir = tempfile.mkdtemp(dir=_TMP_ROOT)
         self.addCleanup(shutil.rmtree, self.dir, True)
@@ -979,7 +1107,8 @@ class RoutesTest(_ApiCase):
                 "api.infinite_image_browsing_api(app)",
                 "c, b = TestClient(app), '/infinite_image_browsing/db'",
                 "r = [c.get(b + '/image_groups_state'), c.post(b + '/image_groups_job_start', json={}),",
-                "     c.post(b + '/image_groups', json={'kind': 'pixel'})]",
+                "     c.post(b + '/image_groups', json={'kind': 'pixel'}),",
+                "     c.post(b + '/image_variants', json={'kind': 'seed'})]",
                 "print('RESULT' + json.dumps([[x.status_code, x.text] for x in r]))",
             ]
         )
@@ -991,6 +1120,147 @@ class RoutesTest(_ApiCase):
         for status, text in json.loads(lines[0][len("RESULT") :]):
             self.assertEqual(status, 500, text)
             self.assertIn("numpy", text)
+
+
+class VariantRoutesTest(_ApiCase):
+    def gen_file(self, name: str, exif=None, im: Image.Image = None, raw: bytes = None) -> int:
+        path = self.path(name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if raw is not None:
+            with open(path, "wb") as f:
+                f.write(raw)
+        else:
+            (im or Image.new("RGB", (8, 8), (9, 9, 9))).save(path)
+        self._clock += 1
+        img = DbImg(path, exif, size=os.stat(path).st_size, date=f"2000-01-01 00:00:{self._clock:02d}")
+        img.save(self.conn)
+        self.conn.commit()
+        return img.id
+
+    def variants(self, kind="seed", client=None, **kw) -> dict:
+        return (client or self.client).post(DB_API + "/image_variants", json={"kind": kind, **kw}).json()
+
+    @staticmethod
+    def head(r: dict) -> dict:
+        return {k: v for k, v in r.items() if k != "groups"}
+
+    def test_seed_and_parameter_variants_of_a_small_library(self):
+        s = [self.gen_file(f"s{k}.png", gen("a red fox", seed)) for k, seed in enumerate((1, 2, 3), 1)]
+        s.append(self.gen_file("s4.png", gen("a red fox", 3, steps=30)))
+        self.gen_file("q1.png", gen("a blue bird", 1))
+        self.gen_file("q2.png", gen("a blue bird", 2))
+        self.gen_file("n1.png", "Negative prompt: x\nSteps: 20, Seed: 9")
+        self.gen_file("n2.png", None)
+        self.gen_file("clip.mp4", gen("a red fox", 4), raw=b"\x00\x00\x00\x18ftypmp42" + bytes(40))
+        r = self.variants("seed")
+        self.assertEqual(self.head(r), {"kind": "seed", "min_seeds": 3, "group_count": 1, "image_count": 4, "offset": 0,
+                                        "next_offset": 1, "has_more": False, "total": 8, "no_prompt": 2})
+        g = r["groups"][0]
+        self.assertEqual((g["id"], g["kind"], g["size"], g["variant_count"], g["prompt"]),
+                         ("seed:792e9a3313aa1a70", "seed", 4, 3, "a red fox"))
+        file_info = {"type", "id", "date", "created_date", "size", "is_under_scanned_path", "bytes", "name", "fullpath"}
+        self.assertEqual(set(g["images"][0]), file_info)
+        self.assertEqual(g["paths"], [self.path(f"s{k}.png") for k in (1, 2, 3, 4)])  # no hashes: by date
+        r = self.variants("seed", min_seeds=2)
+        self.assertEqual((r["group_count"], r["image_count"], [x["size"] for x in r["groups"]]), (2, 6, [4, 2]))
+        r = self.variants("params")
+        self.assertEqual((r["group_count"], r["image_count"], r["total"], r["no_prompt"]), (1, 2, 8, 2))
+        g = r["groups"][0]
+        self.assertRegex(g["id"], r"^params:[0-9a-f]{16}$")
+        self.assertEqual((g["kind"], g["size"], g["variant_count"], g["paths"]),
+                         ("params", 2, 2, [self.path("s3.png"), self.path("s4.png")]))
+        for kind in ("x", 3):
+            self.assertIn(self.client.post(DB_API + "/image_variants", json={"kind": kind}).status_code, (400, 422))
+
+    def test_filters_min_seeds_folders_and_several_folders(self):
+        for k in (1, 2, 3):
+            self.gen_file(f"a/x{k}.png", gen("a red fox", k))
+        self.gen_file("b/y1.png", gen("a red fox", 4))
+        for k in (1, 2, 3):
+            self.gen_file(f"a/z{k}.png", gen("a green frog", k))
+        r = self.variants()
+        self.assertEqual((r["group_count"], r["image_count"], r["total"], [x["size"] for x in r["groups"]]), (2, 7, 7, [4, 3]))
+        self.assertEqual(self.variants(min_seeds=4)["group_count"], 1)
+        self.assertEqual([self.variants(min_seeds=1)[k] for k in ("min_seeds", "group_count")], [2, 2])
+        self.assertEqual([self.variants(min_seeds=999)[k] for k in ("min_seeds", "group_count")], [100, 0])
+        a, b = self.path("a"), self.path("b")
+        r = self.variants(folder_paths=[a])
+        self.assertEqual((r["group_count"], r["total"], [x["size"] for x in r["groups"]]), (2, 6, [3, 3]))
+        self.assertEqual(self.head(self.variants(folder_paths=[a + os.sep, " "])), self.head(r))
+        self.assertEqual((self.variants(folder_paths=[b])["group_count"], self.variants(folder_paths=[b])["total"]), (0, 1))
+        self.assertEqual(self.variants(folder_paths=[a, b])["total"], 7)
+        r = self.variants(multi_folder=True)
+        self.assertEqual((r["group_count"], r["groups"][0]["size"]), (1, 4))
+        self.assertEqual(self.variants("params", multi_folder=True)["group_count"], 0)
+
+    def test_groups_are_computed_once_per_data_for_both_kinds(self):
+        ids = [self.gen_file(f"c{k}.png", gen("a red fox", k)) for k in (1, 2, 3)]
+        self.gen_file("other.png", gen("a blue bird", 1))
+        calls = []
+        real = image_groups.parse_variant_meta
+
+        def counting(exif):
+            calls.append(image_groups._COMPUTE_LOCK.locked())
+            return real(exif)
+
+        with patch.object(image_groups, "parse_variant_meta", counting):
+            first = self.variants("seed")
+            self.variants("params")
+            self.assertEqual(self.variants("seed"), first)
+            self.assertEqual(calls, [True] * 4)  # once per image for both kinds, under the compute lock
+            # an edited exif (same size and date) is new data
+            self.conn.execute("UPDATE image SET exif = ? WHERE id = ?", (gen("a red fox", 9), ids[0]))
+            self.conn.commit()
+            self.assertEqual(self.variants("seed")["groups"][0]["variant_count"], 3)
+            self.assertEqual(len(calls), 8)
+            # back to the old data: from the cache
+            self.conn.execute("UPDATE image SET exif = ? WHERE id = ?", (gen("a red fox", 1), ids[0]))
+            self.conn.commit()
+            self.assertEqual(self.variants("seed"), first)
+            self.assertEqual(len(calls), 8)
+
+    def test_paging_and_members_that_are_gone(self):
+        for name, n in (("a", 5), ("b", 4), ("c", 3)):
+            for k in range(1, n + 1):
+                self.gen_file(f"{name}{k}.png", gen(f"prompt {name}", k))
+        full = self.variants()
+        self.assertEqual((full["group_count"], full["image_count"], [x["size"] for x in full["groups"]]), (3, 12, [5, 4, 3]))
+        page = self.variants(offset=1, limit=1)
+        self.assertEqual((page["next_offset"], page["has_more"], [x["id"] for x in page["groups"]]),
+                         (2, True, [full["groups"][1]["id"]]))
+        os.remove(self.path("c3.png"))
+        r = self.variants()
+        # c has two seeds left: below min_seeds it leaves the page, the counts stay those of the stored groups
+        self.assertEqual((r["group_count"], r["image_count"], r["next_offset"], r["has_more"]), (3, 12, 3, False))
+        self.assertEqual([x["id"] for x in r["groups"]], [x["id"] for x in full["groups"][:2]])
+        g = self.variants(min_seeds=2)["groups"][2]
+        self.assertEqual((g["id"], g["size"], g["variant_count"]), (full["groups"][2]["id"], 2, 2))
+
+    def test_order_follows_the_image_hashes_once_computed(self):
+        base = motif(300)
+        self.gen_file("o.png", gen("a red fox", 1), im=motif(301))  # oldest, but another motif
+        self.gen_file("b.png", gen("a red fox", 2), im=base)
+        self.gen_file("n.png", gen("a red fox", 3), im=noisy(base))
+        self.assertEqual(self.variants()["groups"][0]["paths"], [self.path(x) for x in ("o.png", "b.png", "n.png")])
+        self.run_job()
+        paths = self.variants()["groups"][0]["paths"]
+        self.assertEqual((set(paths[:2]), paths[2]), ({self.path("b.png"), self.path("n.png")}, self.path("o.png")))
+
+    def test_access_control_and_read_only(self):
+        for k in (1, 2, 3):
+            self.gen_file(f"inside/{k}.png", gen("a red fox", k))
+        self.gen_file("outside/4.png", gen("a red fox", 4))
+        inside = self.path("inside")
+        with TestClient(self.make_app(is_path_trusted=lambda p: p.startswith(inside + os.sep))) as client:
+            r = self.variants(client=client)
+            self.assertEqual((r["total"], r["group_count"], r["groups"][0]["size"]), (3, 1, 3))
+            self.assertTrue(all(p.startswith(inside) for p in r["groups"][0]["paths"]))
+
+        async def read_only():
+            raise HTTPException(status_code=403, detail="read only")
+
+        with TestClient(self.make_app(write_permission_required=read_only)) as client:
+            self.assertEqual(client.post(DB_API + "/image_variants", json={"kind": "seed"}).status_code, 200)
 
 
 class DatabaseTest(_ApiCase):
