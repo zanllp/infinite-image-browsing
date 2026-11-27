@@ -11,6 +11,12 @@ User wants to find images
 ├── By tag → POST /db/match_images_by_tags
 └── Random selection → GET /db/random_images
 
+User wants to find duplicate images
+├── Hash status → GET /db/image_groups_state
+├── Compute missing hashes → POST /db/image_groups_job_start (poll /db/image_groups_job_status)
+├── Exact or near-identical groups → POST /db/image_groups
+└── Remove chosen files → POST /delete_files (only after the user confirmed)
+
 User wants to organize images
 ├── Move specific files → POST /move_files
 ├── Copy specific files → POST /copy_files
@@ -86,6 +92,24 @@ curl -X POST http://127.0.0.1:<port>/infinite_image_browsing/db/organize_files_c
   -H "Content-Type: application/json" \
   -d '{"job_id": "abc123"}'
 ```
+
+### Find duplicate images
+
+```bash
+# 1. Hash the images that are not hashed yet (skip if pending is 0)
+curl http://127.0.0.1:<port>/infinite_image_browsing/db/image_groups_state
+curl -X POST http://127.0.0.1:<port>/infinite_image_browsing/db/image_groups_job_start \
+  -H "Content-Type: application/json" -d '{}'
+# Returns: {"job_id": "abc123", "already_running": false}; poll image_groups_job_status until "done"
+
+# 2. List the groups ("pixel" for identical pixels, "near" for similar ones)
+curl -X POST http://127.0.0.1:<port>/infinite_image_browsing/db/image_groups \
+  -H "Content-Type: application/json" \
+  -d '{"kind": "pixel", "limit": 50}'
+# Response: {"groups": [{"id": "...", "size": 2, "paths": ["/a.png", "/b.png"]}], "has_more": false, ...}
+```
+
+Present the groups to the user (the first path of a group is its most typical image) and delete only what they choose, with `POST /delete_files`.
 
 ### Add new folder to library
 
