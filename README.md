@@ -30,6 +30,7 @@ If you would like to support more software, please refer to: [parsers](https://g
 - You can also control the width of the grid images, allowing them to be displayed in widths ranging from 64px to 1024px.
 - Supports pre-generating thumbnails and video covers to improve performance using `--generate_video_cover` and `--generate_image_cache`.
 - Supports specifying the cache directory through the `IIB_CACHE_DIR` environment variable.
+- The number of threads that compute image hashes for the [Duplicate Images](#duplicate-images) view can be set with the `IIB_IMAGE_HASH_THREADS` environment variable (default 3, between 1 and 8).
 
 ### 🔍 Image Search & Favorite
 - The prompt, model, Lora, and other information will be converted into tags and sorted by frequency of use for precise searching.
@@ -88,6 +89,30 @@ If you would like to support more software, please refer to: [parsers](https://g
 
 ### 🧠 Topic/Tag Analysis
 - Tag relationship graph visualization for topic clusters.
+
+### 🧬 Duplicate Images
+Find duplicate and near-duplicate images by their content, independent of file names and metadata.
+
+- **Pixel duplicates**: images with identical pixels, even if the file name, the encoding, or the metadata differ
+- **Near duplicates**: images that look almost the same (re-encoded, resized, slightly edited); a threshold sets how similar they must be
+- **Folder-style tiles**: each group is a tile with a thumbnail mosaic; a click opens the group in the grid, where you select, tag, and delete as usual
+- **Incremental background job**: image hashes are computed only for new and changed images, with progress and a cancel button; the view starts the job when you open it
+
+> **Requirements**: Python dependencies `numpy` and `Pillow`
+>
+> 📸 See [Duplicate Images Preview](#duplicate-images) below for a screenshot and details.
+
+### 🎲 Image Variants
+Find images generated from the same prompt, grouped from their metadata.
+
+- **Seed variants**: same prompt, different seeds (batch runs, re-rolls, the same prompt on another day)
+- **Parameter variants**: same prompt and seed, different model, sampler, steps, CFG or other settings (model and sampler tests, X/Y/Z plots, runs with and without hires fix)
+- **Tiles like Duplicate Images**: each group shows its number of images, of seeds or parameter sets, and the prompt; a click opens it in the grid
+- **Filters**: minimum number of seeds, folders, and only groups that span several folders
+
+> **Requirements**: Python dependency `numpy`
+>
+> 📸 See [Image Variants Preview](#image-variants) below for screenshots and details.
 
 ### 🗂️ Smart Organize
 AI-powered automatic file organization
@@ -242,6 +267,70 @@ AI-powered automatic file organization - groups similar images and creates meani
 <img width="800" alt="Smart Organize Preview List" src="docs/imgs/smart-organize-preview-list.png" />
 
 https://github.com/user-attachments/assets/c1279556-d255-4e71-b230-48523a4859bf
+
+## Duplicate Images
+
+<img width="800" alt="Duplicate Images" src="docs/imgs/duplicate-images.png" />
+
+Groups of **pixel duplicates** and **near duplicates**, computed from the image content. Open it from the startup page (**Duplicate Images**).
+
+### How to Use
+
+1. Open **“Duplicate Images”** from the startup page. If images have not been hashed yet, the view starts a background job and shows its progress (**Cancel** stops it, finished work is kept).
+2. Switch between **Pixel duplicates** and **Near duplicates**. For near duplicates, the **Threshold** (0–12, default 8) sets how similar images must be: `0` means "looks identical", higher values also group merely similar images, and from about 10 on similar images start to chain into large groups.
+3. Each tile shows a group with its number of images (and, for near duplicates, the largest distance between two members). Click it to open the group in the grid: images are ordered by similarity, the most typical one first. Select, tag, or delete there as usual.
+4. **Refresh** reloads the groups; **Compute missing** computes the hashes of images that are not hashed yet.
+
+> The job starts by itself when at most 20000 images are missing; above that, click **Compute missing**. In read-only mode (`IIB_ACCESS_CONTROL_PERMISSION=read-only`) nothing is computed, the view only shows what has been computed before.
+
+### How it Works
+
+- **Pixel hash**: SHA-256 over the decoded pixels (first frame, alpha on white, 16 bit scaled to 8 bit). The EXIF orientation is ignored, so the same pixels with a different orientation tag count as pixel duplicates.
+- **Perceptual hash**: 64-bit pHash (DCT of a 32×32 grayscale version). Near duplicates are the connected components of images whose Hamming distance is at most the threshold, and a group needs at least two different pixel hashes. Plain single-color images are excluded from near groups.
+- **Ordering**: a 32×32 grayscale thumbnail is stored per image; inside a group, images are sorted by their correlation to the most typical one.
+- **Storage**: table `image_hash` (about 1.1 KB per image). A hash is recomputed when the file size or modification time of the image changes or when the version of the procedure changes. Images that cannot be decoded are remembered as failed; images that could not be read (missing file, permissions) are retried in the next job.
+- **Cost**: for about 5000 images the first run takes roughly 35 s with 3 threads; later runs only process new and changed images. Grouping of 50000 images takes a few seconds once per data state; changing the threshold afterwards is almost free.
+
+### Configuration
+
+- **`IIB_IMAGE_HASH_THREADS`**: threads of the hash job, default `3`, between `1` and `8`
+
+### API Endpoints
+
+All routes are below `/infinite_image_browsing/db/`.
+
+- **State**: `GET image_groups_state` returns `total`, `hashed`, `failed`, `pending`, `skipped`, `version` and the running `job`
+- **Start / cancel the job**: `POST image_groups_job_start` (returns `job_id`, joins a running job) and `POST image_groups_job_cancel`; both need write permission
+- **Job status**: `GET image_groups_job_status?job_id=...` (`queued`, `running`, `done`, `cancelled`, `error`, with `done`, `total`, `skipped`)
+- **Groups**: `POST image_groups` with `kind` (`pixel` or `near`), `threshold`, `min_size`, `offset`, and `limit` (at most 1000); each group has `id`, `size`, `max_distance`, the first four file infos in `images`, and all paths in `paths`. Continue with `next_offset` while `has_more` is true.
+
+## Image Variants
+
+<img width="800" alt="Image Variants: seed variants" src="docs/imgs/image-variants-seed.png" />
+
+<img width="800" alt="Image Variants: parameter variants" src="docs/imgs/image-variants-params.png" />
+
+Groups of **seed variants** and **parameter variants**, read from the generation metadata. Open it from the startup page (**Image Variants**).
+
+### How to Use
+
+1. Open **“Image Variants”** from the startup page. No background job is needed: the groups come from the metadata the index already holds.
+2. Switch between **Seed variants** and **Parameter variants**. For seed variants, **Min. seeds** (default 3) sets how many different seeds a group needs.
+3. Limit the groups to **folders** (pick a library folder or type a path), or show **only groups across several folders** to hide the seeds of a single batch.
+4. Each tile shows the number of images, the number of seeds or parameter sets, and the prompt. Click it to open the group in the grid. Images are ordered by similarity where the image hashes of [Duplicate Images](#duplicate-images) exist, otherwise by date.
+
+### How it Works
+
+- **Prompt**: the positive prompt as raw text without `<lora:…>` tags, the negative prompt, and the LoRAs (name and weight, sorted). Images without a positive prompt or without a parameter line take no part; the view counts them. Images without a seed take no part either (the built-in ComfyUI parser writes none).
+- **Seed variants**: images with the same prompt and at least the minimum number of different seeds.
+- **Parameter variants**: images with the same prompt, seed and size and more than one set of generation parameters: every field of the parameter line except seed, size and source, for example model, sampler, steps, CFG, clip skip, hires fix or ADetailer.
+- **Cost**: the groups are computed once per data state and cached. For 100000 images, reading and grouping takes about one second; a cached request about 0.2 s.
+
+### API Endpoints
+
+All routes are below `/infinite_image_browsing/db/`.
+
+- **Groups**: `POST image_variants` with `kind` (`seed` or `params`), `min_seeds` (2–100, default 3, seed variants only), `folder_paths`, `multi_folder`, `offset`, and `limit` (at most 1000); each group has `id`, `size`, `variant_count` (seeds or parameter sets), a shortened `prompt`, the first four file infos in `images`, and all paths in `paths`. `no_prompt` counts the images without a positive prompt or parameter line. Continue with `next_offset` while `has_more` is true.
 
 ## Natural Language Categorization & Search (Experimental)
 

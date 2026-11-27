@@ -60,6 +60,8 @@ const compCnMap: Partial<Record<TabPane['type'], string>> = {
   'random-image': t('randomImage'),
   'global-setting': t('globalSettings'),
   'trend': t('trend'),
+  'image-groups': t('imageGroups'),
+  'image-variants': t('imageVariants'),
 }
 type FileTransModeIn = 'preset' | ExtraPathType
 const createPane = (type: TabPane['type'], path?: string, mode?: FileTransModeIn) => {
@@ -78,6 +80,8 @@ const createPane = (type: TabPane['type'], path?: string, mode?: FileTransModeIn
     case 'topic-search':
     case 'random-image':
     case 'trend':
+    case 'image-groups':
+    case 'image-variants':
     case 'empty':
       pane = { type, name: compCnMap[type]!, key: Date.now() + uniqueId() }
       break

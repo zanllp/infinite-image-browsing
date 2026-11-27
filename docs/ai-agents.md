@@ -40,6 +40,8 @@ Once IIB is running, you can ask your AI agent to help with various image tasks:
 - "Organize my Downloads folder by theme"
 - "Move all landscape images to a separate folder"
 - "Create folders for different art styles"
+- "Find duplicate images in my library"
+- "Show me images generated from the same prompt with different seeds"
 
 **Information Retrieval:**
 - "Show me the generation parameters of this image"

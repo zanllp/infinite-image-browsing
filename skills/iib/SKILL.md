@@ -1,6 +1,6 @@
 ---
 name: iib
-description: Interact with IIB (Infinite Image Browsing) service for searching, browsing, tagging, and organizing AI-generated images. Use when the user needs to search images by prompt/keyword, manage image tags, organize files into folders, get image generation parameters, or work with an image library.
+description: Interact with IIB (Infinite Image Browsing) service for searching, browsing, tagging, and organizing AI-generated images. Use when the user needs to search images by prompt/keyword, find duplicate images or seed and parameter variants, manage image tags, organize files into folders, get image generation parameters, or work with an image library.
 ---
 
 # IIB (Infinite Image Browsing)
@@ -57,6 +57,9 @@ nohup python app.py --port <port> > iib.log 2>&1 &
 | Move files | POST | `/move_files` |
 | Copy files | POST | `/copy_files` |
 | Tag images | POST | `/db/batch_update_image_tag` |
+| Find duplicate images | POST | `/db/image_groups` |
+| Hash images for duplicates | POST | `/db/image_groups_job_start` |
+| Find seed or parameter variants | POST | `/db/image_variants` |
 | Get image metadata | GET | `/image_geninfo?path=...` |
 | Add library path | POST | `/db/extra_paths` |
 | Remove library path | DELETE | `/db/extra_paths` |
@@ -182,6 +185,38 @@ curl -X POST http://127.0.0.1:<port>/infinite_image_browsing/image_geninfo_batch
   -H "Content-Type: application/json" \
   -d '{"paths": ["/path/to/img1.png", "/path/to/img2.png"]}'
 ```
+
+### Find Duplicate Images
+
+Groups of images with identical pixels (`pixel`) or visually near-identical ones (`near`), computed from hashes of the image content. Needs numpy. Details: [API Reference](references/api-reference.md#image-groups-pixel-and-near-duplicates).
+
+```bash
+# 1. Check how many images are hashed
+curl http://127.0.0.1:<port>/infinite_image_browsing/db/image_groups_state
+# If pending > 0, start the hash job and poll until its status is "done"
+curl -X POST http://127.0.0.1:<port>/infinite_image_browsing/db/image_groups_job_start \
+  -H "Content-Type: application/json" -d '{}'
+curl "http://127.0.0.1:<port>/infinite_image_browsing/db/image_groups_job_status?job_id=<job_id>"
+
+# 2. Get the groups
+curl -X POST http://127.0.0.1:<port>/infinite_image_browsing/db/image_groups \
+  -H "Content-Type: application/json" \
+  -d '{"kind": "near", "threshold": 8, "limit": 50}'
+```
+
+Each group lists its `paths`, the most typical image first. A lower `threshold` (0 to 12) finds only closer matches; from about 10 on, groups start to chain into large ones. Page with `next_offset` while `has_more` is true. Show the groups to the user and let them choose what to remove; never delete duplicates automatically.
+
+### Find Image Variants
+
+Groups of images generated from the same prompt: `seed` (different seeds) or `params` (same seed, different model, sampler, steps, CFG or other settings), read from the metadata. Needs numpy. Details: [API Reference](references/api-reference.md#image-variants-seed-and-parameter-variants).
+
+```bash
+curl -X POST http://127.0.0.1:<port>/infinite_image_browsing/db/image_variants \
+  -H "Content-Type: application/json" \
+  -d '{"kind": "seed", "min_seeds": 3, "limit": 50}'
+```
+
+Each group lists its `paths`, the most typical image first, with `variant_count` and the shortened `prompt`. `folder_paths` limits the images to folders, `multi_folder: true` keeps only groups that span several folders. Page with `next_offset` while `has_more` is true. Variants are intended; let the user choose which to keep.
 
 ### Library Management
 

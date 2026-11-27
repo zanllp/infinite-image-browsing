@@ -71,6 +71,7 @@ from scripts.iib.db.datamodel import (
 )
 from scripts.iib.db.update_image_data import update_image_data, rebuild_image_index, add_image_data_single
 from scripts.iib.topic_cluster import mount_topic_cluster_routes
+from scripts.iib.image_groups import mount_image_groups_routes
 from scripts.iib.tag_graph import mount_tag_graph_routes
 from scripts.iib.organize_files import mount_organize_routes
 from scripts.iib.trend import mount_trend_routes
@@ -1871,6 +1872,15 @@ def infinite_image_browsing_api(app: FastAPI, **kwargs):
         twelvelabs_api_key=TWELVELABS_API_KEY,
         embedding_model=EMBEDDING_MODEL,
         ai_model=AI_MODEL,
+    )
+
+    # ===== Image groups (duplicates by image hash, variants by metadata) =====
+    mount_image_groups_routes(
+        app=app,
+        db_api_base=db_api_base,
+        verify_secret=verify_secret,
+        write_permission_required=write_permission_required,
+        is_path_trusted=is_path_trusted if enable_access_control else None,
     )
 
     # ===== Tag 关系图 =====

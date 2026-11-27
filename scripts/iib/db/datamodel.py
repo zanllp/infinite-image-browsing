@@ -118,6 +118,7 @@ class DataBase:
             GlobalSetting.create_table(conn)
             ImageEmbedding.create_table(conn)
             ImageEmbeddingFail.create_table(conn)
+            ImageHash.create_table(conn)
             TopicTitleCache.create_table(conn)
             TopicClusterCache.create_table(conn)
             UserTagPending.create_table(conn)
@@ -229,6 +230,11 @@ class Image:
         self.path = os.path.normpath(new_path)
         with closing(conn.cursor()) as cur:
             if force: # force update path
+                # the overwritten row takes its image hash with it
+                cur.execute(
+                    "DELETE FROM image_hash WHERE image_id IN (SELECT id FROM image WHERE path = ?)",
+                    (self.path,),
+                )
                 cur.execute("DELETE FROM image WHERE path = ?", (self.path,))
             cur.execute("UPDATE image SET path = ? WHERE id = ?", (self.path, self.id))
 
@@ -316,6 +322,7 @@ class Image:
             # so deletion works regardless of FK settings and keeps DB clean.
             cur.execute("DELETE FROM image_embedding WHERE image_id = ?", (int(image_id),))
             cur.execute("DELETE FROM image_embedding_fail WHERE image_id = ?", (int(image_id),))
+            cur.execute("DELETE FROM image_hash WHERE image_id = ?", (int(image_id),))
             cur.execute("DELETE FROM image_tag WHERE image_id = ?", (int(image_id),))
             cur.execute("DELETE FROM image WHERE id = ?", (image_id,))
             conn.commit()
@@ -348,7 +355,7 @@ class Image:
                         )
                         for tag_id, n in cur.fetchall():
                             Tag.add_count(conn, tag_id, -n)
-                        for table in ("image_tag", "image_embedding", "image_embedding_fail"):
+                        for table in ("image_tag", "image_embedding", "image_embedding_fail", "image_hash"):
                             cur.execute(f"DELETE FROM {table} WHERE image_id IN ({placeholders})", ids)
                 commit_with_retry(conn)
                 removed += len(ids)
@@ -375,6 +382,10 @@ class Image:
                 )
                 cur.execute(
                     f"DELETE FROM image_embedding_fail WHERE image_id IN ({placeholders})",
+                    image_ids,
+                )
+                cur.execute(
+                    f"DELETE FROM image_hash WHERE image_id IN ({placeholders})",
                     image_ids,
                 )
                 cur.execute(
@@ -657,6 +668,50 @@ class ImageEmbeddingFail:
     def delete(cls, conn: Connection, *, image_id: int, model: str):
         with closing(conn.cursor()) as cur:
             cur.execute("DELETE FROM image_embedding_fail WHERE image_id = ? AND model = ?", (int(image_id), str(model)))
+
+
+class ImageHash:
+    """
+    Pixel hash and perceptual hash per image, the basis of the image groups (scripts/iib/image_hash.py).
+
+    phash is NULL for flat images. A row is current only while its version is HASH_VERSION and its size and
+    date are those of the image row. status 'fail' records an image that could not be decoded (error says
+    why), so it is not retried on every run.
+    """
+
+    @classmethod
+    def create_table(cls, conn: Connection):
+        with closing(conn.cursor()) as cur:
+            cur.execute(
+                """CREATE TABLE IF NOT EXISTS image_hash (
+                    image_id INTEGER PRIMARY KEY,
+                    pixel_sha TEXT,
+                    phash INTEGER,
+                    gray BLOB,
+                    version INTEGER NOT NULL,
+                    size INTEGER,
+                    date TEXT,
+                    status TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    error TEXT,
+                    FOREIGN KEY (image_id) REFERENCES image(id)
+                )"""
+            )
+
+    @classmethod
+    def upsert_many(cls, conn: Connection, rows: List[tuple]) -> None:
+        """rows: (image_id, pixel_sha, phash, gray, version, size, date, status, error).
+
+        Rows of images that were deleted meanwhile are skipped. The caller commits.
+        """
+        now = datetime.now().isoformat()
+        with closing(conn.cursor()) as cur:
+            cur.executemany(
+                """INSERT OR REPLACE INTO image_hash
+                   (image_id, pixel_sha, phash, gray, version, size, date, status, error, updated_at)
+                   SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM image WHERE id = ?)""",
+                [(*r, now, r[0]) for r in rows],
+            )
 
 
 class TopicTitleCache:

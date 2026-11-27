@@ -1,6 +1,22 @@
 [跳到中文](#中文)
 # English
 
+## 2026-11-27
+### ✨ Image variants: seed and parameter variants from the metadata
+A second view next to Duplicate Images groups images generated from the same prompt: seed variants (same prompt, different seeds) and parameter variants (same prompt and seed, different model, sampler, steps, CFG or other settings).
+- The groups come from the metadata in the index; no background job is needed. They are computed once per data state and cached.
+- Filters: minimum number of seeds (default 3), folders, and only groups that span several folders.
+- Inside a group, images are ordered by similarity where the image hashes of Duplicate Images exist, otherwise by date. Images without a positive prompt take no part and are counted; images without a seed take no part.
+- Needs numpy, like Duplicate Images.
+
+### ✨ Image groups: find pixel duplicates and near duplicates
+A new view groups images that are the same picture: identical pixels (even with another file name, metadata or encoding) and near duplicates (resized, re-encoded or slightly edited copies).
+- A background job computes one hash per image when the view is opened and only for new or changed images, in a few threads (`IIB_IMAGE_HASH_THREADS`, default 3, at most 8). The job can be cancelled; what is written stays. Each hash costs about 1.1 KB in the database.
+- Pixel duplicates compare decoded pixels; the EXIF orientation is ignored, so a rotated copy is a different image. Near duplicates use a perceptual hash and a distance threshold of 0 to 12; plain-colour images take no part in near groups.
+- Needs numpy, which stays optional: without it the server starts normally and the routes answer with an error.
+- Groups are shown as tiles with a preview of up to four images; opening a group lists all its members. The list is loaded page by page (`next_offset` and `has_more` tell where to continue), and files that were deleted since the last index are left out of the groups shown.
+- The hash job starts by itself when the view is opened only for libraries of up to 20000 images; for larger ones a button starts it.
+
 ## 2026-11-15
 ### macOS desktop preview and release 1.11.0
 - Added separate Apple Silicon and Intel macOS installers. These are ad-hoc signed preview builds, without Apple Developer ID signing or notarization; macOS may still block the first launch. See the README before installing.
@@ -947,6 +963,22 @@ Triggered under the same circumstances as above, there will be a button to updat
 
 
 # 中文
+
+## 2026-11-27
+### ✨ 图像变体：从元数据中查找种子变体与参数变体
+在重复图像旁新增视图，把同一提示词生成的图片归为一组：种子变体（提示词相同，种子不同）和参数变体（提示词和种子相同，模型、采样器、步数、CFG 或其他设置不同）。
+- 分组来自索引中的元数据，无需后台任务；每个数据状态只计算一次并缓存。
+- 筛选：最少种子数（默认 3）、文件夹，以及仅显示跨多个文件夹的分组。
+- 组内图片在已有重复图像的图片哈希时按相似度排序，否则按日期排序。没有正向提示词的图片不参与分组，但会被计数；没有种子的图片也不参与。
+- 与重复图像一样需要 numpy。
+
+### ✨ 图片分组：查找像素重复与近似重复
+新增视图，把同一张图的不同副本归为一组：像素完全相同的图片（即使文件名、元数据或编码不同），以及近似重复的图片（缩放、重新编码或轻微修改的副本）。
+- 打开视图时由后台任务为新增或变更的图片各计算一个哈希，使用少量线程（`IIB_IMAGE_HASH_THREADS`，默认 3，最多 8）。任务可以取消，已写入的结果会保留。每个哈希在数据库中约占 1.1 KB。
+- 像素重复比较解码后的像素；EXIF 方向会被忽略，因此旋转过的副本视为不同图片。近似重复使用感知哈希，距离阈值 0 到 12；纯色图片不参与近似分组。
+- 需要 numpy，但它仍是可选依赖：没有 numpy 时服务器照常启动，相关接口返回错误。
+- 分组以卡片形式显示，每组预览最多四张图片，打开分组可查看全部成员。列表分页加载（`next_offset` 和 `has_more` 指明从何处继续），自上次索引以来已删除的文件不会出现在显示的分组中。
+- 仅当图库不超过 20000 张图片时，打开视图会自动启动哈希任务；更大的图库需点击按钮启动。
 
 ## 2026-11-15
 ### macOS 桌面预览版与 1.11.0 发布准备
