@@ -44,15 +44,19 @@ export function useFileItemActions (
   } = useHookShareState().toRefs()
   const nor = Path.normalize
   useEventListen('removeFiles', ({ paths, loc }) => {
-    if (nor(loc) !== nor(currLocation.value)) {
+    // a search result grid reports '/' as its location, so the folder views of the removed files
+    // (in other panes) would ignore the event: look at the folder of each path in that case
+    const here = nor(currLocation.value)
+    const mine = nor(loc) === here ? paths : paths.filter(path => nor(Path.getParentDirectory(path)) === here)
+    if (!mine.length) {
       return
     }
     const top = last(stack.value)
     if (!top) {
       return
     }
-    paths.forEach(path => deletedFiles.value.add(path))
-    paths.filter(isImageFile).forEach(path => deletedFiles.value.add(path.replace(/\.\w+$/, '.txt')))
+    mine.forEach(path => deletedFiles.value.add(path))
+    mine.filter(isImageFile).forEach(path => deletedFiles.value.add(path.replace(/\.\w+$/, '.txt')))
   })
 
   useEventListen('refreshLocation', ({ loc }) => {
