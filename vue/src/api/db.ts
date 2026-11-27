@@ -562,3 +562,97 @@ export const importUserData = async (req: {
   const resp = await axiosInst.value.post('/db/import_user_data', req, { timeout: 300000 })
   return resp.data as UserDataImportStats
 }
+
+// ===== Image groups (pixel / near duplicates from the image hash) =====
+// The view shows errors itself, so these calls are silent (no interceptor toast on top).
+export type ImageGroupKind = 'pixel' | 'near'
+
+export interface ImageGroupsJobInfo {
+  job_id: string
+  status: 'queued' | 'running' | 'done' | 'error' | 'cancelled'
+  done: number
+  total: number
+}
+
+export interface ImageGroupsJobStatusResp extends ImageGroupsJobInfo {
+  /** Images the job could not read for a transient reason (not stored). */
+  skipped: number
+  error: string | null
+}
+
+export interface ImageGroupsStateResp {
+  total: number
+  hashed: number
+  /** Images still to compute; images skipped in this server process are not counted. */
+  pending: number
+  /** Images skipped in this server process (unreadable). */
+  skipped: number
+  /** Unreadable images with a saved error. */
+  failed: number
+  version: number
+  job: ImageGroupsJobInfo | null
+}
+
+export interface ImageGroup {
+  id: string
+  kind: ImageGroupKind
+  /** Number of all members (images only holds the preview). */
+  size: number
+  max_distance: number
+  /** Preview: the first few members as file infos. */
+  images: FileNodeInfo[]
+  /** All member paths, same order (medoid first). */
+  paths: string[]
+}
+
+export interface ImageGroupsResp {
+  kind: ImageGroupKind
+  threshold: number
+  group_count: number
+  image_count: number
+  offset: number
+  /** Raw offset for the next page (missing files are left out of a page, the offset keeps running). */
+  next_offset: number
+  has_more: boolean
+  hashed: number
+  pending: number
+  groups: ImageGroup[]
+}
+
+export const getImageGroupsState = async () => {
+  const resp = await axiosInst.value.get('/db/image_groups_state', { silent: true })
+  return resp.data as ImageGroupsStateResp
+}
+
+export const startImageGroupsJob = async () => {
+  const resp = await axiosInst.value.post('/db/image_groups_job_start', {}, { silent: true })
+  return resp.data as { job_id: string; already_running: boolean }
+}
+
+export const cancelImageGroupsJob = async (job_id: string) => {
+  const resp = await axiosInst.value.post(
+    '/db/image_groups_job_cancel',
+    { job_id },
+    { silent: true }
+  )
+  return resp.data as { cancelled: boolean }
+}
+
+export const getImageGroupsJobStatus = async (job_id: string) => {
+  const resp = await axiosInst.value.get('/db/image_groups_job_status', {
+    params: { job_id },
+    silent: true
+  })
+  return resp.data as ImageGroupsJobStatusResp
+}
+
+export const getImageGroups = async (req: {
+  kind: ImageGroupKind
+  threshold: number
+  min_size: number
+  offset: number
+  limit: number
+}) => {
+  const resp = await axiosInst.value.post('/db/image_groups', req, { silent: true })
+  return resp.data as ImageGroupsResp
+}

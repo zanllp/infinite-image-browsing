@@ -24,7 +24,7 @@ interface TabPaneBase {
 }
 
 interface OtherTabPane extends TabPaneBase {
-  type: 'global-setting' | 'tag-search' |  'batch-download' | 'workspace-snapshot' | 'random-image' | 'topic-search' | 'trend'
+  type: 'global-setting' | 'tag-search' |  'batch-download' | 'workspace-snapshot' | 'random-image' | 'topic-search' | 'trend' | 'image-groups'
 }
 
 export interface EmptyStartTabPane extends TabPaneBase  {
@@ -96,6 +96,7 @@ export interface TopicSearchMatchedImageGridTabPane extends TabPaneBase {
   type: 'topic-search-matched-image-grid'
   id: string
   title: string
+  subtitle?: string
   paths: string[]
 }
 export interface ImgSliTabPane extends TabPaneBase {
