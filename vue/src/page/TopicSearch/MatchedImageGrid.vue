@@ -17,6 +17,8 @@ const props = defineProps<{
   paneIdx: number
   id: string
   title: string
+  /** Optional second line under the title (small, muted). */
+  subtitle?: string
   paths: string[]
 }>()
 
@@ -140,7 +142,10 @@ const onTiktokViewClick = () => {
       </AModal>
 
       <div class="action-bar">
-        <div class="title line-clamp-1">🧩 {{ props.title }}</div>
+        <div class="title-block">
+          <div class="title line-clamp-1" :class="{ tight: !!props.subtitle }">🧩 {{ props.title }}</div>
+          <div v-if="props.subtitle" class="subtitle line-clamp-1" :title="props.subtitle">{{ props.subtitle }}</div>
+        </div>
         <div flex-placeholder />
         <a-button @click="onTiktokViewClick" :disabled="!images?.length">{{ $t('tiktokView') }}</a-button>
         <a-button @click="saveLoadedFileAsJson" :disabled="!images?.length">{{ $t('saveLoadedImageAsJson') }}</a-button>
@@ -220,9 +225,25 @@ const onTiktokViewClick = () => {
   padding: 6px 8px;
 }
 
+.title-block {
+  min-width: 0;
+  max-width: 40vw;
+}
+
 .title {
   font-weight: 700;
   max-width: 40vw;
+
+  // with a subtitle both lines still fit the height of the buttons next to them
+  &.tight {
+    line-height: 1.2;
+  }
+}
+
+.subtitle {
+  font-size: 0.75em;
+  line-height: 1.2;
+  opacity: 0.7;
 }
 
 .file-list {

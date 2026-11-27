@@ -91,6 +91,7 @@ const createPaneFromType = (type: TabPane['type'], props: any): TabPane | null =
       return pane
     }
     case 'topic-search':
+    case 'image-groups':
     case 'batch-download':
     case 'workspace-snapshot':
     case 'global-setting': {
@@ -185,6 +186,7 @@ export const resolveQueryActions = async (g: ReturnType<typeof useGlobalStore>) 
         'img-sli',
         'random-image',
         'topic-search',
+        'image-groups',
         'batch-download',
         'workspace-snapshot',
         'global-setting',

@@ -246,6 +246,60 @@ Tag-based search.
 }
 ```
 
+### Image groups (pixel and near duplicates)
+Groups of images with identical pixels (`pixel`) or visually near-identical ones (`near`, perceptual hash). A background job hashes the images that have no current hash yet; the groups are computed from the stored hashes. Needs numpy (otherwise 500).
+
+#### GET /db/image_groups_state
+**Response:**
+```json
+{ "total": 5031, "hashed": 4990, "failed": 10, "skipped": 1, "pending": 30, "version": 1,
+  "job": null }
+```
+`total = hashed + failed + skipped + pending`. `failed` are images that cannot be decoded (not tried again until they change). `skipped` are images that could not be read for a transient reason (missing file, permissions); the server remembers them until it restarts and a new job tries them once more, so `pending` does not count them. `job` is `null` or `{ "job_id", "status", "done", "total" }` of the running job.
+
+#### POST /db/image_groups_job_start
+Start the hash job for the pending images (one job at a time; needs write permission). Threads: `IIB_IMAGE_HASH_THREADS` (default 3, 1 to 8).
+
+**Response:** `{ "job_id": "uuid", "already_running": false }`
+
+#### GET /db/image_groups_job_status
+**Parameters:** `job_id` (string)
+
+**Response:**
+```json
+{ "job_id": "uuid", "status": "queued|running|done|error|cancelled",
+  "done": 120, "total": 400, "error": null, "skipped": 0 }
+```
+
+#### POST /db/image_groups_job_cancel
+Stop a job: no new batches start, running ones finish and what is written stays (needs write permission).
+
+**Request body:** `{ "job_id": "uuid" }` (optional, default: the running job)
+
+**Response:** `{ "cancelled": true }`
+
+#### POST /db/image_groups
+**Request body:**
+```json
+{ "kind": "pixel|near", "threshold": 8, "min_size": 2, "offset": 0, "limit": 200 }
+```
+`threshold` (near only, Hamming distance of the 64 bit hashes) is clamped to 0..12, `limit` to 1..1000.
+
+**Response:**
+```json
+{
+  "kind": "near", "threshold": 8,
+  "group_count": 163, "image_count": 421, "offset": 0, "next_offset": 100, "has_more": true,
+  "hashed": 5000, "pending": 31,
+  "groups": [{
+    "id": "near:4316", "kind": "near", "size": 13, "max_distance": 24,
+    "images": [{...FileInfo...}],
+    "paths": ["/path/to/img1.png", ...]
+  }]
+}
+```
+`group_count` and `image_count` cover all groups before `offset`/`limit`, as stored (files that are gone from disk are not subtracted). A page leaves out the members whose file is gone and the groups that fall below `min_size`, so it can hold fewer groups than it covers. Page by page: continue with `offset = next_offset` (the position in the full list: `offset` plus the groups the page covered) while `has_more` is true; every group is visited once. `images` holds the first four members (medoid first), `paths` the paths of all `size` members in the same order. Pixel groups have `max_distance` 0 and the id `pixel:<first 16 characters of the pixel hash>`; near groups have the id `near:<smallest image id of the group>`, taken before missing files are left out, so it stays the same while files disappear.
+
 ---
 
 ## 5. Tag Management
