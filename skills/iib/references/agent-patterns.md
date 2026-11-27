@@ -17,6 +17,10 @@ User wants to find duplicate images
 ├── Exact or near-identical groups → POST /db/image_groups
 └── Remove chosen files → POST /delete_files (only after the user confirmed)
 
+User wants to find variants of the same prompt
+├── Different seeds → POST /db/image_variants (kind "seed")
+└── Different model, sampler, steps, CFG … → POST /db/image_variants (kind "params")
+
 User wants to organize images
 ├── Move specific files → POST /move_files
 ├── Copy specific files → POST /copy_files
@@ -110,6 +114,17 @@ curl -X POST http://127.0.0.1:<port>/infinite_image_browsing/db/image_groups \
 ```
 
 Present the groups to the user (the first path of a group is its most typical image) and delete only what they choose, with `POST /delete_files`.
+
+### Find image variants
+
+```bash
+curl -X POST http://127.0.0.1:<port>/infinite_image_browsing/db/image_variants \
+  -H "Content-Type: application/json" \
+  -d '{"kind": "params", "limit": 50}'
+# Response: {"groups": [{"id": "params:…", "size": 3, "variant_count": 3, "prompt": "…", "paths": [...]}], "has_more": false, ...}
+```
+
+Show the groups with their prompt to the user; variants are intended, so nothing is deleted without their choice.
 
 ### Add new folder to library
 
