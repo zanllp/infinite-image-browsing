@@ -16,7 +16,7 @@ import { SearchSelect, delay } from 'vue3-ts-util'
 import { PlusOutlined, ArrowRightOutlined, HistoryOutlined, SaveOutlined } from '@/icon'
 import { useGlobalStore } from '@/store/useGlobalStore'
 import { groupBy, uniqueId, debounce, cloneDeep } from 'lodash-es'
-import { createReactiveQueue, type Dict, useGlobalEventListen, globalEvents } from '@/util'
+import { createReactiveQueue, type Dict, useGlobalEventListen } from '@/util'
 import { Modal, message } from 'ant-design-vue'
 import { t } from '@/i18n'
 import { makeAsyncFunctionSingle } from '@/util'
@@ -36,14 +36,9 @@ const global = useGlobalStore()
 const showAutoUpdateFeatureTip = useLocalStorage('iib_auto_update_feature_tip_shown', false)
 const tagStore = useTagStore()
 
-/**
- * 索引更新后标签缓存可能已过期：清空缓存并通知各网格立即补拉当前可视区标签。
- * 不能只 clear 就完事，否则要等用户滚动触发 viewableAreaFilesChange 才会补拉，
- * 表现为「切回来标签没了，滚一下又好了」。
- */
+/** 索引更新后标签缓存可能已过期：标为过期（旧值保持可见）并通知各网格立即补拉当前可视区标签 */
 const invalidateTagCache = () => {
-  tagStore.tagMap.clear()
-  globalEvents.emit('tagsInvalidated')
+  tagStore.invalidateTagCache()
 }
 const queue = createReactiveQueue()
 const loading = computed(() => !queue.isIdle)
