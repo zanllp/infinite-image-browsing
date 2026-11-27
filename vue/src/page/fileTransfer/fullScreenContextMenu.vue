@@ -10,7 +10,7 @@ import type { MenuInfo } from 'ant-design-vue/lib/menu/src/interface'
 import { debounce, throttle, last } from 'lodash-es'
 import { computed, watch, onMounted } from 'vue'
 import { ref } from 'vue'
-import { copy2clipboardI18n, type Dict } from '@/util'
+import { copy2clipboardI18n, useGlobalEventListen, type Dict } from '@/util'
 import { useResizeAndDrag } from './useResize'
 import {
   DragOutlined,
@@ -125,6 +125,14 @@ watch(
   },
   { immediate: true }
 )
+
+// after the tag cache is invalidated (e.g. tags changed in another browser tab), the grid refetches
+// only its viewable area, which may not contain the previewed file
+useGlobalEventListen('tagsInvalidated', () => {
+  if (props.file?.is_under_scanned_path) {
+    tagStore.fetchImageTags([props.file.fullpath])
+  }
+})
 
 watch(promptTabActivedKey, async (tabKey) => {
   if (tabKey === 'exif') {
